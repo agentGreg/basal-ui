@@ -1,0 +1,9 @@
+basal
+Copyright 2026 Remigiusz Kinas
+
+This product includes models fine-tuned from the following works, licensed under the Apache License, Version 2.0:
+
+  basal-1.0-4.5B  <- speakleash/Bielik-4.5B-v3.0-Instruct  (https://huggingface.co/speakleash/Bielik-4.5B-v3.0-Instruct)
+  basal-1.0-1.5B  <- speakleash/Bielik-1.5B-v3.0-Instruct  (https://huggingface.co/speakleash/Bielik-1.5B-v3.0-Instruct)
+
+The inference engine in this repository is original work licensed under the Apache License, Version 2.0.
