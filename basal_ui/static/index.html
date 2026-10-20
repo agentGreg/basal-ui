@@ -10,6 +10,8 @@
 :root{--paper:#f8f7f4;--white:#fff;--ink:#232824;--muted:#646b5e;--line:#dedfd8;--accent:#b94329;--accent-light:#f5e8e0;--omni:#655487;--omni-light:#efebf5;--mono:"IBM Plex Mono",monospace;--sans:Manrope,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--green:#53745a;--green-light:#edf2e9;--amber:#a46634;--amber-light:#fff8eb;--shadow:0 4px 12px #20292004;color-scheme:light}*{box-sizing:border-box}::selection{background:#edb29b}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.7 var(--sans);-webkit-font-smoothing:antialiased}main{max-width:1280px;margin:auto;padding:28px 40px 64px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:26px}.brand{display:flex;align-items:center;gap:10px;line-height:1}.brand>span{font-size:30px;font-weight:750;letter-spacing:-1.7px}.brand-mark{width:25px;height:32px;color:var(--accent)}.brand-dot{color:var(--accent)}.eyebrow,.section-index{font:400 12px/1.5 var(--mono);letter-spacing:1.2px;text-transform:uppercase}.eyebrow{display:flex;align-items:center;gap:10px;color:var(--accent)}.status-dot{display:inline-block;width:6px;height:6px;background:#85897f;border-radius:50%;flex:none;box-shadow:0 0 0 4px #53745a0b}.status-dot.ready{background:#53745a}.status-dot.error{background:var(--accent);box-shadow:0 0 0 4px #b943290b}h1,h2,h3,p{margin:0}h1,h2,h3{font-weight:600;line-height:1.25}h2{font-size:clamp(26px,3vw,36px);letter-spacing:-1.9px}h3{font-size:20px;letter-spacing:-.55px}p,.muted,small{color:var(--muted)}.card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;box-shadow:var(--shadow);margin-bottom:18px}.section-label{display:flex;align-items:center;gap:12px;margin-bottom:8px}.hardware{display:flex;align-items:center;justify-content:space-between;gap:20px}.hardware-name{font-weight:650;font-size:18px}.hardware-grid{display:flex;gap:24px;flex-wrap:wrap}.metric label{display:block;color:var(--muted);font:11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.05em}.metric strong{font-variant-numeric:tabular-nums}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip,.badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:4px;padding:2px 8px;font:11px/1.5 var(--mono);white-space:nowrap}.badge.rec{background:var(--accent-light);border-color:#e9c4b7;color:var(--accent)}.badge.best{background:#f2eee3;border-color:#e2dbc8;color:#765b31}.badge.experimental{background:var(--omni-light);border-color:#dcd3e9;color:var(--omni)}.badge.fit-fits{background:var(--green-light);border-color:#d4e0d2;color:var(--green)}.badge.fit-tight{background:var(--amber-light);border-color:#f2a476;color:var(--amber)}.badge.fit-too_large{background:var(--accent-light);border-color:#e9c4b7;color:var(--accent)}.badge.fit-unknown{background:#f0f0ec;color:var(--muted)}.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.controls label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}button,select,input,textarea{font:inherit}button{min-height:40px;border:1px solid #d7d9d1;background:transparent;color:var(--ink);border-radius:5px;padding:10px 16px;font-size:13px;font-weight:650;cursor:pointer;transition:background .2s,border-color .2s,transform .2s,box-shadow .2s}button:hover{border-color:#a9b19f;background:#f0f0e9;transform:translateY(-2px)}button.primary{min-height:49px;padding:13px 22px;border-color:var(--accent);background:var(--accent);color:#fff;font-size:14px}button.primary:hover{background:#a83a22}.button-dark{background:var(--ink);border-color:var(--ink);color:#fff}button:disabled{opacity:.48;cursor:not-allowed}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--muted);font:11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.04em;padding:9px 8px;border-bottom:1px solid var(--line)}td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}tr:last-child td{border-bottom:0}.family-row td{padding-top:17px;padding-bottom:7px;font-weight:700;font-size:14px;border-bottom:0}.not-runnable{opacity:.58}.reason{display:block;font-size:11px;color:var(--accent);max-width:250px}.model-name{font-weight:650}.nowrap{white-space:nowrap}.status{position:sticky;top:0;z-index:4;background:#fffF;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:8px;padding:10px 14px;margin-bottom:18px}.status-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.state-pill{font:12px var(--mono);text-transform:uppercase}.status-model{color:var(--muted);overflow-wrap:anywhere}.status-error{color:var(--accent);font-weight:650}.progress-wrap{display:flex;align-items:center;gap:10px;flex:1 1 300px}.progress{height:8px;background:#e7e8e1;border-radius:3px;overflow:hidden;flex:1}.progress>span{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}.logs{margin:8px 0 0;max-height:180px;overflow:auto;background:#232824;color:#f8f7f4;padding:10px;border-radius:4px;font:11px/1.5 var(--mono);white-space:pre-wrap}.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}fieldset{border:0;padding:0;margin:0;min-width:0}fieldset:disabled{opacity:.48}.playground-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.playground-head select{max-width:400px}.section-index{margin-bottom:10px}textarea,input[type=text],select{border:1px solid var(--line);border-radius:4px;background:var(--white);color:var(--ink);padding:8px}textarea{width:100%;min-height:90px;resize:vertical}#stateInput{min-height:115px;margin-top:6px}.field{margin:12px 0}.field>label,.question label{display:block;font-size:12px;font-weight:650;margin-bottom:5px}.questions{display:grid;gap:10px}.question{border:1px solid var(--line);border-radius:5px;padding:12px}.q-head{display:grid;grid-template-columns:minmax(120px,1fr) 145px auto;gap:8px;align-items:end}.q-options{margin-top:8px}.q-options textarea{min-height:72px}.q-instructions{margin-top:8px}.editjson{margin-top:12px}.error-box{color:var(--accent);background:var(--accent-light);border-radius:4px;padding:9px;margin-top:10px;white-space:pre-wrap}.results{margin-top:14px}.answer{border-top:1px solid var(--line);padding:12px 0}.answer h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.headline{font-weight:700;font-size:15px}.prob{display:grid;grid-template-columns:minmax(90px,180px) 1fr 55px;align-items:center;gap:9px;margin:5px 0;font-size:12px}.bar{height:9px;background:#e7e8e1;border-radius:3px;overflow:hidden}.bar span{display:block;background:#c9cabc;height:100%}.prob:first-of-type .bar span{background:var(--accent)}.answer-meta{font:11px/1.6 var(--mono);color:var(--muted);margin-top:7px}.answer pre{max-height:320px;overflow:auto;background:#f0f0ec;padding:10px;border-radius:4px}details summary{cursor:pointer;color:var(--muted);font:12px var(--mono)}details pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.45 var(--mono)}.empty{color:var(--muted);padding:18px 4px;text-align:center}
 @media(max-width:900px){main{padding:20px 16px 48px}.hardware{align-items:flex-start;flex-direction:column}.table-wrap{overflow:auto}table{min-width:800px}.section-head{align-items:flex-start;flex-direction:column}.status{top:0}.q-head{grid-template-columns:minmax(90px,1fr) 120px auto}}
 .directory-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.directory-row>div:first-child{flex:1 1 320px}.directory-row input{width:100%}.directory-hint{font:11px/1.5 var(--mono);overflow-wrap:anywhere;margin-top:7px}.manager-error{margin-top:8px}.disk-list{margin-top:18px}.disk-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}.disk-row:last-child{border-bottom:0}.disk-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.disk-total{font:11px/1.5 var(--mono);color:var(--muted);text-align:right;margin-top:8px}
+.serve-status{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:8px 0 18px}.serve-status-text{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}.serve-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px 22px;align-items:start;margin:14px 0}.serve-fields>.field{margin:0}.serve-fields input,.serve-fields textarea{width:100%}.serve-fields textarea{min-height:42px;height:42px}.serve-fields small{display:block;margin-top:4px;font-size:12px}.serve-options{display:flex;flex-wrap:wrap;gap:10px 28px;margin:4px 0 6px}.serve-options label{display:flex;align-items:center;gap:8px;font-size:14px}.serve-options small{flex-basis:100%;font-size:12px}.serve-actions,.key-create{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.key-create input{max-width:300px}.key-secret{margin:12px 0}.connect-tabs{max-width:100%;overflow-x:auto}.connect-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;background:#f0efe9;border:1px solid var(--line);border-radius:6px;font:12px/1.6 var(--mono)}#serveKeys .disk-row button{flex:none}
+.mono{font-family:var(--mono);overflow-wrap:anywhere}
 .prob.winner .bar span{background:var(--accent)}
 [hidden]{display:none!important}
 .media-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:10px}.media-item{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--white);overflow:hidden;font-size:12px}.media-preview{display:block;width:100%;aspect-ratio:4/3;padding:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--paper);cursor:zoom-in}.media-preview img{display:block;width:100%;height:100%;object-fit:contain}.media-audio{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/3;border-bottom:1px solid var(--line);background:var(--paper);color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}.media-meta{display:flex;align-items:center;gap:8px;padding:8px}.media-meta>span{flex:1;min-width:0}.media-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.media-meta small{display:block;color:var(--muted);font-family:var(--mono);font-size:11px}
@@ -18,17 +20,34 @@
 .media-lightbox{max-width:92vw;max-height:92vh;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--white)}.media-lightbox::backdrop{background:#232824cc}.media-lightbox img{display:block;max-width:90vw;max-height:80vh;object-fit:contain;margin:0 auto}.media-lightbox-bar{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px}.media-lightbox-bar span{flex:1}.media-lightbox-bar small{color:var(--muted);font-family:var(--mono)}
 .tabs{display:inline-flex;gap:3px;padding:3px;margin:4px 0 18px;background:#efeee8;border:1px solid #dcded4;border-radius:8px}.tabs button{min-height:36px;padding:4px 14px;border:1px solid transparent;border-radius:5px;background:transparent;color:#465243;font-size:12px;font-weight:700}.tabs button:hover{background:#fffdf7;border-color:transparent;transform:none}.tabs button.active{background:#fffdf7;border-color:#b9c0ac;box-shadow:0 1px 3px #263d2310;color:#233522}
 .suggestion-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:20px}.suggestion-card{display:flex;flex-direction:column;gap:10px;padding:22px;background:#fdfaf6;border:1px solid #e3d2c6;border-top:3px solid var(--accent);border-radius:10px}.suggestion-card.omni{background:#f6f3fa;border-color:#dcd3e9;border-top-color:var(--omni)}.suggestion-card .eyebrow{font-size:10px;color:#7e654e}.suggestion-card.omni .eyebrow{color:var(--omni)}.suggestion-card h3{font-size:28px;letter-spacing:-1.2px;line-height:1.1}.family-suffix{color:var(--accent)}.omni .family-suffix{color:var(--omni)}.suggestion-card h3 small{font:12px var(--mono);margin-left:7px;letter-spacing:0;color:#847297;vertical-align:middle}.suggestion-tier{font-size:16px;font-weight:550;color:var(--ink)}.suggestion-meta{display:inline-block;padding:7px 10px;background:#eceee6;border-radius:4px;font-size:12px;color:#546246}.suggestion-card .why{flex:1;font-size:14px;line-height:1.6;color:var(--muted)}.why code{font:12px var(--mono);color:var(--ink);white-space:nowrap}.suggestion-downloaded{font:11px/1.6 var(--mono);color:var(--green)}.suggestion-card button.primary{align-self:flex-start;display:inline-flex;align-items:center;gap:18px;min-height:40px;padding:10px 16px;font-size:13px}.suggestion-card .icon{width:16px;height:16px}.badge.omni{background:var(--omni-light);border-color:#dcd3e9;color:var(--omni)}
+.app-shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;background:var(--paper);border-right:1px solid var(--line);padding:28px 18px;display:flex;flex-direction:column;justify-content:space-between}.sidebar .brand{padding:0 10px 30px}.side-nav{display:grid;gap:5px}.side-nav button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border-color:transparent;background:transparent;font-size:14px}.side-nav button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.side-nav button.active{background:var(--white);border-color:var(--line);box-shadow:0 1px 3px #263d2310}.sidebar-status{border-top:1px solid var(--line);padding:16px 8px 0;font-size:12px}.footer-status{display:flex;align-items:center;gap:8px;font:11px var(--mono);text-transform:uppercase}.footer-model{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);margin:7px 0}.footer-url{font:10px var(--mono);overflow-wrap:anywhere}.main-content{width:100%;max-width:1200px;margin:0 auto;padding:28px 40px 64px}.page-header{display:flex;justify-content:flex-end;margin-bottom:20px}.view[hidden]{display:none}.ghost{border-color:transparent;background:transparent}.icon-button{position:relative}.icon-button:before{content:attr(data-tooltip);position:absolute;z-index:8;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);padding:4px 7px;background:var(--ink);color:white;border-radius:4px;font:10px var(--mono);white-space:nowrap;opacity:0;pointer-events:none}.icon-button:hover:before,.icon-button:focus-visible:before{opacity:1}.status{position:static;box-shadow:none;border:0;padding:0;margin:0;background:transparent}.status-head{align-items:center}.status-error{flex-basis:100%}.main-content .card h2{font-size:26px;letter-spacing:-1px}input[type=text],input[type=number],textarea,select{border-radius:5px}input:focus,textarea:focus,select:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px #b9432920}select{min-height:40px;padding-right:32px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m2 4 4 4 4-4' fill='none' stroke='%23646b5e' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}input[type=checkbox]{appearance:none;width:34px;height:20px;flex:none;border:1px solid #c9cbc2;border-radius:99px;background:#e9eae4;position:relative;vertical-align:middle;cursor:pointer;transition:.15s}input[type=checkbox]:after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:white;box-shadow:0 1px 3px #0002;transition:.15s}input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}input[type=checkbox]:checked:after{left:16px}label:has(input[type=checkbox]){display:inline-flex;align-items:center;gap:8px;cursor:pointer}.destructive{color:var(--accent);border-color:#e9c4b7}.destructive:hover{color:white;background:var(--accent);border-color:var(--accent)}.secret-alert{padding:14px;background:#fbfaf6;border:1px solid var(--line);border-radius:6px;margin:12px 0}.secret-alert code{font:13px var(--mono);overflow-wrap:anywhere}.secret-alert p{font-size:12px;margin:6px 0}.confirm-dialog{width:min(440px,calc(100vw - 32px));border:1px solid var(--line);border-radius:10px;padding:22px;background:var(--white);color:var(--ink);box-shadow:0 18px 60px #23282430}.confirm-dialog::backdrop{background:#23282480}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.toast-stack{position:fixed;right:20px;bottom:20px;z-index:20;display:grid;gap:8px;width:min(360px,calc(100vw - 40px))}.toast{padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:var(--white);box-shadow:0 6px 22px #23282418;font-size:13px}.toast.error{border-left:3px solid var(--accent)}.toast.success{border-left:3px solid var(--green)}.skeleton{height:52px;margin:8px 0;border-radius:5px;background:linear-gradient(90deg,#f0f0ec,#faf9f6,#f0f0ec);background-size:200% 100%;animation:skeleton 1.2s infinite}@keyframes skeleton{to{background-position:-200% 0}}
+@media(max-width:900px){.app-shell{display:block}.sidebar{position:relative;width:100%;height:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--line);gap:10px}.sidebar-top{display:flex;align-items:center;gap:18px;min-width:0}.sidebar .brand{padding:0}.side-nav{display:flex;overflow-x:auto;gap:3px}.side-nav button{width:auto;flex:none;padding:8px 10px}.side-nav button svg{display:none}.sidebar-status{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:8px 0 0}.footer-model{flex:1;min-width:0;margin:0}.footer-url{display:none}.main-content{padding:20px 16px 48px}.hardware{align-items:flex-start;flex-direction:column}}
+.switch[role=switch]{display:inline-flex}
+.main-content input[type=number],.main-content input[type=search],.main-content input[type=url]{min-height:40px;padding:8px;border:1px solid var(--line);border-radius:5px;background:var(--white);color:var(--ink);font:inherit}.main-content input[type=number]:focus,.main-content input[type=search]:focus,.main-content input[type=url]:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px #b9432920}.page-header{display:block;margin:0 0 18px}.page-header .eyebrow{margin-bottom:6px}.page-header h1{font-size:30px;letter-spacing:-1.2px}.page-header p{margin-top:3px;color:var(--muted)}.outline-action{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--white);color:var(--ink)}.outline-action svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.sidebar-status .outline-action{width:100%;justify-content:center}.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.dashboard-grid .card{margin:0}.dashboard-grid .card p{font-size:13px}.dashboard-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.dashboard-heading h3{font-size:17px}.dashboard-link{font-size:12px}.overview-suggestion .suggestion-grid{grid-template-columns:1fr}.overview-suggestion .suggestion-card{padding:16px}.summary-value{font-size:15px;font-weight:650;overflow-wrap:anywhere}.summary-meta{font:11px var(--mono);color:var(--muted)}.button-icon{display:inline-flex;align-items:center;gap:7px}.button-icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}@media(max-width:700px){.dashboard-grid{grid-template-columns:1fr}}
+#overview{display:grid;grid-template-columns:minmax(0,1fr)}#overview>#hardware{grid-row:1;grid-column:1/-1}#overview>#status{grid-row:2;grid-column:1/-1}#overview>.dashboard-grid{grid-row:3;grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.dashboard-stack{display:grid;gap:16px}.dashboard-grid .card{min-width:0}.summary-value{font-size:16px;font-weight:650}.summary-meta{font:11px/1.5 var(--mono);color:var(--muted)}.playground-head{justify-content:flex-end}.serve-status label{margin-left:auto}
+@media(max-width:700px){#overview>.dashboard-grid{grid-template-columns:1fr}}
+.page-header h2{font-size:30px;letter-spacing:-1.2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
-<body><main>
-<header><div class="brand"><svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true"><path d="m18 3 16 8-16 8L2 11Z" fill="currentColor"/><path d="m2 18 16 8 16-8M2 25l16 8 16-8" fill="none" stroke="currentColor" stroke-width="3.5"/></svg><span>basal<span class="brand-dot">.</span></span></div><div class="eyebrow"><span class="status-dot" id="headerDot"></span><span id="headerStatus">LOCAL DECISION ENGINE</span></div></header>
-<section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">01 / HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="memoryBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
-<section class="card" id="manager"><div class="section-index">02 / MODEL MANAGER</div><div class="section-head"><h2>Model manager</h2></div><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section>
-<section class="card"><div class="section-index">03 / MODELS</div><div class="section-head"><h2>Models</h2></div><div class="tabs" role="tablist"><button id="suggestedTab" class="active" role="tab" aria-selected="true">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="suggested" role="tabpanel"><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="models" class="table-wrap"><div class="empty">Loading models…</div></div></div></section>
-<section id="status" class="status" aria-live="polite"><div class="status-head"><span class="status-dot" id="statusDot"></span><span class="state-pill" id="stateLabel">idle</span><span class="spinner" id="startingSpinner" hidden></span><span class="status-model" id="statusModel">No model loaded</span><span id="statusMode" class="chip" hidden></span><span id="statusMedia" class="chip media" hidden></span><div class="progress-wrap" id="progressWrap" hidden><div class="progress"><span id="progressBar"></span></div><small id="progressText"></small></div><span id="statusError" class="status-error"></span><button id="unloadButton" hidden>Unload</button><button id="logsToggle" aria-expanded="false">Logs</button></div><pre id="logs" class="logs" hidden></pre></section>
-<section class="card"><div class="section-index">04 / PLAYGROUND</div><div class="playground-head"><h2>Playground</h2><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playground" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section>
-<dialog id="mediaLightbox" class="media-lightbox" aria-label="Image preview"><img id="mediaLightboxImage" alt=""><div class="media-lightbox-bar"><span id="mediaLightboxName"></span><small id="mediaLightboxSize"></small><button type="button" id="mediaLightboxClose">Close</button></div></dialog>
-</main>
+<body><div class="app-shell">
+<aside class="sidebar"><div class="sidebar-top"><div class="brand"><svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true"><path d="m18 3 16 8-16 8L2 11Z" fill="currentColor"/><path d="m2 18 16 8 16-8M2 25l16 8 16-8" fill="none" stroke="currentColor" stroke-width="3.5"/></svg><span>basal<span class="brand-dot">.</span></span></div><nav class="side-nav" aria-label="Main navigation">
+<button type="button" data-view="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg>Overview</button>
+<button type="button" data-view="models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg>Models</button>
+<button type="button" data-view="manager"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v13H3zM8 7l2-3h4l2 3m-5 4v5m-2-2h4"/></svg>Model manager</button>
+<button type="button" data-view="playground"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-6 7 6 7m8-14 6 7-6 7m-3-16-2 18"/></svg>Playground</button>
+<button type="button" data-view="api"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h.01M7 13h.01M11 9h6m-6 4h6M8 19v2m8-2v2"/></svg>API server</button>
+</nav></div><div class="sidebar-status"><div class="footer-status"><span class="status-dot" id="footerDot"></span><span id="footerState">idle</span></div><div id="footerModel" class="footer-model" title="No model loaded">No model loaded</div><div id="footerUrl" class="footer-url" hidden></div><button id="footerUnload" class="outline-action" type="button" hidden>Unload</button></div></aside>
+<main class="main-content"><header class="page-header"><div class="eyebrow" id="pageEyebrow">01 / OVERVIEW</div><h2 id="pageTitle">Overview</h2><p id="pageDescription">Hardware, model readiness, and serving at a glance.</p></header>
+<section class="view" id="overview" data-page="overview"><section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="memoryBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
+<div class="dashboard-grid"><section class="card"><div class="dashboard-heading"><h3>Suggested for this machine</h3><a class="dashboard-link" href="#models">All suggestions →</a></div><div id="overviewSuggested" class="overview-suggestion"><p class="muted">Loading suggestions…</p></div></section><div class="dashboard-stack"><section class="card"><div class="dashboard-heading"><h3>On disk</h3><a class="dashboard-link" href="#manager">Manage models →</a></div><div id="diskSummary" class="summary-value">Loading…</div><div id="diskSummaryMeta" class="summary-meta"></div></section><section class="card"><div class="dashboard-heading"><h3>API server</h3><a class="dashboard-link" href="#api">Configure →</a></div><div id="apiSummary" class="summary-value">Loading…</div><div id="apiSummaryMeta" class="summary-meta"></div></section></div></div>
+<section class="card" id="status" aria-live="polite"><div class="section-index">RUNNING MODEL</div><div class="status-head"><span class="status-dot" id="statusDot"></span><span class="state-pill" id="stateLabel">idle</span><span class="spinner" id="startingSpinner" hidden></span><span class="status-model" id="statusModel">No model loaded</span><span id="statusMode" class="chip" hidden></span><span id="statusMedia" class="chip media" hidden></span><div class="progress-wrap" id="progressWrap" hidden><div class="progress"><span id="progressBar"></span></div><small id="progressText"></small></div><span id="statusError" class="status-error"></span><button id="unloadButton" hidden>Unload</button><button id="restartButton" hidden>Restart</button><button id="logsToggle" class="ghost icon-button" data-tooltip="Show logs" aria-label="Show logs" aria-expanded="false">Logs</button></div><pre id="logs" class="logs" hidden></pre></section></section>
+<section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="suggestedTab" class="active" role="tab" aria-selected="true">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="suggested" role="tabpanel"><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
+<section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
+<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
+<section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the last model when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python (basal)</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
+<dialog id="mediaLightbox" class="media-lightbox" aria-label="Image preview"><img id="mediaLightboxImage" alt=""><div class="media-lightbox-bar"><span id="mediaLightboxName"></span><small id="mediaLightboxSize"></small><button type="button" id="mediaLightboxClose">Close</button></div></dialog><dialog id="confirmDialog" class="confirm-dialog"><h3 id="confirmTitle"></h3><p id="confirmDescription" class="muted"></p><div class="dialog-actions"><button id="confirmCancel" type="button">Cancel</button><button id="confirmAccept" class="destructive" type="button">Delete</button></div></dialog><div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
+</main></div>
 <script>
 'use strict';
 const $ = (s, root=document) => root.querySelector(s);
@@ -42,6 +61,57 @@ async function api(path, options={}) {
   if (!response.ok) throw new Error(data?.detail || (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) || `${response.status} ${response.statusText}`);
   return data;
 }
+function toast(message, type='success') {
+  const node=document.createElement('div'); node.className=`toast ${type}`; node.textContent=message;
+  $('#toastStack').append(node); setTimeout(()=>node.remove(),4000);
+}
+function confirmDialog({title,description,confirmLabel='Confirm',destructive=false}) {
+  return new Promise(resolve=>{
+    const dialog=$('#confirmDialog'), accept=$('#confirmAccept'), cancel=$('#confirmCancel');
+    $('#confirmTitle').textContent=title; $('#confirmDescription').textContent=description;
+    accept.textContent=confirmLabel; accept.classList.toggle('destructive',destructive);
+    dialog.showModal();
+    const finish=value=>{dialog.close();accept.removeEventListener('click',yes);cancel.removeEventListener('click',no);dialog.removeEventListener('close',closed);resolve(value);};
+    const yes=()=>finish(true),no=()=>finish(false),closed=()=>finish(false);
+    accept.addEventListener('click',yes);cancel.addEventListener('click',no);dialog.addEventListener('close',closed);
+  });
+}
+function showView(name, updateHash=false) {
+  const pages={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Suggestions fitted to this machine’s memory now, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of the loaded model.'],api:['05 / API SERVER','API server','Expose the loaded model to other apps.']};
+  if(!pages[name]) name='overview';
+  $('#pageEyebrow').textContent=pages[name][0];$('#pageTitle').textContent=pages[name][1];$('#pageDescription').textContent=pages[name][2];
+  document.querySelectorAll('.view').forEach(view=>view.hidden=view.dataset.page!==name);
+  document.querySelectorAll('.side-nav [data-view]').forEach(button=>{
+    const active=button.dataset.view===name;button.classList.toggle('active',active);
+    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+  });
+  if(updateHash&&location.hash!==`#${name}`)history.pushState(null,'',`#${name}`);
+}
+document.querySelectorAll('.side-nav [data-view]').forEach(button=>button.addEventListener('click',()=>showView(button.dataset.view,true)));
+window.addEventListener('hashchange',()=>showView(location.hash.slice(1)));
+window.addEventListener('popstate',()=>showView(location.hash.slice(1)));
+showView(location.hash.slice(1));
+document.addEventListener('change',event=>{
+  if(event.target.matches('input[type=checkbox]'))event.target.setAttribute('aria-checked',String(event.target.checked));
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Enter'&&event.target.matches('input[type=checkbox][role=switch]')) {
+    event.preventDefault(); setChecked(event.target,!event.target.checked);
+    event.target.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+});
+function setChecked(input, value) {
+  input.checked=Boolean(value);
+  input.setAttribute('aria-checked',String(input.checked));
+}
+document.querySelectorAll('input[type=checkbox]').forEach(input=>{input.setAttribute('role','switch');setChecked(input,input.checked);});
+document.querySelectorAll('.icon-button').forEach(button=>{
+  const icon=button.id==='logsToggle'
+    ?'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4h12v12H4zM7 8h6M7 11h6M7 14h3"/></svg>'
+    :'<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="7" width="10" height="11" rx="1"/><path d="M4 13V3h10"/></svg>';
+  button.className='outline-action button-icon icon-button';
+  button.innerHTML=icon+`<span>${esc(button.textContent.trim())}</span>`;
+});
 function renderHardware(data) {
   hw = data;
   $('#deviceName').textContent = data.device_name || 'Unknown device';
@@ -60,12 +130,16 @@ function renderModels(data) {
   renderDiskModels();
   const suggestions = data.suggestions || [];
   renderSuggestions(suggestions);
+  const overviewSuggestion=$('#overviewSuggested'), firstSuggestion=$('#suggested .suggestion-card');
+  overviewSuggestion.replaceChildren(firstSuggestion?firstSuggestion.cloneNode(true):Object.assign(document.createElement('p'),{className:'muted',textContent:'No suggested model fits right now.'}));
+  const overviewLoad=$('.suggestion-load',overviewSuggestion);
+  if(overviewLoad)overviewLoad.addEventListener('click',()=>loadModel(overviewLoad.dataset.id,overviewLoad.dataset.media==='true'));
   const slots = new Map(suggestions.map(s => [s.id, s.slot]));
   const older = $('#olderToggle').checked, showBad = $('#notRunnableToggle').checked, downloadedOnly = $('#downloadedToggle').checked;
   const list = modelData.filter(m => (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
   list.sort((a,b) => familyOrder(b.family)-familyOrder(a.family) || tierOrder(a.tier)-tierOrder(b.tier) || a.port.localeCompare(b.port));
   const groups = new Map(); for (const m of list) { if (!groups.has(m.family)) groups.set(m.family, []); groups.get(m.family).push(m); }
-  if (!list.length) { $('#models').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
+  if (!list.length) { $('#modelsTable').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
   let html = '<table><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th></th><th></th><th>Action</th></tr></thead><tbody>';
   for (const [family, rows] of groups) {
     html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni-')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
@@ -80,7 +154,7 @@ function renderModels(data) {
       html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td>${m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>`:''}${mediaButton || (!m.runnable?'—':'')}</td></tr>`;
     }
   }
-  $('#models').innerHTML = html + '</tbody></table>';
+  $('#modelsTable').innerHTML = html + '</tbody></table>';
   document.querySelectorAll('.load-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id)));
   document.querySelectorAll('.load-media-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id, true)));
 }
@@ -107,12 +181,14 @@ function renderDiskModels() {
   const rows = modelData.filter(m => m.downloaded), total = rows.reduce((sum,m) => sum + (Number(m.downloaded_bytes) || 0),0);
   $('#diskModels').innerHTML = rows.length ? rows.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong><span class="muted">${gb(m.downloaded_bytes)}</span></div><button type="button" class="delete-model" data-id="${esc(m.id)}">Delete</button></div>`).join('') : '<div class="empty">Nothing downloaded yet</div>';
   $('#diskTotal').textContent = `Total: ${gb(total)} in ${rows.length} ${rows.length === 1 ? 'model' : 'models'}`;
+  $('#diskSummary').textContent=`${rows.length} ${rows.length===1?'model':'models'} on disk`;
+  $('#diskSummaryMeta').textContent=`${gb(total)} total`;
   document.querySelectorAll('.delete-model').forEach(button => button.addEventListener('click', async () => {
     const model = rows.find(m => m.id === button.dataset.id);
-    if (!model || !confirm(`Delete ${model.family} ${model.tier} (${model.label}) from disk?`)) return;
+    if (!model || !await confirmDialog({title:'Delete model from disk?',description:`${model.family} ${model.tier} (${model.label}) will be removed from disk.`,confirmLabel:'Delete',destructive:true})) return;
     $('#modelsDirError').textContent = '';
-    try { await api('/api/models/delete', {method:'POST', body:JSON.stringify({id:model.id})}); await loadModels(); }
-    catch (e) { $('#modelsDirError').textContent = e.message; }
+    try { await api('/api/models/delete', {method:'POST', body:JSON.stringify({id:model.id})}); toast('Model deleted'); await loadModels(); }
+    catch (e) { $('#modelsDirError').textContent = e.message; toast(e.message,'error'); }
   }));
 }
 async function loadSettings() {
@@ -126,20 +202,20 @@ async function saveModelsDir(value) {
   $('#modelsDirError').textContent = '';
   try {
     await api('/api/settings', {method:'PUT', body:JSON.stringify({models_dir:value})});
-    await Promise.all([loadSettings(),loadModels()]);
-  } catch (e) { $('#modelsDirError').textContent = e.message; }
+    await Promise.all([loadSettings(),loadModels()]); toast('Models directory saved');
+  } catch (e) { $('#modelsDirError').textContent = e.message; toast(e.message,'error'); }
 }
 async function loadModels(refresh=false) {
-  $('#models').innerHTML = '<div class="empty">Loading models…</div>';
+  $('#modelsTable').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   $('#suggested').innerHTML = '<div class="empty">Loading suggestions…</div>';
   try { renderModels(await api(`/api/models${refresh?'?refresh=1':''}`)); }
-  catch (e) { $('#models').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; $('#suggested').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
+  catch (e) { $('#modelsTable').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; $('#suggested').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; toast(e.message,'error'); }
 }
 async function loadModel(id, media=false) {
   statusSequence++;
   clearSelectedMedia();
-  try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); await refreshStatus(); }
-  catch (e) { showStatusError(e.message); }
+  try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); toast('Model load started'); await refreshStatus(); }
+  catch (e) { showStatusError(e.message); toast(e.message,'error'); }
 }
 function showStatusError(text) { $('#statusError').textContent = text || ''; }
 function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? 'images' : kind === 'audio' ? 'audio' : kind).join(' and '); }
@@ -202,11 +278,20 @@ async function selectMedia(files) {
   } catch (error) { if (selection === mediaSelection) showMediaError(error.message); }
 }
 function renderStatus(s) {
+  statusCache=s;
   $('#stateLabel').textContent = s.state || 'idle';
-  const dot=$('#statusDot'); dot.className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
-  $('#headerDot').className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
-  $('#headerStatus').textContent=s.state==='ready'?'MODEL READY':s.state==='error'?'MODEL ERROR':'LOCAL DECISION ENGINE';
+  const dot=$('#statusDot'), footerDot=$('#footerDot'); dot.className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
+  footerDot.className=dot.className; $('#footerState').textContent=s.state || 'idle';
   $('#statusModel').textContent = s.model || 'No model loaded';
+  let extras=$('#statusExtras');
+  if(!extras){extras=document.createElement('span');extras.id='statusExtras';extras.className='chips';$('#status').querySelector('.status-head').append(extras);}
+  extras.innerHTML=`${s.serving?.url?`<span class="chip">${esc(s.serving.url)}</span>${s.serving.require_key?'<span class="chip">key required</span>':''}${s.serving.mcp?'<span class="chip">mcp</span>':''}`:''}${s.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
+  $('#statusModel').textContent = s.model || 'No model loaded';
+  $('#footerModel').textContent=s.model || 'No model loaded'; $('#footerModel').title=s.model || 'No model loaded';
+  $('#footerUrl').textContent=s.serving?.url || ''; $('#footerUrl').hidden=!s.serving?.url;
+  $('#footerUnload').hidden=!['ready','downloading','starting','error'].includes(s.state);
+  $('#unloadButton').hidden=$('#footerUnload').hidden;
+  $('#restartButton').hidden=!s.model || ['downloading','starting'].includes(s.state);
   $('#statusMode').textContent = s.mode || ''; $('#statusMode').hidden = !s.mode;
   loadedMedia = Array.isArray(s.media) ? s.media : [];
   const mediaChip = loadedMedia.map(kind => kind === 'image' ? 'images' : kind).join(' · ');
@@ -216,7 +301,7 @@ function renderStatus(s) {
   if (!loadedMedia.length) clearSelectedMedia();
   $('#startingSpinner').hidden = s.state !== 'starting';
   $('#progressWrap').hidden = s.state !== 'downloading';
-  $('#unloadButton').hidden = !['ready','downloading','starting','error'].includes(s.state);
+  showStatusError(s.state === 'error' ? s.error : '');
   showStatusError(s.state === 'error' ? s.error : '');
   if (s.state === 'downloading' && s.progress) {
     const done=Number(s.progress.done_bytes)||0,total=Number(s.progress.total_bytes)||0,pct=total?Math.min(100,done/total*100):0;
@@ -224,7 +309,7 @@ function renderStatus(s) {
   }
   const logs=$('#logs'), wasBottom=logs.scrollTop + logs.clientHeight >= logs.scrollHeight - 8;
   logs.textContent=(s.logs||[]).join('\n'); if (wasBottom) logs.scrollTop=logs.scrollHeight;
-  const ready=s.state==='ready'; $('#playground').disabled=!ready; $('#playgroundHint').hidden=ready;
+  const ready=s.state==='ready'; $('#playgroundForm').disabled=!ready; $('#playgroundHint').hidden=ready;
   const frequent=['downloading','starting'].includes(s.state), delay=frequent?1000:5000;
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer=setTimeout(refreshStatus,delay);
@@ -233,7 +318,7 @@ async function refreshStatus() {
   const sequence = ++statusSequence;
   try {
     const status = await api('/api/status');
-    if (sequence === statusSequence) renderStatus(status);
+    if (sequence === statusSequence) { renderStatus(status); if (serveData) renderServeStatus(status); }
   } catch(e) {
     if (sequence === statusSequence) { showStatusError(e.message); pollTimer=setTimeout(refreshStatus,5000); }
   }
@@ -361,7 +446,10 @@ function selectModelsTab(tab) {
 $('#suggestedTab').addEventListener('click',()=>selectModelsTab('suggested'));
 $('#allModelsTab').addEventListener('click',()=>selectModelsTab('all'));
 selectModelsTab(localStorage.getItem('basal-ui.tab')==='all'?'all':'suggested');
-$('#unloadButton').addEventListener('click',async()=>{statusSequence++;try{await api('/api/unload',{method:'POST'});await refreshStatus();await loadModels();}catch(e){showStatusError(e.message);}});
+$('#unloadButton').addEventListener('click',unloadModel);
+$('#footerUnload').addEventListener('click',unloadModel);
+async function unloadModel(){statusSequence++;try{await api('/api/unload',{method:'POST'});toast('Model unloaded');await refreshStatus();await loadModels();}catch(e){showStatusError(e.message);toast(e.message,'error');}}
+$('#restartButton').addEventListener('click',restartModel);
 $('#logsToggle').addEventListener('click',()=>{const logs=$('#logs');logs.hidden=!logs.hidden;$('#logsToggle').setAttribute('aria-expanded',String(!logs.hidden));});
 $('#addQuestion').addEventListener('click',()=>addQuestion());
 $('#stateInput').addEventListener('input',syncRequest);
@@ -375,6 +463,154 @@ window.addEventListener('beforeunload',()=>selectedMedia.forEach(item=>URL.revok
 addQuestion();
 $('#examples').addEventListener('change',e=>{const item=examples[Number(e.target.value)];if(item?.request)setRequest(item.request);else if(item)setRequest({state:item.state,questions:item.questions});});
 $('#sendButton').addEventListener('click',sendDecision);
-(async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=`Hardware unavailable: ${e.message}`;}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus()]);})();
+let serveData=null, serveHost='127.0.0.1', statusCache=null, connectTab='curl';
+function connectionEndpoint() {
+  const settings=serveData.settings, serving=statusCache?.serving;
+  if (serving) return serving.url;
+  const host=settings.host==='0.0.0.0'?(serveData.lan_ip||location.hostname):'127.0.0.1';
+  return `http://${host}:${settings.port}`;
+}
+function renderConnect() {
+  const settings=serveData.settings, serving=statusCache?.serving;
+  const endpoint=connectionEndpoint(), name=serving?.model_name||statusCache?.model||'basal-model';
+  const requireKey=serving?serving.require_key:settings.require_key, mcp=serving?serving.mcp:settings.mcp;
+  const key=requireKey?'<your key>':null, auth=key?` -H 'Authorization: Bearer ${key}'`:'';
+  const keyArg=key?`, api_key="${key}"`:'';
+  const mcpHttp=mcp
+    ?JSON.stringify({mcpServers:{basal:{url:`${endpoint}/mcp`,...(key?{headers:{Authorization:`Bearer ${key}`}}:{})}}},null,2)+'\n\n'
+    :'';
+  const snippets={
+    curl:`curl -X POST ${endpoint}/v1/systemone -H 'Content-Type: application/json'${auth} -d '{"state":"...","questions":{"route":{"type":"choice","instructions":"Choose a route","criteria":{"sales":"sales","support":"support"}}}}'
+
+curl -X POST ${endpoint}/v1/decisions -H 'Content-Type: application/json'${auth} -d '{"model":"${name}","input":"...","questions":[{"type":"choice","name":"route","instructions":"Choose a route","choices":[{"value":"sales"},{"value":"support"}]}]}'`,
+    python:`from basal.client import Basal
+
+client = Basal("${endpoint}"${keyArg})
+answer = client.decide(
+    state="...",
+    questions={"route": {"type": "choice", "instructions": "Choose a route",
+                         "criteria": {"sales": "sales", "support": "support"}}},
+)
+print(answer)`,
+    typesafe:`export TYPESAFE_BASE_URL=${endpoint}
+export TYPESAFE_API_KEY=${key||'local'}
+export TYPESAFE_DEFAULT_MODEL=${name}
+export NO_PROXY=localhost,127.0.0.1`,
+    openai:`from openai import OpenAI
+
+client = OpenAI(base_url="${endpoint}/v1", api_key="${key||'local'}")
+decision = client.decisions.create(
+    model="${name}",
+    input="...",
+    questions=[{"type": "choice", "instructions": "Choose a route",
+                "choices": [{"value": "sales"}, {"value": "support"}]}],
+)`,
+    litellm:`model_list:
+  - model_name: ${name}
+    litellm_params:
+      model: hosted_vllm/${name}
+      api_base: ${endpoint}
+      api_key: ${key||'local'}`,
+    mcp:mcpHttp+`# stdio bridge
+basal-mcp --url ${endpoint}${key?` --api-key ${key}`:''}`
+  };
+  $('#connectCurl').textContent=snippets.curl;
+  $('#connectPython').textContent=snippets.python;
+  $('#connectTypesafe').textContent=snippets.typesafe;
+  $('#connectOpenai').textContent=snippets.openai;
+  $('#connectLitellm').textContent=snippets.litellm;
+  $('#connectMcp').textContent=snippets.mcp;
+  $('#mcpConnectHint').hidden=Boolean(mcp);
+  $('#runningServerNote').hidden=!statusCache?.restart_required;
+  $('#connectTabs').querySelectorAll('[data-connect]').forEach(tab=>{
+    const active=tab.dataset.connect===connectTab;
+    tab.classList.toggle('active',active); tab.setAttribute('aria-selected',String(active));
+  });
+  document.querySelectorAll('[data-connect-panel]').forEach(panel=>{panel.hidden=panel.dataset.connectPanel!==connectTab;});
+}
+
+// the endpoint line of the API server card: where the API answers now, and whether saved settings await a restart
+function renderServeStatus(status) {
+  const serving=status?.serving;
+  const restart=status?.restart_required?'<span class="badge fit-tight">Restart to apply</span>':'';
+  // only the text slot is re-rendered: the "Serve the API" switch shares the line
+  const text=$('#serveStatus .serve-status-text');
+  text.innerHTML=serving
+    ?`<span class="mono">${esc(serving.url)}</span>${serving.require_key?'<span class="chip">key required</span>':''}${serving.mcp?'<span class="chip">mcp</span>':''}${restart}`
+    :`<span>Only this app can reach the model</span>${restart}`;
+  $('#restartServe').disabled=!status?.model||['downloading','starting'].includes(status.state);
+  $('#apiSummary').textContent=serving?'Serving':'Off';
+  $('#apiSummaryMeta').textContent=`${serving?serving.url:'API server is not serving'} · ${serveData?.keys?.length ?? 0} API keys`;
+  renderConnect();
+}
+async function loadServe(){
+  try{
+    serveData=await api('/api/serve');
+    const s=serveData.settings;
+    setChecked($('#serveEnabled'),s.enabled); $('#servePort').value=s.port; setChecked($('#serveRequireKey'),s.require_key);
+    $('#serveMaxLen').value=s.max_len; $('#serveCors').value=s.cors_origins.join('\n'); $('#serveLog').value=s.log_decisions;
+    setChecked($('#serveMcp'),s.mcp); $('#serveMcp').disabled=!serveData.mcp_available; $('#mcpHint').textContent=serveData.mcp_hint||'';
+    setChecked($('#autoLoad'),serveData.auto_load); serveHost=s.host;
+    $('#serveLoopback').classList.toggle('active',serveHost==='127.0.0.1');
+    $('#serveLan').classList.toggle('active',serveHost==='0.0.0.0');
+    $('#serveWarning').hidden=s.host!=='0.0.0.0'||s.require_key;
+    renderServeStatus(statusCache);
+    $('#serveKeys').innerHTML=serveData.keys.map(k=>`<div class="disk-row"><span class="disk-info">${esc(k.name)} · ${esc(k.prefix)} · created ${esc(new Date(k.created*1000).toLocaleString())} · last used ${k.last_used?esc(new Date(k.last_used*1000).toLocaleString()):'never'}</span><button type="button" data-revoke="${esc(k.name)}">Revoke</button></div>`).join('')||'<p class="muted">No API keys created.</p>';
+    $('#serveKeys').querySelectorAll('[data-revoke]').forEach(button=>button.addEventListener('click',async()=>{
+      if(await confirmDialog({title:'Revoke API key?',description:`${button.dataset.revoke} will no longer be able to access this server.`,confirmLabel:'Revoke',destructive:true})){
+        try{await api(`/api/serve/keys/${encodeURIComponent(button.dataset.revoke)}`,{method:'DELETE'});toast('API key revoked');await loadServe();}
+        catch(error){showServeError(error.message);toast(error.message,'error');}
+      }
+    }));
+    $('#serveError').hidden=true;
+    renderConnect();
+  }catch(error){showServeError(error.message);}
+}
+function showServeError(message) { $('#serveError').textContent=message; $('#serveError').hidden=!message; }
+$('#serveLoopback').onclick=()=>{serveHost='127.0.0.1';$('#serveWarning').hidden=true;$('#serveLoopback').classList.add('active');$('#serveLan').classList.remove('active');};
+$('#serveLan').onclick=()=>{serveHost='0.0.0.0';$('#serveWarning').hidden=$('#serveRequireKey').checked;$('#serveLan').classList.add('active');$('#serveLoopback').classList.remove('active');};
+$('#serveRequireKey').addEventListener('change',()=>{$('#serveWarning').hidden=serveHost!=='0.0.0.0'||$('#serveRequireKey').checked;if(serveData)renderConnect();});
+$('#connectTabs').querySelectorAll('[data-connect]').forEach(button=>button.addEventListener('click',()=>{connectTab=button.dataset.connect;renderConnect();}));
+$('#saveServe').onclick=async()=>{
+  try{
+    await api('/api/serve',{method:'PUT',body:JSON.stringify({
+      enabled:$('#serveEnabled').checked,host:serveHost,port:Number($('#servePort').value),
+      require_key:$('#serveRequireKey').checked,max_len:Number($('#serveMaxLen').value),
+      cors_origins:$('#serveCors').value.split('\n').map(value=>value.trim()).filter(Boolean),
+      log_decisions:$('#serveLog').value,mcp:$('#serveMcp').checked,auto_load:$('#autoLoad').checked
+    })});
+    showServeError(''); await loadServe(); await refreshStatus();
+    toast(statusCache?.restart_required?'Settings saved — restart the server to apply':'Settings saved');
+  }catch(error){showServeError(error.message);toast(error.message,'error');}
+};
+$('#createKey').onclick=async()=>{
+  try{
+    const key=await api('/api/serve/keys',{method:'POST',body:JSON.stringify({name:$('#newKeyName').value})});
+    $('#newKeySecret').innerHTML=`<code>${esc(key.key)}</code><p>Copy it now: it is not shown again.</p><button type="button" id="copyNewKey">Copy</button>`;
+    $('#newKeySecret').hidden=false; $('#copyNewKey').onclick=()=>copyText(key.key,'API key copied');
+    $('#newKeyName').value=''; await loadServe(); toast('API key created');
+  }catch(error){showServeError(error.message);toast(error.message,'error');}
+};
+$('#restartServe').onclick=restartModel;
+async function restartModel(){
+  try{await api('/api/restart',{method:'POST'});toast('Model restart started');await refreshStatus();}
+  catch(error){showServeError(error.message);showStatusError(error.message);toast(error.message,'error');}
+}
+async function copyText(text, success='Copied to clipboard') {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const area=document.createElement('textarea'); area.value=text; area.style.position='fixed'; area.style.opacity='0';
+    document.body.append(area);
+    let copied=false;
+    try { area.select(); copied=document.execCommand('copy'); }
+    catch {}
+    finally { area.remove(); }
+    if(!copied) { toast('Copy failed — select the text and copy manually','error'); return; }
+  }
+  toast(success);
+}
+$('#copyServeUrl').onclick=()=>copyText(connectionEndpoint(),'Endpoint copied');
+$('#copyServeConnect').onclick=()=>copyText($(`[data-connect-panel="${connectTab}"] code`).textContent,'Snippet copied');
+ (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=`Hardware unavailable: ${e.message}`;}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);})();
 </script>
 </body></html>

@@ -9,8 +9,10 @@ The model runs in a basal-serve subprocess on a free local port; this app proxie
 import argparse
 from collections import deque
 from contextlib import asynccontextmanager
+import hashlib
 import os
 from pathlib import Path
+import secrets
 import signal
 import socket
 import subprocess
@@ -32,33 +34,63 @@ FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
 
 
+def _lan_ip():
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("192.0.2.1", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return socket.gethostname()
+
+
 class Runner:
     """One model at a time: idle -> downloading -> starting -> ready, or error. Every load or stop starts a new
     generation; a background load that finds its generation outdated stops instead of touching the state."""
 
-    def __init__(self, models_dir_fn=settings.models_dir, platform_fn=lambda: hardware.detect().platform):
+    def __init__(self, models_dir_fn=settings.models_dir, platform_fn=lambda: hardware.detect().platform,
+                 settings_mod=settings, internal_secret=None):
         self.models_dir_fn = models_dir_fn
         self.platform_fn = platform_fn
+        self.settings_mod = settings_mod
+        self.internal_secret = internal_secret or secrets.token_urlsafe(32)
         self.lock = threading.RLock()
         self.gen = 0
         self.process = None
         self.downloads: dict[str, threading.Thread] = {}
         self.logs = deque(maxlen=200)
+        self._lan_ip = None
         self._reset()
 
     def _reset(self):
         self.state, self.model, self.model_repo, self.mode = "idle", None, None, None
         self.command, self.progress, self.error, self.base_url = None, None, None, None
         self.media_requested, self.media = False, []
+        self.serve_snapshot = None  # the serve settings the running basal-serve was started with
 
     def status(self):
         with self.lock:
             if self.state == "ready" and self.process and self.process.poll() is not None:
                 self.state = "error"
                 self.error = f"basal-serve exited ({self.process.returncode}): {self.logs[-1] if self.logs else ''}"
+            config = self.serve_snapshot
+            restart_required = (self.state == "ready" and config is not None
+                                and config != self.settings_mod.serve_settings())
+            serving = None
+            if self.state == "ready" and config is not None and config["enabled"]:
+                host = config["host"]
+                serving_host = "127.0.0.1" if host == "127.0.0.1" else self.lan_ip()
+                serving = {"url": f"http://{serving_host}:{config['port']}", "host": host,
+                           "port": config["port"], "require_key": config["require_key"], "mcp": config["mcp"],
+                           "model_name": self.model, "restart_required": restart_required}
             return {"state": self.state, "model": self.model, "mode": self.mode, "command": self.command,
                     "progress": self.progress, "error": self.error, "logs": list(self.logs),
-                    "media_requested": self.media_requested, "media": self.media}
+                    "media_requested": self.media_requested, "media": self.media, "serving": serving,
+                    "restart_required": restart_required}
+
+    def lan_ip(self):
+        if self._lan_ip is None:
+            self._lan_ip = _lan_ip()
+        return self._lan_ip
 
     def busy(self, repo: str) -> bool:
         """A download of the repository is running (also one left in the background by an unload), or the loaded
@@ -92,8 +124,9 @@ class Runner:
             self.logs.clear()
             gen = self.gen
             cache_dir = self.models_dir_fn()
+            serve = self.settings_mod.serve_settings()
         self._terminate(old)
-        threading.Thread(target=self._start, args=(assessment, gen, media, cache_dir), daemon=True).start()
+        threading.Thread(target=self._start, args=(assessment, gen, media, cache_dir, serve), daemon=True).start()
         return self.status()
 
     def _update(self, gen, **fields):
@@ -136,21 +169,46 @@ class Runner:
             raise path
         return Path(path)
 
-    def _build_command(self, v, path, assessment, media, port):
-        return [sys.executable, "-m", "basal.server",
-                *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None),
-                "--host", "127.0.0.1", "--port", str(port)]
+    def _build_command(self, v, path, assessment, media, port, serve):
+        command = [sys.executable, "-m", "basal.server",
+                   *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None),
+                   "--name", v.id,
+                   "--host", serve["host"] if serve["enabled"] else "127.0.0.1",
+                   "--port", str(serve["port"] if serve["enabled"] else port)]
+        if serve["enabled"]:
+            if serve["require_key"]:
+                command += ["--api-keys", str(self.settings_mod.keys_file(hashlib.sha256(
+                    self.internal_secret.encode()).hexdigest()))]
+            if serve["cors_origins"]:
+                command += ["--cors-origins", ",".join(serve["cors_origins"])]
+            if serve["log_decisions"]:
+                command += ["--log-decisions", serve["log_decisions"]]
+            if serve["mcp"]:
+                command += ["--mcp", "on"]
+        if assessment.mode in ("vllm", "sglang"):
+            command += ["--max-len", str(serve["max_len"])]
+        return command
 
-    def _start(self, assessment, gen, media=False, cache_dir=None):
+    def _start(self, assessment, gen, media=False, cache_dir=None, serve=None):
         v = assessment.variant
+        serve = serve or self.settings_mod.serve_settings()
         try:
             path = catalog.is_downloaded(v, cache_dir) or self._download(v, gen, cache_dir)
             if path is None:
                 return
+            port = serve["port"] if serve["enabled"] else 0
+            host = serve["host"] if serve["enabled"] else "127.0.0.1"
             with socket.socket() as s:
-                s.bind(("127.0.0.1", 0))
-                port = s.getsockname()[1]
-            command = self._build_command(v, path, assessment, media, port)
+                try:
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.bind((host, port))
+                except OSError as exc:
+                    if serve["enabled"]:
+                        raise RuntimeError(f"port {port} on {host} is in use") from exc
+                    raise
+                if not port:
+                    port = s.getsockname()[1]
+            command = self._build_command(v, path, assessment, media, port, serve)
             options = ({"start_new_session": True} if os.name == "posix" else
                        {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)})
             with self.lock:
@@ -158,6 +216,7 @@ class Runner:
                     return
                 self.state, self.progress, self.command = "starting", None, command
                 self.base_url = f"http://127.0.0.1:{port}"
+                self.serve_snapshot = dict(serve)
                 self.process = proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                                        text=True, bufsize=1, **options)
             threading.Thread(target=self._read_logs, args=(proc,), daemon=True).start()
@@ -168,13 +227,13 @@ class Runner:
                     raise RuntimeError(f"basal-serve exited ({proc.returncode}): "
                                        f"{self.logs[-1] if self.logs else 'no output'}")
                 try:
-                    if httpx.get(self.base_url + "/health", timeout=1).status_code == 200:
+                    if httpx.get(self.base_url + "/health", headers=self._headers(), timeout=1).status_code == 200:
                         media_kinds = []
                         if media:
                             error = None
                             for attempt in range(5):
                                 try:
-                                    response = httpx.get(self.base_url + "/v1/models", timeout=1)
+                                    response = httpx.get(self.base_url + "/v1/models", headers=self._headers(), timeout=1)
                                     response.raise_for_status()
                                     models = response.json().get("models", [])
                                     media_kinds = models[0].get("media", []) if models else []
@@ -186,7 +245,11 @@ class Runner:
                                         time.sleep(0.5)
                             if error is not None:
                                 raise RuntimeError(f"could not read media capabilities from basal-serve: {error}")
-                        self._update(gen, state="ready", media=media_kinds)
+                        with self.lock:
+                            if gen != self.gen:
+                                return
+                            self.state, self.media = "ready", media_kinds
+                            self.settings_mod.remember_model(v.id, media)
                         return
                 except httpx.HTTPError:
                     pass
@@ -244,12 +307,15 @@ class Runner:
             signal_group(kill=True)
             proc.wait()
 
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.internal_secret}"}
+
     def decide(self, body):
         with self.lock:
             if self.state != "ready":
                 raise RuntimeError("no model is ready; load one first")
             url = self.base_url + "/v1/systemone"
-        return httpx.post(url, json=body, timeout=120)
+        return httpx.post(url, json=body, headers=self._headers(), timeout=120)
 
 
 def _capture(fn):
@@ -291,16 +357,47 @@ def _byte_counter():
 
 def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, runner=None,
               settings_mod=settings, allowed_hosts=("127.0.0.1", "localhost", "::1")) -> FastAPI:
-    runner = runner or Runner(models_dir_fn=settings_mod.models_dir, platform_fn=lambda: hardware_fn().platform)
+    runner = runner or Runner(models_dir_fn=settings_mod.models_dir, platform_fn=lambda: hardware_fn().platform,
+                              settings_mod=settings_mod)
     allowed_hosts = tuple(allowed_hosts)
 
     def hw():
         return hardware_fn()
 
+    auto_load_stop = threading.Event()
+    auto_load_lock = threading.Lock()
+
+    def _auto_load():
+        last = settings_mod.last_model()
+        try:
+            variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
+            variant = next((v for v in variants if v.id == last["id"]), None)
+            if variant is None:
+                raise ValueError("model is unknown")
+            assessment = catalog.assess(variant, hw())
+            if not assessment.runnable and not last.get("media"):
+                raise ValueError(assessment.reason)
+            if last.get("media") and assessment.media_mode is None:
+                raise ValueError(assessment.media_reason)
+            with auto_load_lock:
+                if not auto_load_stop.is_set():
+                    runner.load(assessment, media=last.get("media", False))
+        except Exception as exc:
+            print(f"basal-ui: auto-load skipped: {exc}", file=sys.stderr)
+
     @asynccontextmanager
     async def lifespan(_app):
+        auto_load_thread = None
+        if settings_mod.load().get("auto_load") and settings_mod.last_model():
+            auto_load_thread = threading.Thread(target=_auto_load, daemon=True)
+            auto_load_thread.start()
         yield
+        with auto_load_lock:
+            auto_load_stop.set()
+        if auto_load_thread is not None:
+            auto_load_thread.join(timeout=5)
         runner.unload()
+        settings_mod.remove_keys_file()
 
     app = FastAPI(title="basal-ui", lifespan=lifespan)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
@@ -323,6 +420,79 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
     def index():
         # revalidate on every load: a cached copy from an older basal-ui would talk to the new API
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+    def serve_response():
+        config = settings_mod.serve_settings()
+        available = None
+        hint = None
+        try:
+            from basal.mcp_server import available as mcp_available
+            hint = mcp_available()
+            available = hint is None
+        except ImportError as exc:
+            hint = str(exc)
+        status = runner.status()
+        usage = {}
+        if status["state"] == "ready" and status.get("serving") and status["serving"]["require_key"]:
+            try:
+                response = httpx.get(runner.base_url + "/v1/keys", headers=runner._headers(), timeout=2)
+                response.raise_for_status()
+                usage = {item["name"]: item["last_used"] for item in response.json().get("keys", [])}
+            except httpx.HTTPError:
+                pass
+        lan = runner.lan_ip() if config["host"] == "0.0.0.0" else None
+        return {"settings": config, "auto_load": settings_mod.load().get("auto_load", False),
+                "keys": [{**{k: v for k, v in key.items() if k != "sha256"},
+                          "last_used": usage.get(key["name"])} for key in settings_mod.keys()],
+                "mcp_available": available, "mcp_hint": hint, "lan_ip": lan}
+
+    @app.get("/api/serve")
+    def get_serve():
+        return serve_response()
+
+    @app.put("/api/serve")
+    def put_serve(body: dict = Body(...)):
+        try:
+            if "auto_load" in body and not isinstance(body["auto_load"], bool):
+                raise ValueError("auto_load must be a boolean")
+            patch = {k: v for k, v in body.items() if k != "auto_load"}
+            if patch:
+                settings_mod.update_serve(patch)
+            if "auto_load" in body:
+                settings_mod.set_auto_load(body["auto_load"])
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return serve_response()
+
+    @app.post("/api/serve/keys", status_code=201)
+    def post_key(body: dict = Body(...)):
+        try:
+            record, secret = settings_mod.create_key(body.get("name"))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {**record, "key": secret}
+
+    @app.delete("/api/serve/keys/{name}")
+    def remove_key(name: str):
+        try:
+            settings_mod.delete_key(name)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"deleted": name}
+
+    @app.post("/api/restart", status_code=202)
+    def restart_model():
+        status = runner.status()
+        if status["state"] == "idle":
+            raise HTTPException(409, "no model is loaded")
+        if status["state"] in ("downloading", "starting"):
+            raise HTTPException(409, "model is still loading")
+        variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
+        variant = next((v for v in variants if v.id == status["model"]), None)
+        if variant is None:
+            raise HTTPException(400, "loaded model is no longer available")
+        assessment = catalog.assess(variant, hw())
+        return runner.load(assessment, media=status.get("media_requested", False))
 
     @app.get("/api/hardware")
     def get_hardware():
