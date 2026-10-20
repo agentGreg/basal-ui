@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>basal</title>
+<style>
+@font-face{font-family:Manrope;src:url("/static/fonts/manrope.ttf") format("truetype");font-weight:400 800;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url("/static/fonts/ibm-plex-mono.ttf") format("truetype");font-weight:400;font-display:swap}
+:root{--paper:#f8f7f4;--white:#fff;--ink:#232824;--muted:#646b5e;--line:#dedfd8;--accent:#b94329;--accent-light:#f5e8e0;--omni:#655487;--omni-light:#efebf5;--mono:"IBM Plex Mono",monospace;--sans:Manrope,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;--green:#53745a;--green-light:#edf2e9;--amber:#a46634;--amber-light:#fff8eb;--shadow:0 4px 12px #20292004;color-scheme:light}*{box-sizing:border-box}::selection{background:#edb29b}body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.7 var(--sans);-webkit-font-smoothing:antialiased}main{max-width:1280px;margin:auto;padding:28px 40px 64px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:26px}.brand{display:flex;align-items:center;gap:10px;line-height:1}.brand>span{font-size:30px;font-weight:750;letter-spacing:-1.7px}.brand-mark{width:25px;height:32px;color:var(--accent)}.brand-dot{color:var(--accent)}.eyebrow,.section-index{font:400 12px/1.5 var(--mono);letter-spacing:1.2px;text-transform:uppercase}.eyebrow{display:flex;align-items:center;gap:10px;color:var(--accent)}.status-dot{display:inline-block;width:6px;height:6px;background:#85897f;border-radius:50%;flex:none;box-shadow:0 0 0 4px #53745a0b}.status-dot.ready{background:#53745a}.status-dot.error{background:var(--accent);box-shadow:0 0 0 4px #b943290b}h1,h2,h3,p{margin:0}h1,h2,h3{font-weight:600;line-height:1.25}h2{font-size:clamp(26px,3vw,36px);letter-spacing:-1.9px}h3{font-size:20px;letter-spacing:-.55px}p,.muted,small{color:var(--muted)}.card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;box-shadow:var(--shadow);margin-bottom:18px}.section-label{display:flex;align-items:center;gap:12px;margin-bottom:8px}.hardware{display:flex;align-items:center;justify-content:space-between;gap:20px}.hardware-name{font-weight:650;font-size:18px}.hardware-grid{display:flex;gap:24px;flex-wrap:wrap}.metric label{display:block;color:var(--muted);font:11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.05em}.metric strong{font-variant-numeric:tabular-nums}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.chip,.badge{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:4px;padding:2px 8px;font:11px/1.5 var(--mono);white-space:nowrap}.badge.rec{background:var(--accent-light);border-color:#e9c4b7;color:var(--accent)}.badge.best{background:#f2eee3;border-color:#e2dbc8;color:#765b31}.badge.experimental{background:var(--omni-light);border-color:#dcd3e9;color:var(--omni)}.badge.fit-fits{background:var(--green-light);border-color:#d4e0d2;color:var(--green)}.badge.fit-tight{background:var(--amber-light);border-color:#f2a476;color:var(--amber)}.badge.fit-too_large{background:var(--accent-light);border-color:#e9c4b7;color:var(--accent)}.badge.fit-unknown{background:#f0f0ec;color:var(--muted)}.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.controls label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}button,select,input,textarea{font:inherit}button{min-height:40px;border:1px solid #d7d9d1;background:transparent;color:var(--ink);border-radius:5px;padding:10px 16px;font-size:13px;font-weight:650;cursor:pointer;transition:background .2s,border-color .2s,transform .2s,box-shadow .2s}button:hover{border-color:#a9b19f;background:#f0f0e9;transform:translateY(-2px)}button.primary{min-height:49px;padding:13px 22px;border-color:var(--accent);background:var(--accent);color:#fff;font-size:14px}button.primary:hover{background:#a83a22}.button-dark{background:var(--ink);border-color:var(--ink);color:#fff}button:disabled{opacity:.48;cursor:not-allowed}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--muted);font:11px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.04em;padding:9px 8px;border-bottom:1px solid var(--line)}td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}tr:last-child td{border-bottom:0}.family-row td{padding-top:17px;padding-bottom:7px;font-weight:700;font-size:14px;border-bottom:0}.not-runnable{opacity:.58}.reason{display:block;font-size:11px;color:var(--accent);max-width:250px}.model-name{font-weight:650}.nowrap{white-space:nowrap}.status{position:sticky;top:0;z-index:4;background:#fffF;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:8px;padding:10px 14px;margin-bottom:18px}.status-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.state-pill{font:12px var(--mono);text-transform:uppercase}.status-model{color:var(--muted);overflow-wrap:anywhere}.status-error{color:var(--accent);font-weight:650}.progress-wrap{display:flex;align-items:center;gap:10px;flex:1 1 300px}.progress{height:8px;background:#e7e8e1;border-radius:3px;overflow:hidden;flex:1}.progress>span{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}.logs{margin:8px 0 0;max-height:180px;overflow:auto;background:#232824;color:#f8f7f4;padding:10px;border-radius:4px;font:11px/1.5 var(--mono);white-space:pre-wrap}.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}fieldset{border:0;padding:0;margin:0;min-width:0}fieldset:disabled{opacity:.48}.playground-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.playground-head select{max-width:400px}.section-index{margin-bottom:10px}textarea,input[type=text],select{border:1px solid var(--line);border-radius:4px;background:var(--white);color:var(--ink);padding:8px}textarea{width:100%;min-height:90px;resize:vertical}#stateInput{min-height:115px;margin-top:6px}.field{margin:12px 0}.field>label,.question label{display:block;font-size:12px;font-weight:650;margin-bottom:5px}.questions{display:grid;gap:10px}.question{border:1px solid var(--line);border-radius:5px;padding:12px}.q-head{display:grid;grid-template-columns:minmax(120px,1fr) 145px auto;gap:8px;align-items:end}.q-options{margin-top:8px}.q-options textarea{min-height:72px}.q-instructions{margin-top:8px}.editjson{margin-top:12px}.error-box{color:var(--accent);background:var(--accent-light);border-radius:4px;padding:9px;margin-top:10px;white-space:pre-wrap}.results{margin-top:14px}.answer{border-top:1px solid var(--line);padding:12px 0}.answer h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.headline{font-weight:700;font-size:15px}.prob{display:grid;grid-template-columns:minmax(90px,180px) 1fr 55px;align-items:center;gap:9px;margin:5px 0;font-size:12px}.bar{height:9px;background:#e7e8e1;border-radius:3px;overflow:hidden}.bar span{display:block;background:#c9cabc;height:100%}.prob:first-of-type .bar span{background:var(--accent)}.answer-meta{font:11px/1.6 var(--mono);color:var(--muted);margin-top:7px}.answer pre{max-height:320px;overflow:auto;background:#f0f0ec;padding:10px;border-radius:4px}details summary{cursor:pointer;color:var(--muted);font:12px var(--mono)}details pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.45 var(--mono)}.empty{color:var(--muted);padding:18px 4px;text-align:center}
+@media(max-width:900px){main{padding:20px 16px 48px}.hardware{align-items:flex-start;flex-direction:column}.table-wrap{overflow:auto}table{min-width:800px}.section-head{align-items:flex-start;flex-direction:column}.status{top:0}.q-head{grid-template-columns:minmax(90px,1fr) 120px auto}}
+.directory-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.directory-row>div:first-child{flex:1 1 320px}.directory-row input{width:100%}.directory-hint{font:11px/1.5 var(--mono);overflow-wrap:anywhere;margin-top:7px}.manager-error{margin-top:8px}.disk-list{margin-top:18px}.disk-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}.disk-row:last-child{border-bottom:0}.disk-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.disk-total{font:11px/1.5 var(--mono);color:var(--muted);text-align:right;margin-top:8px}
+.prob.winner .bar span{background:var(--accent)}
+[hidden]{display:none!important}
+.media-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:10px}.media-item{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--white);overflow:hidden;font-size:12px}.media-preview{display:block;width:100%;aspect-ratio:4/3;padding:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--paper);cursor:zoom-in}.media-preview img{display:block;width:100%;height:100%;object-fit:contain}.media-audio{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/3;border-bottom:1px solid var(--line);background:var(--paper);color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em}.media-meta{display:flex;align-items:center;gap:8px;padding:8px}.media-meta>span{flex:1;min-width:0}.media-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.media-meta small{display:block;color:var(--muted);font-family:var(--mono);font-size:11px}
+.chip.media{background:var(--omni-light);border-color:#dcd3e9;color:var(--omni)}button.load-media-model{margin-left:6px;border-color:#dcd3e9;color:var(--omni)}button.load-media-model:hover{border-color:var(--omni);background:var(--omni-light)}
+#mediaInput{font-size:13px;color:var(--muted)}#mediaInput::file-selector-button{min-height:40px;margin-right:12px;padding:10px 16px;border:1px solid #d7d9d1;border-radius:5px;background:transparent;color:var(--ink);font:650 13px var(--sans);cursor:pointer;transition:background .2s,border-color .2s}#mediaInput::file-selector-button:hover{border-color:#a9b19f;background:#f0f0e9}
+.media-lightbox{max-width:92vw;max-height:92vh;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--white)}.media-lightbox::backdrop{background:#232824cc}.media-lightbox img{display:block;max-width:90vw;max-height:80vh;object-fit:contain;margin:0 auto}.media-lightbox-bar{display:flex;align-items:center;gap:12px;padding:8px 12px;font-size:13px}.media-lightbox-bar span{flex:1}.media-lightbox-bar small{color:var(--muted);font-family:var(--mono)}
+.tabs{display:inline-flex;gap:3px;padding:3px;margin:4px 0 18px;background:#efeee8;border:1px solid #dcded4;border-radius:8px}.tabs button{min-height:36px;padding:4px 14px;border:1px solid transparent;border-radius:5px;background:transparent;color:#465243;font-size:12px;font-weight:700}.tabs button:hover{background:#fffdf7;border-color:transparent;transform:none}.tabs button.active{background:#fffdf7;border-color:#b9c0ac;box-shadow:0 1px 3px #263d2310;color:#233522}
+.suggestion-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:20px}.suggestion-card{display:flex;flex-direction:column;gap:10px;padding:22px;background:#fdfaf6;border:1px solid #e3d2c6;border-top:3px solid var(--accent);border-radius:10px}.suggestion-card.omni{background:#f6f3fa;border-color:#dcd3e9;border-top-color:var(--omni)}.suggestion-card .eyebrow{font-size:10px;color:#7e654e}.suggestion-card.omni .eyebrow{color:var(--omni)}.suggestion-card h3{font-size:28px;letter-spacing:-1.2px;line-height:1.1}.family-suffix{color:var(--accent)}.omni .family-suffix{color:var(--omni)}.suggestion-card h3 small{font:12px var(--mono);margin-left:7px;letter-spacing:0;color:#847297;vertical-align:middle}.suggestion-tier{font-size:16px;font-weight:550;color:var(--ink)}.suggestion-meta{display:inline-block;padding:7px 10px;background:#eceee6;border-radius:4px;font-size:12px;color:#546246}.suggestion-card .why{flex:1;font-size:14px;line-height:1.6;color:var(--muted)}.why code{font:12px var(--mono);color:var(--ink);white-space:nowrap}.suggestion-downloaded{font:11px/1.6 var(--mono);color:var(--green)}.suggestion-card button.primary{align-self:flex-start;display:inline-flex;align-items:center;gap:18px;min-height:40px;padding:10px 16px;font-size:13px}.suggestion-card .icon{width:16px;height:16px}.badge.omni{background:var(--omni-light);border-color:#dcd3e9;color:var(--omni)}
+</style>
+</head>
+<body><main>
+<header><div class="brand"><svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true"><path d="m18 3 16 8-16 8L2 11Z" fill="currentColor"/><path d="m2 18 16 8 16-8M2 25l16 8 16-8" fill="none" stroke="currentColor" stroke-width="3.5"/></svg><span>basal<span class="brand-dot">.</span></span></div><div class="eyebrow"><span class="status-dot" id="headerDot"></span><span id="headerStatus">LOCAL DECISION ENGINE</span></div></header>
+<section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">01 / HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="memoryBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
+<section class="card" id="manager"><div class="section-index">02 / MODEL MANAGER</div><div class="section-head"><h2>Model manager</h2></div><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section>
+<section class="card"><div class="section-index">03 / MODELS</div><div class="section-head"><h2>Models</h2></div><div class="tabs" role="tablist"><button id="suggestedTab" class="active" role="tab" aria-selected="true">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="suggested" role="tabpanel"><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="models" class="table-wrap"><div class="empty">Loading models…</div></div></div></section>
+<section id="status" class="status" aria-live="polite"><div class="status-head"><span class="status-dot" id="statusDot"></span><span class="state-pill" id="stateLabel">idle</span><span class="spinner" id="startingSpinner" hidden></span><span class="status-model" id="statusModel">No model loaded</span><span id="statusMode" class="chip" hidden></span><span id="statusMedia" class="chip media" hidden></span><div class="progress-wrap" id="progressWrap" hidden><div class="progress"><span id="progressBar"></span></div><small id="progressText"></small></div><span id="statusError" class="status-error"></span><button id="unloadButton" hidden>Unload</button><button id="logsToggle" aria-expanded="false">Logs</button></div><pre id="logs" class="logs" hidden></pre></section>
+<section class="card"><div class="section-index">04 / PLAYGROUND</div><div class="playground-head"><h2>Playground</h2><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playground" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section>
+<dialog id="mediaLightbox" class="media-lightbox" aria-label="Image preview"><img id="mediaLightboxImage" alt=""><div class="media-lightbox-bar"><span id="mediaLightboxName"></span><small id="mediaLightboxSize"></small><button type="button" id="mediaLightboxClose">Close</button></div></dialog>
+</main>
+<script>
+'use strict';
+const $ = (s, root=document) => root.querySelector(s);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const gb = n => n == null ? '—' : `${(Number(n) / 1e9).toFixed(1)} GB`;
+let modelData = [], hw = null, examples = [], pollTimer = null, loadedMedia = [], selectedMedia = [], mediaSelection = 0, statusSequence = 0;
+async function api(path, options={}) {
+  const response = await fetch(path, {headers:{'Content-Type':'application/json',...(options.headers||{})}, ...options});
+  const text = await response.text(); let data;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!response.ok) throw new Error(data?.detail || (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) || `${response.status} ${response.statusText}`);
+  return data;
+}
+function renderHardware(data) {
+  hw = data;
+  $('#deviceName').textContent = data.device_name || 'Unknown device';
+  $('#platform').textContent = data.platform || '—';
+  $('#memoryBudget').textContent = gb(data.memory_bytes);
+  $('#availableMemory').textContent = gb(data.available_bytes);
+  $('#systemRam').textContent = gb(data.system_ram_bytes);
+  $('#engines').innerHTML = (data.engines || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="muted">No engines detected</span>';
+}
+function familyOrder(family) {
+  return ({'basal-2.0':5,'basal-omni-1.1':4,'basal-omni-1.0':3,'basal-1.5':2,'basal-1.0':1})[family] || 0;
+}
+function tierOrder(tier) { return ({mini:0,'1.5B':1,'4.5B':2,max:3,ultra:4})[tier] ?? 9; }
+function renderModels(data) {
+  modelData = data.models || [];
+  renderDiskModels();
+  const suggestions = data.suggestions || [];
+  renderSuggestions(suggestions);
+  const slots = new Map(suggestions.map(s => [s.id, s.slot]));
+  const older = $('#olderToggle').checked, showBad = $('#notRunnableToggle').checked, downloadedOnly = $('#downloadedToggle').checked;
+  const list = modelData.filter(m => (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
+  list.sort((a,b) => familyOrder(b.family)-familyOrder(a.family) || tierOrder(a.tier)-tierOrder(b.tier) || a.port.localeCompare(b.port));
+  const groups = new Map(); for (const m of list) { if (!groups.has(m.family)) groups.set(m.family, []); groups.get(m.family).push(m); }
+  if (!list.length) { $('#models').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
+  let html = '<table><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th></th><th></th><th>Action</th></tr></thead><tbody>';
+  for (const [family, rows] of groups) {
+    html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni-')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
+    for (const m of rows) {
+      const classes = `fit-${m.fit || 'unknown'}`;
+      const nowClasses = `fit-${m.fit_now || 'unknown'}`;
+      const reason = !m.runnable && m.reason ? `<span class="reason" title="${esc(m.reason)}">${esc(m.reason)}</span>` : '';
+      const slot = slots.get(m.id);
+      const badges = `${slot?`<span class="badge ${({recommended:'rec',best_quality:'best',multimodal:'omni'})[slot]||''}">${esc(slot.replace('_',' '))}</span>`:''}${m.experimental?'<span class="badge experimental">Experimental</span>':''}`;
+      const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
+      const mediaButton = m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '';
+      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td>${m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>`:''}${mediaButton || (!m.runnable?'—':'')}</td></tr>`;
+    }
+  }
+  $('#models').innerHTML = html + '</tbody></table>';
+  document.querySelectorAll('.load-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id)));
+  document.querySelectorAll('.load-media-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id, true)));
+}
+// "basal-2.0" / "basal-omni-1.0" written the way basal.si5.pl writes the family names
+function familyMark(family) {
+  const parts = String(family).match(/^basal-(omni-)?(.+)$/);
+  if (!parts) return esc(family);
+  return parts[1] ? `basal<span class="family-suffix">-omni</span><small>${esc(parts[2])}</small>` : `basal<span class="family-suffix">-${esc(parts[2])}</span>`;
+}
+const ARROW = '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+function renderSuggestions(suggestions) {
+  if (!suggestions.length) { $('#suggested').innerHTML = '<div class="empty">Nothing fits the memory available now; free memory or use All models</div>'; return; }
+  const models = new Map(modelData.map(m => [m.id, m]));
+  $('#suggested').innerHTML = `<div class="suggestion-grid">${suggestions.map(s => {
+    const m = models.get(s.id);
+    if (!m) return '';
+    const media = s.slot === 'multimodal';
+    const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
+    return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}<button class="primary suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button></article>`;
+  }).join('')}</div>`;
+  document.querySelectorAll('.suggestion-load').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id,b.dataset.media==='true')));
+}
+function renderDiskModels() {
+  const rows = modelData.filter(m => m.downloaded), total = rows.reduce((sum,m) => sum + (Number(m.downloaded_bytes) || 0),0);
+  $('#diskModels').innerHTML = rows.length ? rows.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong><span class="muted">${gb(m.downloaded_bytes)}</span></div><button type="button" class="delete-model" data-id="${esc(m.id)}">Delete</button></div>`).join('') : '<div class="empty">Nothing downloaded yet</div>';
+  $('#diskTotal').textContent = `Total: ${gb(total)} in ${rows.length} ${rows.length === 1 ? 'model' : 'models'}`;
+  document.querySelectorAll('.delete-model').forEach(button => button.addEventListener('click', async () => {
+    const model = rows.find(m => m.id === button.dataset.id);
+    if (!model || !confirm(`Delete ${model.family} ${model.tier} (${model.label}) from disk?`)) return;
+    $('#modelsDirError').textContent = '';
+    try { await api('/api/models/delete', {method:'POST', body:JSON.stringify({id:model.id})}); await loadModels(); }
+    catch (e) { $('#modelsDirError').textContent = e.message; }
+  }));
+}
+async function loadSettings() {
+  try {
+    const settings = await api('/api/settings');
+    $('#modelsDir').value = settings.models_dir;
+    $('#defaultModelsDirHint').textContent = `Default: ${settings.default_models_dir}`;
+  } catch (e) { $('#modelsDirError').textContent = e.message; }
+}
+async function saveModelsDir(value) {
+  $('#modelsDirError').textContent = '';
+  try {
+    await api('/api/settings', {method:'PUT', body:JSON.stringify({models_dir:value})});
+    await Promise.all([loadSettings(),loadModels()]);
+  } catch (e) { $('#modelsDirError').textContent = e.message; }
+}
+async function loadModels(refresh=false) {
+  $('#models').innerHTML = '<div class="empty">Loading models…</div>';
+  $('#suggested').innerHTML = '<div class="empty">Loading suggestions…</div>';
+  try { renderModels(await api(`/api/models${refresh?'?refresh=1':''}`)); }
+  catch (e) { $('#models').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; $('#suggested').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
+}
+async function loadModel(id, media=false) {
+  statusSequence++;
+  clearSelectedMedia();
+  try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); await refreshStatus(); }
+  catch (e) { showStatusError(e.message); }
+}
+function showStatusError(text) { $('#statusError').textContent = text || ''; }
+function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? 'images' : kind === 'audio' ? 'audio' : kind).join(' and '); }
+function clearSelectedMedia() {
+  mediaSelection++;
+  selectedMedia.forEach(item => URL.revokeObjectURL(item.url));
+  selectedMedia = [];
+  $('#mediaInput').value = '';
+  renderSelectedMedia();
+}
+const fileSize = n => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
+function renderSelectedMedia() {
+  $('#mediaItems').innerHTML = selectedMedia.map((item,index) => `<div class="media-item">${item.kind === 'image'
+    ? `<button type="button" class="media-preview" data-preview="${index}" title="Open preview"><img src="${esc(item.url)}" alt="${esc(item.file.name)}"></button>`
+    : '<div class="media-audio">audio</div>'}<div class="media-meta"><span><span class="media-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span><small data-dims="${index}">${fileSize(item.file.size)}</small></span><button type="button" data-remove="${index}" aria-label="Remove ${esc(item.file.name)}">Remove</button></div></div>`).join('');
+  $('#mediaItems').querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
+    URL.revokeObjectURL(selectedMedia[Number(button.dataset.remove)].url);
+    selectedMedia.splice(Number(button.dataset.remove),1);
+    renderSelectedMedia(); syncRequest();
+  }));
+  $('#mediaItems').querySelectorAll('[data-preview]').forEach(button => {
+    const item = selectedMedia[Number(button.dataset.preview)], img = button.querySelector('img');
+    const showDims = () => { item.dims = `${img.naturalWidth}×${img.naturalHeight} · ${fileSize(item.file.size)}`; $(`[data-dims="${button.dataset.preview}"]`).textContent = item.dims; };
+    if (img.complete && img.naturalWidth) showDims(); else img.addEventListener('load', showDims, {once:true});
+    button.addEventListener('click', () => {
+      $('#mediaLightboxImage').src = item.url; $('#mediaLightboxImage').alt = item.file.name;
+      $('#mediaLightboxName').textContent = item.file.name; $('#mediaLightboxSize').textContent = item.dims || fileSize(item.file.size);
+      $('#mediaLightbox').showModal();
+    });
+  });
+  $('#mediaOptions').hidden = !selectedMedia.some(item => item.kind === 'image');
+}
+function showMediaError(message='') {
+  $('#mediaError').textContent = message;
+  $('#mediaError').hidden = !message;
+}
+async function selectMedia(files) {
+  const selection = ++mediaSelection;
+  showMediaError();
+  if (files.length > 8) { showMediaError('at most 8 media items'); return; }
+  const supported = new Set(loadedMedia);
+  for (const file of files) {
+    if (file.size > 20 * 1024 * 1024) { showMediaError(`${file.name} is over 20 MiB`); return; }
+    const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : null;
+    if (!kind) { showMediaError(`${file.name} must be an image or audio file`); return; }
+    if (!supported.has(kind)) { showMediaError(`This model does not support ${kind}`); return; }
+  }
+  const readFile = file => new Promise((resolve,reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({file,kind:file.type.startsWith('image/')?'image':'audio',data:String(reader.result).split(',')[1]});
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+  try {
+    const filesData = await Promise.all(files.map(readFile));
+    if (selection !== mediaSelection) return;
+    selectedMedia.forEach(item => URL.revokeObjectURL(item.url));
+    selectedMedia = filesData.map(item => ({...item,url:URL.createObjectURL(item.file)}));
+    renderSelectedMedia(); syncRequest();
+  } catch (error) { if (selection === mediaSelection) showMediaError(error.message); }
+}
+function renderStatus(s) {
+  $('#stateLabel').textContent = s.state || 'idle';
+  const dot=$('#statusDot'); dot.className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
+  $('#headerDot').className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
+  $('#headerStatus').textContent=s.state==='ready'?'MODEL READY':s.state==='error'?'MODEL ERROR':'LOCAL DECISION ENGINE';
+  $('#statusModel').textContent = s.model || 'No model loaded';
+  $('#statusMode').textContent = s.mode || ''; $('#statusMode').hidden = !s.mode;
+  loadedMedia = Array.isArray(s.media) ? s.media : [];
+  const mediaChip = loadedMedia.map(kind => kind === 'image' ? 'images' : kind).join(' · ');
+  $('#statusMedia').textContent = mediaChip; $('#statusMedia').hidden = !loadedMedia.length;
+  $('#mediaField').hidden = !loadedMedia.length;
+  $('#mediaInput').accept = [loadedMedia.includes('image')?'image/*':'',loadedMedia.includes('audio')?'audio/*':''].filter(Boolean).join(',');
+  if (!loadedMedia.length) clearSelectedMedia();
+  $('#startingSpinner').hidden = s.state !== 'starting';
+  $('#progressWrap').hidden = s.state !== 'downloading';
+  $('#unloadButton').hidden = !['ready','downloading','starting','error'].includes(s.state);
+  showStatusError(s.state === 'error' ? s.error : '');
+  if (s.state === 'downloading' && s.progress) {
+    const done=Number(s.progress.done_bytes)||0,total=Number(s.progress.total_bytes)||0,pct=total?Math.min(100,done/total*100):0;
+    $('#progressBar').style.width=`${pct}%`; $('#progressText').textContent=`${gb(done)} / ${gb(total)} · ${Math.round(pct)}%`;
+  }
+  const logs=$('#logs'), wasBottom=logs.scrollTop + logs.clientHeight >= logs.scrollHeight - 8;
+  logs.textContent=(s.logs||[]).join('\n'); if (wasBottom) logs.scrollTop=logs.scrollHeight;
+  const ready=s.state==='ready'; $('#playground').disabled=!ready; $('#playgroundHint').hidden=ready;
+  const frequent=['downloading','starting'].includes(s.state), delay=frequent?1000:5000;
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer=setTimeout(refreshStatus,delay);
+}
+async function refreshStatus() {
+  const sequence = ++statusSequence;
+  try {
+    const status = await api('/api/status');
+    if (sequence === statusSequence) renderStatus(status);
+  } catch(e) {
+    if (sequence === statusSequence) { showStatusError(e.message); pollTimer=setTimeout(refreshStatus,5000); }
+  }
+}
+async function loadExamples() {
+  try {
+    examples=await api('/api/examples');
+    $('#examples').innerHTML='<option value="">Load an example…</option>'+examples.map((e,i)=>`<option value="${i}">${esc(e.file || e.id || `Example ${i+1}`)}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('');
+  } catch(e) { $('#examples').innerHTML='<option value="">Examples unavailable</option>'; }
+}
+function parseOptions(text, type) {
+  const lines=text.split('\n').map(x=>x.trim()).filter(Boolean);
+  if(type==='noul') { const c={}; if(lines[0]) c.true=lines[0]; if(lines[1]) c.false=lines[1]; return Object.keys(c).length?{criteria:c}:{}; }
+  if(type==='score') return {criteria:lines};
+  const KEYED=/^([^\s:]{1,40}):\s*(\S.*)$/;  // "key: description"; a plain option text may contain colons too
+  const hasDescriptions=lines.length>0&&lines.every(x=>KEYED.test(x));
+  const criteria={};
+  lines.forEach((line,i)=>{const m=line.match(KEYED); if(hasDescriptions) criteria[m[1]]=m[2]; else criteria[String(i)]=line;});
+  return {criteria,option_keys:hasDescriptions?'show':'hide'};
+}
+function parseStructuredText(text) { const trimmed=text.trim(); if(trimmed.startsWith('{')||trimmed.startsWith('[')) { try{return JSON.parse(trimmed);}catch{}} return text; }
+function parseQuestionCard(card) {
+  const name=$('.q-name',card).value.trim() || 'question'; const type=$('.q-type',card).value;
+  return [name,{type,instructions:parseStructuredText($('.q-instructions-input',card).value),...parseOptions($('.q-options textarea',card).value,type)}];
+}
+function mediaRequestFields() {
+  const fields = {};
+  if (selectedMedia.length) fields.media = selectedMedia.map(({kind,data}) => ({type:kind,data}));
+  if (selectedMedia.some(item => item.kind === 'image')) fields.detail = $('#mediaDetail').value;
+  if ($('#mediaLang').value !== 'auto') fields.lang = $('#mediaLang').value;
+  return fields;
+}
+function buildRequest() {
+  const questions={}; for(const card of document.querySelectorAll('.question')) { const [name,q]=parseQuestionCard(card); questions[name]=q; }
+  return {state:parseStructuredText($('#stateInput').value),questions,...mediaRequestFields()};
+}
+function syncRequest(force=false) {
+  const textarea = $('#requestJson');
+  if ($('#editJsonToggle').checked && !force) {
+    let request;
+    try { request = JSON.parse(textarea.value); }
+    catch (e) { showMediaError(e.message); return; }
+    if (!request || typeof request !== 'object' || Array.isArray(request)) { showMediaError('request JSON must be an object'); return; }
+    delete request.media; delete request.detail; delete request.lang;
+    Object.assign(request, mediaRequestFields());
+    textarea.value = JSON.stringify(request, null, 2);
+    showMediaError();
+  } else if (force || !$('#editJsonToggle').checked) {
+    textarea.value = JSON.stringify(buildRequest(), null, 2);
+  }
+}
+function addQuestion(name='question', q={type:'choice',instructions:'',criteria:{}}) {
+  const card=document.createElement('div'); card.className='question';
+  const type=['choice','noul','score'].includes(q.type)?q.type:'choice';
+  let criteria=q.criteria ?? q.levels ?? {};
+  let optionText='';
+  if(type==='noul') optionText=[criteria.true||'',criteria.false||''].filter(Boolean).join('\n');
+  else if(Array.isArray(criteria)) optionText=criteria.join('\n');
+  else if(criteria&&typeof criteria==='object'&&q.option_keys==='hide') optionText=Object.values(criteria).map(v=>typeof v==='string'?v:JSON.stringify(v)).join('\n');
+  else if(criteria&&typeof criteria==='object') optionText=Object.entries(criteria).map(([k,v])=>v==null?String(k):`${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n');
+  card.innerHTML=`<div class="q-head"><div><label>Name</label><input class="q-name" type="text" value="${esc(name)}"></div><div><label>Type</label><select class="q-type"><option value="choice">choice</option><option value="noul">noul</option><option value="score">score</option></select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label>Instructions</label><textarea class="q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:JSON.stringify(q.instructions||''))}</textarea></div><div class="q-options"><label class="option-label">Options / descriptions <small>(one per line)</small></label><textarea placeholder="key: description, or one option per line">${esc(optionText)}</textarea><small class="option-help"></small></div>`;
+  $('.q-type',card).value=type;
+  $('.q-name',card).addEventListener('input',syncRequest); $('.q-type',card).addEventListener('change',()=>{updateOptionHelp(card);syncRequest();});
+  $('.q-instructions-input',card).addEventListener('input',syncRequest); $('.q-options textarea',card).addEventListener('input',syncRequest);
+  $('.remove-question',card).addEventListener('click',()=>{card.remove();syncRequest();});
+  $('#questions').append(card); updateOptionHelp(card); syncRequest();
+}
+function updateOptionHelp(card) { const type=$('.q-type',card).value; $('.option-label',card).firstChild.textContent=type==='noul'?'Yes / no descriptions ':type==='score'?'Score levels ':'Options / descriptions '; $('.option-help',card).textContent=type==='noul'?'Optional: first line describes true, second describes false.':type==='score'?'Ordered from lowest to highest score.':'key: description uses explicit keys; plain lines use hidden keys 0…n.'; }
+function setRequest(req) {
+  $('#stateInput').value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
+  $('#questions').innerHTML='';
+  for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
+  if(!Object.keys(req.questions||{}).length) addQuestion();
+  syncRequest(true);
+}
+function resultHeadline(name, answer, requestQuestion) {
+  const type=answer.type || requestQuestion?.type || 'unknown';
+  if(type==='choice') { const key=answer.choice ?? answer.answer ?? ''; const criteria=requestQuestion?.criteria; const desc=criteria && !Array.isArray(criteria) ? criteria[key] : null; return `${key}${desc?` · ${typeof desc==='string'?desc:JSON.stringify(desc)}`:''}`; }
+  if(type==='noul') { const p=Number(answer.noul ?? answer.probabilities?.true); return Number.isFinite(p)?`P(yes) ${(p*100).toFixed(1)}%`:'P(yes) —'; }
+  if(type==='score') { const legend=answer.legend; const score=Number(answer.score ?? answer.expected_score); const top=legend&&Number.isFinite(score)?legend[String(Math.round(score))]:null; return `Expected level ${Number.isFinite(score)?score.toFixed(2):'—'}${top?` · nearest: ${top}`:''}`; }
+  return null;
+}
+function renderResults(data, request) {
+  const answers=data?.answers || data || {}; let html='';
+  for(const [name,answer] of Object.entries(answers)) {
+    const q=request.questions?.[name]||{}, probs=answer?.probabilities;
+    const calibration = answer?.calibration === 'text' ? '<div class="answer-meta">calibration fitted on text</div>' : '';
+    if(!answer || !probs || typeof probs!=='object') { html+=`<article class="answer"><h3>${esc(name)}</h3>${calibration}<pre>${esc(JSON.stringify(answer,null,2))}</pre></article>`; continue; }
+    const headline=resultHeadline(name,answer,q), type=answer.type||q.type||'unknown';
+    const entries=Object.entries(probs).sort((a,b)=>Number(b[1])-Number(a[1]));
+    const bars=entries.map(([k,v],i)=>{const p=Math.max(0,Math.min(1,Number(v)||0));return `<div class="prob ${i===0?'winner':''}"><span>${esc(k)}${q.criteria&&q.criteria[k]?` · ${esc(q.criteria[k])}`:''}</span><div class="bar"><span style="width:${p*100}%"></span></div><strong>${(p*100).toFixed(1)}%</strong></div>`;}).join('');
+    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span></h3>${headline?`<div class="headline">${esc(headline)}</div>`:''}<div class="answer-meta">Confidence: ${answer.confidence==null?'—':`${(Number(answer.confidence)*100).toFixed(1)}%`}</div>${calibration}${bars}</article>`;
+  }
+  const u=data?.usage, mediaUsage=u?.media;
+  const mediaSummary=mediaUsage?` · Media: ${mediaUsage.images??0} images, ${mediaUsage.audio??0} audio, ${mediaUsage.media_tokens??0} tokens`:'';
+  const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${mediaSummary}</div>`:'';
+  $('#results').innerHTML=html ? usage+html : '<div class="empty">No answers returned.</div>';
+  $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
+}
+async function sendDecision() {
+  $('#decideError').hidden=true; $('#results').innerHTML='';
+  let request;
+  try { request=$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
+  catch(e) { $('#decideError').textContent=`Invalid JSON: ${e.message}`; $('#decideError').hidden=false; return; }
+  try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request); }
+  catch(e) { $('#decideError').textContent=e.message; $('#decideError').hidden=false; }
+}
+$('#refreshModels').addEventListener('click',()=>loadModels(true));
+$('#downloadedToggle').addEventListener('change',rerenderFilters);
+$('#saveModelsDir').addEventListener('click',()=>saveModelsDir($('#modelsDir').value));
+$('#defaultModelsDir').addEventListener('click',()=>saveModelsDir(null));
+let catalogData=null;
+const originalRenderModels=renderModels;
+renderModels=function(data){catalogData=data; originalRenderModels(data);};
+function rerenderFilters(){if(catalogData) originalRenderModels(catalogData);}
+$('#olderToggle').addEventListener('change',rerenderFilters);
+$('#notRunnableToggle').addEventListener('change',rerenderFilters);
+function selectModelsTab(tab) {
+  const suggested = tab === 'suggested';
+  $('#suggested').hidden = !suggested; $('#allModels').hidden = suggested;
+  $('#suggestedTab').classList.toggle('active',suggested); $('#suggestedTab').setAttribute('aria-selected',String(suggested));
+  $('#allModelsTab').classList.toggle('active',!suggested); $('#allModelsTab').setAttribute('aria-selected',String(!suggested));
+  localStorage.setItem('basal-ui.tab',tab);
+}
+$('#suggestedTab').addEventListener('click',()=>selectModelsTab('suggested'));
+$('#allModelsTab').addEventListener('click',()=>selectModelsTab('all'));
+selectModelsTab(localStorage.getItem('basal-ui.tab')==='all'?'all':'suggested');
+$('#unloadButton').addEventListener('click',async()=>{statusSequence++;try{await api('/api/unload',{method:'POST'});await refreshStatus();await loadModels();}catch(e){showStatusError(e.message);}});
+$('#logsToggle').addEventListener('click',()=>{const logs=$('#logs');logs.hidden=!logs.hidden;$('#logsToggle').setAttribute('aria-expanded',String(!logs.hidden));});
+$('#addQuestion').addEventListener('click',()=>addQuestion());
+$('#stateInput').addEventListener('input',syncRequest);
+$('#editJsonToggle').addEventListener('change',()=>{if($('#editJsonToggle').checked) syncRequest(true);else syncRequest();$('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;});
+$('#mediaInput').addEventListener('change',event=>selectMedia(Array.from(event.target.files||[])));
+$('#mediaDetail').addEventListener('change',()=>syncRequest());
+$('#mediaLang').addEventListener('change',()=>syncRequest());
+$('#mediaLightboxClose').addEventListener('click',()=>$('#mediaLightbox').close());
+$('#mediaLightbox').addEventListener('click',e=>{if(e.target===$('#mediaLightbox'))$('#mediaLightbox').close();});
+window.addEventListener('beforeunload',()=>selectedMedia.forEach(item=>URL.revokeObjectURL(item.url)));
+addQuestion();
+$('#examples').addEventListener('change',e=>{const item=examples[Number(e.target.value)];if(item?.request)setRequest(item.request);else if(item)setRequest({state:item.state,questions:item.questions});});
+$('#sendButton').addEventListener('click',sendDecision);
+(async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=`Hardware unavailable: ${e.message}`;}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus()]);})();
+</script>
+</body></html>
