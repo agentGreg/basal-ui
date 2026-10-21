@@ -28,6 +28,7 @@
 @media(max-width:700px){#overview>.dashboard-grid{grid-template-columns:1fr}}
 .page-header h2{font-size:30px;letter-spacing:-1.2px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.model-row{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)}.model-row:last-child{border-bottom:0}.model-row-main,.model-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.model-row-meta{font-size:13px}.memory-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 6px}.memory-progress{display:flex;gap:1px;margin-bottom:6px}.memory-progress>span{flex:none;background:var(--green)}.memory-progress.over>span{background:var(--accent)}.download-progress{display:block;margin-top:4px}.log-view{max-height:calc(100vh - 260px);min-height:240px}.history-row{cursor:pointer}.history-state{max-width:360px;font-size:12px}.history-panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}.history-panes pre{max-height:360px;overflow:auto;background:#232824;color:#f8f7f4;padding:10px;border-radius:4px;font:11px/1.5 var(--mono);white-space:pre-wrap}.stats-types td{border-top:0;padding-top:0}#logs .card>.tabs{margin-bottom:10px;flex-wrap:wrap}
 </style>
 </head>
 <body><div class="app-shell">
@@ -36,16 +37,21 @@
 <button type="button" data-view="models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg>Models</button>
 <button type="button" data-view="manager"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v13H3zM8 7l2-3h4l2 3m-5 4v5m-2-2h4"/></svg>Model manager</button>
 <button type="button" data-view="playground"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-6 7 6 7m8-14 6 7-6 7m-3-16-2 18"/></svg>Playground</button>
-<button type="button" data-view="api"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h.01M7 13h.01M11 9h6m-6 4h6M8 19v2m8-2v2"/></svg>API server</button>
-</nav></div><div class="sidebar-status"><div class="footer-status"><span class="status-dot" id="footerDot"></span><span id="footerState">idle</span></div><div id="footerModel" class="footer-model" title="No model loaded">No model loaded</div><div id="footerUrl" class="footer-url" hidden></div><button id="footerUnload" class="outline-action" type="button" hidden>Unload</button></div></aside>
+<button type="button" data-view="api"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"/></svg>API server</button>
+<button type="button" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</button>
+<button type="button" data-view="logs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Logs</button>
+</nav></div><div class="sidebar-status"><div class="footer-status"><span class="status-dot" id="footerDot"></span><span id="footerState">idle</span></div><div id="footerModel" class="footer-model" title="No model loaded">No model loaded</div><div id="footerUrl" class="footer-url" hidden></div><button id="footerUnload" class="outline-action" type="button" hidden>Unload all</button></div></aside>
 <main class="main-content"><header class="page-header"><div class="eyebrow" id="pageEyebrow">01 / OVERVIEW</div><h2 id="pageTitle">Overview</h2><p id="pageDescription">Hardware, model readiness, and serving at a glance.</p></header>
-<section class="view" id="overview" data-page="overview"><section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="memoryBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
+<section class="view" id="overview" data-page="overview"><section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="hardwareBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
 <div class="dashboard-grid"><section class="card"><div class="dashboard-heading"><h3>Suggested for this machine</h3><a class="dashboard-link" href="#models">All suggestions →</a></div><div id="overviewSuggested" class="overview-suggestion"><p class="muted">Loading suggestions…</p></div></section><div class="dashboard-stack"><section class="card"><div class="dashboard-heading"><h3>On disk</h3><a class="dashboard-link" href="#manager">Manage models →</a></div><div id="diskSummary" class="summary-value">Loading…</div><div id="diskSummaryMeta" class="summary-meta"></div></section><section class="card"><div class="dashboard-heading"><h3>API server</h3><a class="dashboard-link" href="#api">Configure →</a></div><div id="apiSummary" class="summary-value">Loading…</div><div id="apiSummaryMeta" class="summary-meta"></div></section></div></div>
-<section class="card" id="status" aria-live="polite"><div class="section-index">RUNNING MODEL</div><div class="status-head"><span class="status-dot" id="statusDot"></span><span class="state-pill" id="stateLabel">idle</span><span class="spinner" id="startingSpinner" hidden></span><span class="status-model" id="statusModel">No model loaded</span><span id="statusMode" class="chip" hidden></span><span id="statusMedia" class="chip media" hidden></span><div class="progress-wrap" id="progressWrap" hidden><div class="progress"><span id="progressBar"></span></div><small id="progressText"></small></div><span id="statusError" class="status-error"></span><button id="unloadButton" hidden>Unload</button><button id="restartButton" hidden>Restart</button><button id="logsToggle" class="ghost icon-button" data-tooltip="Show logs" aria-label="Show logs" aria-expanded="false">Logs</button></div><pre id="logs" class="logs" hidden></pre></section></section>
-<section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="suggestedTab" class="active" role="tab" aria-selected="true">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="suggested" role="tabpanel"><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
+<section class="card" id="status" aria-live="polite"><div class="section-index">LOADED MODELS</div><div id="memoryBar"></div><div id="loadedModels"><div class="empty">No model loaded</div></div></section></section>
+<section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
 <section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
-<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
-<section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the last model when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python (basal)</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
+<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
+<section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the models when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
+<section class="view" data-page="api"><section class="card"><h3>Memory</h3><div class="serve-fields"><div class="field"><label for="memoryBudget">Budget (GiB; empty uses the hardware budget)</label><input id="memoryBudget" type="number" min="1" step="0.1"></div><div class="field"><label for="memoryReserve">Keep free (GiB)</label><input id="memoryReserve" type="number" min="0" step="0.1" value="2"></div></div><button id="saveMemory" type="button">Save memory settings</button><div id="memoryError" class="error-box" role="alert" hidden></div></section></section>
+<section class="view" id="history" data-page="history"><section class="card"><div class="controls"><select id="historyModel"><option value="">All models</option></select><div id="historySource" class="tabs"><button data-source="">All</button><button data-source="playground">Playground</button><button data-source="api">API</button><button data-source="mcp">MCP</button></div><input type="search" id="historySearch" placeholder="Search state…"><button id="clearHistory" class="destructive">Clear history</button></div><div id="historyTable" class="table-wrap"></div><button id="historyMore" hidden>Load more</button></section></section>
+<section class="view" id="logs" data-page="logs"><section class="card"><div id="logSources" class="tabs"></div><label><input id="logFollow" type="checkbox" checked> Follow</label><button id="copyLogs">Copy</button><button id="clearLogs">Clear view</button><button id="downloadLogs">Download</button><p id="logEmpty" class="muted">No output yet.</p><pre id="logOutput" class="logs log-view"></pre></section></section>
 <dialog id="mediaLightbox" class="media-lightbox" aria-label="Image preview"><img id="mediaLightboxImage" alt=""><div class="media-lightbox-bar"><span id="mediaLightboxName"></span><small id="mediaLightboxSize"></small><button type="button" id="mediaLightboxClose">Close</button></div></dialog><dialog id="confirmDialog" class="confirm-dialog"><h3 id="confirmTitle"></h3><p id="confirmDescription" class="muted"></p><div class="dialog-actions"><button id="confirmCancel" type="button">Cancel</button><button id="confirmAccept" class="destructive" type="button">Delete</button></div></dialog><div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 </main></div>
 <script>
@@ -76,21 +82,6 @@ function confirmDialog({title,description,confirmLabel='Confirm',destructive=fal
     accept.addEventListener('click',yes);cancel.addEventListener('click',no);dialog.addEventListener('close',closed);
   });
 }
-function showView(name, updateHash=false) {
-  const pages={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Suggestions fitted to this machine’s memory now, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of the loaded model.'],api:['05 / API SERVER','API server','Expose the loaded model to other apps.']};
-  if(!pages[name]) name='overview';
-  $('#pageEyebrow').textContent=pages[name][0];$('#pageTitle').textContent=pages[name][1];$('#pageDescription').textContent=pages[name][2];
-  document.querySelectorAll('.view').forEach(view=>view.hidden=view.dataset.page!==name);
-  document.querySelectorAll('.side-nav [data-view]').forEach(button=>{
-    const active=button.dataset.view===name;button.classList.toggle('active',active);
-    if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
-  });
-  if(updateHash&&location.hash!==`#${name}`)history.pushState(null,'',`#${name}`);
-}
-document.querySelectorAll('.side-nav [data-view]').forEach(button=>button.addEventListener('click',()=>showView(button.dataset.view,true)));
-window.addEventListener('hashchange',()=>showView(location.hash.slice(1)));
-window.addEventListener('popstate',()=>showView(location.hash.slice(1)));
-showView(location.hash.slice(1));
 document.addEventListener('change',event=>{
   if(event.target.matches('input[type=checkbox]'))event.target.setAttribute('aria-checked',String(event.target.checked));
 });
@@ -116,7 +107,7 @@ function renderHardware(data) {
   hw = data;
   $('#deviceName').textContent = data.device_name || 'Unknown device';
   $('#platform').textContent = data.platform || '—';
-  $('#memoryBudget').textContent = gb(data.memory_bytes);
+  $('#hardwareBudget').textContent = gb(data.memory_bytes);
   $('#availableMemory').textContent = gb(data.available_bytes);
   $('#systemRam').textContent = gb(data.system_ram_bytes);
   $('#engines').innerHTML = (data.engines || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="muted">No engines detected</span>';
@@ -144,19 +135,26 @@ function renderModels(data) {
   for (const [family, rows] of groups) {
     html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni-')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
     for (const m of rows) {
-      const classes = `fit-${m.fit || 'unknown'}`;
-      const nowClasses = `fit-${m.fit_now || 'unknown'}`;
+      const classes = `fit-${esc(m.fit || 'unknown')}`;
+      const nowClasses = `fit-${esc(m.fit_now || 'unknown')}`;
       const reason = !m.runnable && m.reason ? `<span class="reason" title="${esc(m.reason)}">${esc(m.reason)}</span>` : '';
       const slot = slots.get(m.id);
       const badges = `${slot?`<span class="badge ${({recommended:'rec',best_quality:'best',multimodal:'omni'})[slot]||''}">${esc(slot.replace('_',' '))}</span>`:''}${m.experimental?'<span class="badge experimental">Experimental</span>':''}`;
       const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
+      const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
+      const downloadButton=downloadControl(m,downloadStatus);
       const mediaButton = m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '';
-      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td>${m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>`:''}${mediaButton || (!m.runnable?'—':'')}</td></tr>`;
+      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td>${loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadButton:m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>${mediaButton}`:'—'}</td></tr>`;
     }
   }
   $('#modelsTable').innerHTML = html + '</tbody></table>';
   document.querySelectorAll('.load-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id)));
   document.querySelectorAll('.load-media-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id, true)));
+  bindModelButtons('#modelsTable');
+}
+function bindModelButtons(scope) {
+  document.querySelectorAll(`${scope} .download-model`).forEach(b=>b.addEventListener('click',()=>act(async()=>{await api('/api/download',{method:'POST',body:JSON.stringify({id:b.dataset.id})});await refreshStatus();})));
+  document.querySelectorAll(`${scope} .unload-model`).forEach(b=>b.addEventListener('click',()=>act(()=>unloadOne(b.dataset.id))));
 }
 // "basal-2.0" / "basal-omni-1.0" written the way basal.si5.pl writes the family names
 function familyMark(family) {
@@ -165,6 +163,10 @@ function familyMark(family) {
   return parts[1] ? `basal<span class="family-suffix">-omni</span><small>${esc(parts[2])}</small>` : `basal<span class="family-suffix">-${esc(parts[2])}</span>`;
 }
 const ARROW = '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+function downloadControl(m, progress) {
+  if(progress&&!progress.error)return `<button class="download-model" data-id="${esc(m.id)}" disabled>Downloading…</button><small class="muted download-progress">${gb(progress.done_bytes)} / ${gb(progress.total_bytes)}</small>`;
+  return `<button class="download-model" data-id="${esc(m.id)}">Download</button>${progress?.error?`<span class="reason">${esc(progress.error)}</span>`:''}`;
+}
 function renderSuggestions(suggestions) {
   if (!suggestions.length) { $('#suggested').innerHTML = '<div class="empty">Nothing fits the memory available now; free memory or use All models</div>'; return; }
   const models = new Map(modelData.map(m => [m.id, m]));
@@ -173,9 +175,12 @@ function renderSuggestions(suggestions) {
     if (!m) return '';
     const media = s.slot === 'multimodal';
     const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
-    return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}<button class="primary suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button></article>`;
+    const download=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
+    const action=loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadControl(m,download):`<button class="suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button>`;
+    return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}${action}</article>`;
   }).join('')}</div>`;
   document.querySelectorAll('.suggestion-load').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id,b.dataset.media==='true')));
+  bindModelButtons('#suggested');
 }
 function renderDiskModels() {
   const rows = modelData.filter(m => m.downloaded), total = rows.reduce((sum,m) => sum + (Number(m.downloaded_bytes) || 0),0);
@@ -217,7 +222,7 @@ async function loadModel(id, media=false) {
   try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); toast('Model load started'); await refreshStatus(); }
   catch (e) { showStatusError(e.message); toast(e.message,'error'); }
 }
-function showStatusError(text) { $('#statusError').textContent = text || ''; }
+function showStatusError(text) { if(text)toast(text,'error'); }
 function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? 'images' : kind === 'audio' ? 'audio' : kind).join(' and '); }
 function clearSelectedMedia() {
   mediaSelection++;
@@ -276,43 +281,6 @@ async function selectMedia(files) {
     selectedMedia = filesData.map(item => ({...item,url:URL.createObjectURL(item.file)}));
     renderSelectedMedia(); syncRequest();
   } catch (error) { if (selection === mediaSelection) showMediaError(error.message); }
-}
-function renderStatus(s) {
-  statusCache=s;
-  $('#stateLabel').textContent = s.state || 'idle';
-  const dot=$('#statusDot'), footerDot=$('#footerDot'); dot.className=`status-dot ${s.state==='ready'?'ready':s.state==='error'?'error':''}`;
-  footerDot.className=dot.className; $('#footerState').textContent=s.state || 'idle';
-  $('#statusModel').textContent = s.model || 'No model loaded';
-  let extras=$('#statusExtras');
-  if(!extras){extras=document.createElement('span');extras.id='statusExtras';extras.className='chips';$('#status').querySelector('.status-head').append(extras);}
-  extras.innerHTML=`${s.serving?.url?`<span class="chip">${esc(s.serving.url)}</span>${s.serving.require_key?'<span class="chip">key required</span>':''}${s.serving.mcp?'<span class="chip">mcp</span>':''}`:''}${s.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
-  $('#statusModel').textContent = s.model || 'No model loaded';
-  $('#footerModel').textContent=s.model || 'No model loaded'; $('#footerModel').title=s.model || 'No model loaded';
-  $('#footerUrl').textContent=s.serving?.url || ''; $('#footerUrl').hidden=!s.serving?.url;
-  $('#footerUnload').hidden=!['ready','downloading','starting','error'].includes(s.state);
-  $('#unloadButton').hidden=$('#footerUnload').hidden;
-  $('#restartButton').hidden=!s.model || ['downloading','starting'].includes(s.state);
-  $('#statusMode').textContent = s.mode || ''; $('#statusMode').hidden = !s.mode;
-  loadedMedia = Array.isArray(s.media) ? s.media : [];
-  const mediaChip = loadedMedia.map(kind => kind === 'image' ? 'images' : kind).join(' · ');
-  $('#statusMedia').textContent = mediaChip; $('#statusMedia').hidden = !loadedMedia.length;
-  $('#mediaField').hidden = !loadedMedia.length;
-  $('#mediaInput').accept = [loadedMedia.includes('image')?'image/*':'',loadedMedia.includes('audio')?'audio/*':''].filter(Boolean).join(',');
-  if (!loadedMedia.length) clearSelectedMedia();
-  $('#startingSpinner').hidden = s.state !== 'starting';
-  $('#progressWrap').hidden = s.state !== 'downloading';
-  showStatusError(s.state === 'error' ? s.error : '');
-  showStatusError(s.state === 'error' ? s.error : '');
-  if (s.state === 'downloading' && s.progress) {
-    const done=Number(s.progress.done_bytes)||0,total=Number(s.progress.total_bytes)||0,pct=total?Math.min(100,done/total*100):0;
-    $('#progressBar').style.width=`${pct}%`; $('#progressText').textContent=`${gb(done)} / ${gb(total)} · ${Math.round(pct)}%`;
-  }
-  const logs=$('#logs'), wasBottom=logs.scrollTop + logs.clientHeight >= logs.scrollHeight - 8;
-  logs.textContent=(s.logs||[]).join('\n'); if (wasBottom) logs.scrollTop=logs.scrollHeight;
-  const ready=s.state==='ready'; $('#playgroundForm').disabled=!ready; $('#playgroundHint').hidden=ready;
-  const frequent=['downloading','starting'].includes(s.state), delay=frequent?1000:5000;
-  if (pollTimer) clearTimeout(pollTimer);
-  pollTimer=setTimeout(refreshStatus,delay);
 }
 async function refreshStatus() {
   const sequence = ++statusSequence;
@@ -415,7 +383,7 @@ function renderResults(data, request) {
   const u=data?.usage, mediaUsage=u?.media;
   const mediaSummary=mediaUsage?` · Media: ${mediaUsage.images??0} images, ${mediaUsage.audio??0} audio, ${mediaUsage.media_tokens??0} tokens`:'';
   const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${mediaSummary}</div>`:'';
-  $('#results').innerHTML=html ? usage+html : '<div class="empty">No answers returned.</div>';
+  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong></div>`+(html ? usage+html : '<div class="empty">No answers returned.</div>');
   $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
 }
 async function sendDecision() {
@@ -423,6 +391,9 @@ async function sendDecision() {
   let request;
   try { request=$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
   catch(e) { $('#decideError').textContent=`Invalid JSON: ${e.message}`; $('#decideError').hidden=false; return; }
+  if(!request||typeof request!=='object'||Array.isArray(request)) { $('#decideError').textContent='The request must be a JSON object.'; $('#decideError').hidden=false; return; }
+  request.model=selectedModel;
+  if($('#editJsonToggle').checked)$('#requestJson').value=JSON.stringify(request,null,2);
   try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request); }
   catch(e) { $('#decideError').textContent=e.message; $('#decideError').hidden=false; }
 }
@@ -436,21 +407,6 @@ renderModels=function(data){catalogData=data; originalRenderModels(data);};
 function rerenderFilters(){if(catalogData) originalRenderModels(catalogData);}
 $('#olderToggle').addEventListener('change',rerenderFilters);
 $('#notRunnableToggle').addEventListener('change',rerenderFilters);
-function selectModelsTab(tab) {
-  const suggested = tab === 'suggested';
-  $('#suggested').hidden = !suggested; $('#allModels').hidden = suggested;
-  $('#suggestedTab').classList.toggle('active',suggested); $('#suggestedTab').setAttribute('aria-selected',String(suggested));
-  $('#allModelsTab').classList.toggle('active',!suggested); $('#allModelsTab').setAttribute('aria-selected',String(!suggested));
-  localStorage.setItem('basal-ui.tab',tab);
-}
-$('#suggestedTab').addEventListener('click',()=>selectModelsTab('suggested'));
-$('#allModelsTab').addEventListener('click',()=>selectModelsTab('all'));
-selectModelsTab(localStorage.getItem('basal-ui.tab')==='all'?'all':'suggested');
-$('#unloadButton').addEventListener('click',unloadModel);
-$('#footerUnload').addEventListener('click',unloadModel);
-async function unloadModel(){statusSequence++;try{await api('/api/unload',{method:'POST'});toast('Model unloaded');await refreshStatus();await loadModels();}catch(e){showStatusError(e.message);toast(e.message,'error');}}
-$('#restartButton').addEventListener('click',restartModel);
-$('#logsToggle').addEventListener('click',()=>{const logs=$('#logs');logs.hidden=!logs.hidden;$('#logsToggle').setAttribute('aria-expanded',String(!logs.hidden));});
 $('#addQuestion').addEventListener('click',()=>addQuestion());
 $('#stateInput').addEventListener('input',syncRequest);
 $('#editJsonToggle').addEventListener('change',()=>{if($('#editJsonToggle').checked) syncRequest(true);else syncRequest();$('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;});
@@ -466,13 +422,13 @@ $('#sendButton').addEventListener('click',sendDecision);
 let serveData=null, serveHost='127.0.0.1', statusCache=null, connectTab='curl';
 function connectionEndpoint() {
   const settings=serveData.settings, serving=statusCache?.serving;
-  if (serving) return serving.url;
+  if (serving?.url) return serving.url;
   const host=settings.host==='0.0.0.0'?(serveData.lan_ip||location.hostname):'127.0.0.1';
   return `http://${host}:${settings.port}`;
 }
 function renderConnect() {
   const settings=serveData.settings, serving=statusCache?.serving;
-  const endpoint=connectionEndpoint(), name=serving?.model_name||statusCache?.model||'basal-model';
+  const endpoint=connectionEndpoint(), name=selectedModel||readyModels()[0]?.id||'model-id';
   const requireKey=serving?serving.require_key:settings.require_key, mcp=serving?serving.mcp:settings.mcp;
   const key=requireKey?'<your key>':null, auth=key?` -H 'Authorization: Bearer ${key}'`:'';
   const keyArg=key?`, api_key="${key}"`:'';
@@ -480,18 +436,18 @@ function renderConnect() {
     ?JSON.stringify({mcpServers:{basal:{url:`${endpoint}/mcp`,...(key?{headers:{Authorization:`Bearer ${key}`}}:{})}}},null,2)+'\n\n'
     :'';
   const snippets={
-    curl:`curl -X POST ${endpoint}/v1/systemone -H 'Content-Type: application/json'${auth} -d '{"state":"...","questions":{"route":{"type":"choice","instructions":"Choose a route","criteria":{"sales":"sales","support":"support"}}}}'
+    curl:`curl -X POST ${endpoint}/v1/systemone -H 'Content-Type: application/json'${auth} -d '{"model":"${name}","state":"...","questions":{"route":{"type":"choice","instructions":"Choose a route","criteria":{"sales":"sales","support":"support"}}}}'
 
 curl -X POST ${endpoint}/v1/decisions -H 'Content-Type: application/json'${auth} -d '{"model":"${name}","input":"...","questions":[{"type":"choice","name":"route","instructions":"Choose a route","choices":[{"value":"sales"},{"value":"support"}]}]}'`,
-    python:`from basal.client import Basal
+    python:`import httpx
 
-client = Basal("${endpoint}"${keyArg})
-answer = client.decide(
-    state="...",
-    questions={"route": {"type": "choice", "instructions": "Choose a route",
-                         "criteria": {"sales": "sales", "support": "support"}}},
-)
-print(answer)`,
+response = httpx.post("${endpoint}/v1/systemone", json={
+    "model": "${name}",
+    "state": "...",
+    "questions": {"route": {"type": "choice", "instructions": "Choose a route",
+                            "criteria": {"sales": "sales", "support": "support"}}},
+}${key?`, headers={"Authorization": "Bearer ${key}"}`:''})
+print(response.json())`,
     typesafe:`export TYPESAFE_BASE_URL=${endpoint}
 export TYPESAFE_API_KEY=${key||'local'}
 export TYPESAFE_DEFAULT_MODEL=${name}
@@ -512,7 +468,9 @@ decision = client.decisions.create(
       api_base: ${endpoint}
       api_key: ${key||'local'}`,
     mcp:mcpHttp+`# stdio bridge
-basal-mcp --url ${endpoint}${key?` --api-key ${key}`:''}`
+basal-mcp --url ${endpoint} --model ${name}${key?` --api-key ${key}`:''}
+
+The MCP server also provides list_models().`,
   };
   $('#connectCurl').textContent=snippets.curl;
   $('#connectPython').textContent=snippets.python;
@@ -521,7 +479,7 @@ basal-mcp --url ${endpoint}${key?` --api-key ${key}`:''}`
   $('#connectLitellm').textContent=snippets.litellm;
   $('#connectMcp').textContent=snippets.mcp;
   $('#mcpConnectHint').hidden=Boolean(mcp);
-  $('#runningServerNote').hidden=!statusCache?.restart_required;
+  $('#runningServerNote').hidden=!statusCache?.serving?.restart_required;
   $('#connectTabs').querySelectorAll('[data-connect]').forEach(tab=>{
     const active=tab.dataset.connect===connectTab;
     tab.classList.toggle('active',active); tab.setAttribute('aria-selected',String(active));
@@ -532,15 +490,14 @@ basal-mcp --url ${endpoint}${key?` --api-key ${key}`:''}`
 // the endpoint line of the API server card: where the API answers now, and whether saved settings await a restart
 function renderServeStatus(status) {
   const serving=status?.serving;
-  const restart=status?.restart_required?'<span class="badge fit-tight">Restart to apply</span>':'';
-  // only the text slot is re-rendered: the "Serve the API" switch shares the line
+  const restart=serving?.restart_required?'<span class="badge fit-tight">Restart to apply</span>':'';
   const text=$('#serveStatus .serve-status-text');
   text.innerHTML=serving
-    ?`<span class="mono">${esc(serving.url)}</span>${serving.require_key?'<span class="chip">key required</span>':''}${serving.mcp?'<span class="chip">mcp</span>':''}${restart}`
-    :`<span>Only this app can reach the model</span>${restart}`;
-  $('#restartServe').disabled=!status?.model||['downloading','starting'].includes(status.state);
-  $('#apiSummary').textContent=serving?'Serving':'Off';
-  $('#apiSummaryMeta').textContent=`${serving?serving.url:'API server is not serving'} · ${serveData?.keys?.length ?? 0} API keys`;
+    ?`${serving.url?`<span class="mono">${esc(serving.url)}</span>`:'<span>Not running</span>'} <span class="chip">${serving.models?.length??0} ${serving.models?.length===1?'model':'models'}</span>${serving.require_key?' <span class="chip">key required</span>':''}${serving.mcp?' <span class="chip">mcp</span>':''}${serving.error?` <span class="reason">${esc(serving.error)}</span>`:''} ${restart}`
+    :'<span>Only this app can reach the models</span>';
+  $('#restartServe').disabled=!(serveData?.settings?.enabled||serving?.running);
+  $('#apiSummary').textContent=serving?.running?'Serving':serving?.error?'Error':'Off';
+  $('#apiSummaryMeta').textContent=`${serving?.url||serving?.error||'API server is not serving'} · ${serveData?.keys?.length ?? 0} API keys`;
   renderConnect();
 }
 async function loadServe(){
@@ -580,7 +537,7 @@ $('#saveServe').onclick=async()=>{
       log_decisions:$('#serveLog').value,mcp:$('#serveMcp').checked,auto_load:$('#autoLoad').checked
     })});
     showServeError(''); await loadServe(); await refreshStatus();
-    toast(statusCache?.restart_required?'Settings saved — restart the server to apply':'Settings saved');
+    toast(statusCache?.serving?.restart_required?'Settings saved — restart the server to apply':'Settings saved');
   }catch(error){showServeError(error.message);toast(error.message,'error');}
 };
 $('#createKey').onclick=async()=>{
@@ -591,11 +548,7 @@ $('#createKey').onclick=async()=>{
     $('#newKeyName').value=''; await loadServe(); toast('API key created');
   }catch(error){showServeError(error.message);toast(error.message,'error');}
 };
-$('#restartServe').onclick=restartModel;
-async function restartModel(){
-  try{await api('/api/restart',{method:'POST'});toast('Model restart started');await refreshStatus();}
-  catch(error){showServeError(error.message);showStatusError(error.message);toast(error.message,'error');}
-}
+$('#restartServe').onclick=async()=>{try{await api('/api/serve/restart',{method:'POST'});toast('API server restarted');await refreshStatus();}catch(e){showServeError(e.message);toast(e.message,'error');}};
 async function copyText(text, success='Copied to clipboard') {
   try { await navigator.clipboard.writeText(text); }
   catch {
@@ -611,6 +564,267 @@ async function copyText(text, success='Copied to clipboard') {
 }
 $('#copyServeUrl').onclick=()=>copyText(connectionEndpoint(),'Endpoint copied');
 $('#copyServeConnect').onclick=()=>copyText($(`[data-connect-panel="${connectTab}"] code`).textContent,'Snippet copied');
+// Several models: status rows, memory bar, statistics, benchmarks, History and Logs views.
+let selectedModel=localStorage.getItem('basal-ui.model')||'', previousDownloads=new Set(), rowsSignature='', playgroundSignature='';
+let statsData={models:{},benchmarks:{}}, statsSignature='', benchSignature='', benchRunning=false;
+let historyAfter=null, historyBefore=null, historySource='', historyTimer=null, historyDebounce=null, historyRows=new Map();
+const historyOpen=new Map();
+let logSource='basal-ui', logAfter=0, logTimer=null, shownHash=null;
+const readyModels=()=>(statusCache?.models||[]).filter(m=>m.state==='ready');
+const pct=v=>v==null?'—':`${(Number(v)*100).toFixed(1)}%`;
+const num=(v,digits=1)=>v==null?'—':Number(v).toFixed(digits);
+const shortName=id=>String(id).split('/').pop();
+const clock=ts=>new Date(ts*1000).toLocaleTimeString([], {hour12:false});
+async function act(fn){try{await fn();}catch(e){toast(e.message,'error');}}
+function renderStatus(s) {
+  statusCache=s;
+  const models=s.models||[], ready=readyModels(), downloads=s.downloads||{}, repos=new Set(Object.keys(downloads));
+  const finished=[...previousDownloads].some(repo=>!repos.has(repo)); previousDownloads=repos;
+  const signature=JSON.stringify([models.map(m=>[m.id,m.state]),downloads]);
+  if(finished)loadModels(); else if(signature!==rowsSignature)rerenderFilters();  // loaded chips and download progress in the model lists
+  rowsSignature=signature;
+  if(!ready.some(m=>m.id===selectedModel)&&ready.length)selectedModel=ready[0].id;
+  if(selectedModel)localStorage.setItem('basal-ui.model',selectedModel);
+  const busy=models.some(m=>['starting','downloading'].includes(m.state));
+  $('#footerState').textContent=ready.length?`${ready.length} ready${busy?' · loading…':''}`:busy?'loading…':'idle';
+  $('#footerDot').className=`status-dot${ready.length?' ready':models.some(m=>m.state==='error')?' error':''}`;
+  $('#footerModel').textContent=models.map(m=>shortName(m.id)).join(', ')||'No model loaded';
+  $('#footerModel').title=models.map(m=>m.id).join(', ')||'No model loaded';
+  $('#footerUrl').textContent=s.serving?.url||''; $('#footerUrl').hidden=!s.serving?.url;
+  $('#footerUnload').hidden=!models.length; $('#footerUnload').textContent=models.length>1?'Unload all':'Unload';
+  renderMemoryBar(s.memory||{},models);
+  renderLoadedRows(models);
+  renderPlaygroundModels(ready);
+  renderBenchmarkState(s.benchmark,ready);
+  if(serveData)renderServeStatus(s);
+  loadStats();
+  clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,busy||repos.size||s.benchmark?.running?1000:5000);
+}
+function renderMemoryBar(memory, models) {
+  const budget=Number(memory.budget_bytes)||0, reserve=Number(memory.reserve_bytes)||0, limit=Math.max(1,budget-reserve);
+  const sizes=models.map(m=>({m,bytes:Number(m.rss_bytes)||Number(m.est_memory_bytes)||0}));
+  const used=sizes.reduce((sum,x)=>sum+x.bytes,0);
+  const segments=sizes.map(({m,bytes})=>`<span title="${esc(m.id)} · ${gb(bytes)}${m.rss_bytes?' resident':' estimated'}" style="width:${Math.min(100,bytes/limit*100)}%"></span>`).join('');
+  $('#memoryBar').innerHTML=budget?`<div class="memory-head"><span>Memory</span><span>${gb(used)} / ${gb(limit)} (budget ${gb(budget)}, keep ${gb(reserve)} free) · available now ${gb(memory.available_bytes)}</span></div><div class="progress memory-progress${memory.over?' over':''}">${segments}</div>`:'';
+}
+function renderLoadedRows(models) {
+  $('#loadedModels').innerHTML=models.length?models.map(m=>{
+    const stats=statsData.models?.[m.id], p=m.progress;
+    const progress=p?`<div class="progress-wrap"><div class="progress"><span style="width:${p.total_bytes?Math.min(100,p.done_bytes/p.total_bytes*100):0}%"></span></div><small>${gb(p.done_bytes)} / ${gb(p.total_bytes)}</small></div>`:'';
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions"><button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button><a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button></div></div>`;
+  }).join(''):'<div class="empty">No model loaded · <a href="#models">Load a model</a></div>';
+  $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
+  $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
+}
+function renderPlaygroundModels(ready) {
+  const select=$('#playgroundModel'), signature=JSON.stringify(ready.map(m=>[m.id,m.media]));
+  if(signature!==playgroundSignature){
+    playgroundSignature=signature;
+    select.innerHTML=ready.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="">No model loaded</option>';
+  }
+  select.value=selectedModel; select.disabled=!ready.length;
+  $('#playgroundForm').disabled=!ready.length; $('#playgroundHint').hidden=Boolean(ready.length);
+  setPlaygroundMedia(ready.find(m=>m.id===selectedModel)?.media||[]);
+}
+function setPlaygroundMedia(kinds) {
+  if(JSON.stringify(kinds)===JSON.stringify(loadedMedia))return;
+  loadedMedia=kinds; clearSelectedMedia(); syncRequest();
+  $('#mediaField').hidden=!kinds.length;
+  $('#mediaInput').accept=[kinds.includes('image')?'image/*':'',kinds.includes('audio')?'audio/*':''].filter(Boolean).join(',');
+}
+$('#playgroundModel').addEventListener('change',e=>{selectedModel=e.target.value;localStorage.setItem('basal-ui.model',selectedModel);setPlaygroundMedia(readyModels().find(m=>m.id===selectedModel)?.media||[]);if(serveData)renderConnect();});
+async function unloadOne(id){await api('/api/unload',{method:'POST',body:JSON.stringify({id})});await refreshStatus();}
+async function restartOne(id){await api('/api/restart',{method:'POST',body:JSON.stringify({id})});toast(`Restarting ${shortName(id)}`);await refreshStatus();}
+$('#footerUnload').onclick=()=>act(async()=>{
+  if((statusCache?.models||[]).length>1&&!await confirmDialog({title:'Unload all models?',description:'Every loaded model stops; clients of the API server get 404 until a model is loaded again.',confirmLabel:'Unload all',destructive:true}))return;
+  await api('/api/unload',{method:'POST',body:'{}'}); await refreshStatus();
+});
+let statsSequence=0;
+async function loadStats() {
+  const sequence=++statsSequence;
+  try{
+    const data=await api('/api/stats');
+    if(sequence!==statsSequence)return;  // a reset or a newer poll answered meanwhile
+    statsData=data;
+    const signature=JSON.stringify(statsData.models);
+    if(signature!==statsSignature){statsSignature=signature;renderStats();if(statusCache)renderLoadedRows(statusCache.models||[]);}
+    const bench=JSON.stringify(statsData.benchmarks);
+    if(bench!==benchSignature){benchSignature=bench;renderBenchmarkResults();}
+  }catch{}
+}
+function renderStats() {
+  const entries=Object.entries(statsData.models||{});
+  $('#statsTable').innerHTML=`<div class="section-head"><h3>Statistics</h3>${entries.length?'<button type="button" id="resetAllStats" class="destructive">Reset all</button>':''}</div>${entries.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Requests</th><th>Questions</th><th>Avg best-answer prob.</th><th>Avg / p95 latency</th><th>Input tokens</th><th>Last used</th><th></th></tr></thead><tbody>${entries.map(([id,x])=>`<tr><td title="${esc(id)}">${esc(shortName(id))}</td><td>${x.requests}${x.errors?` <span class="reason">${x.errors} errors</span>`:''}</td><td>${x.questions}</td><td>${pct(x.avg_best_prob)}</td><td>${num(x.avg_latency_ms,0)} / ${num(x.p95_ms,0)} ms</td><td>${x.input_tokens}</td><td>${x.last_used?esc(new Date(x.last_used*1000).toLocaleString()):'—'}</td><td><button type="button" data-reset="${esc(id)}">Reset</button></td></tr><tr class="stats-types"><td colspan="8">${Object.entries(x.by_type||{}).map(([type,v])=>`<span class="chip">${esc(type)} · ${v.questions} · ${pct(v.avg_best_prob)}</span>`).join(' ')||'<span class="muted">no answers yet</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No decisions yet: statistics appear after the first playground, API or MCP decision.</div>'}`;
+  $('#statsTable').querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset statistics?',description:`The counters of ${b.dataset.reset} start from zero.`,confirmLabel:'Reset',destructive:true})){await api(`/api/stats/${encodeURIComponent(b.dataset.reset)}`,{method:'DELETE'});toast('Statistics reset');await loadStats();}}));
+  const all=$('#resetAllStats'); if(all)all.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset all statistics?',description:'The counters of every model start from zero. Benchmark results stay.',confirmLabel:'Reset all',destructive:true})){await api('/api/stats',{method:'DELETE'});toast('Statistics reset');await loadStats();}});
+}
+$('#benchmarks').innerHTML=`<div class="section-head"><h3>Benchmarks</h3></div><div class="controls"><select id="benchmarkModel" aria-label="Model to benchmark"></select><select id="benchmarkSet" aria-label="Benchmark set"><option value="bundled">Bundled examples (44 items)</option><option value="custom">Custom path…</option></select><input id="benchmarkPath" type="text" placeholder="/path/to/set.jsonl or a directory of .jsonl" hidden><button type="button" id="runBenchmark">Benchmark</button><button type="button" id="cancelBenchmark" hidden>Cancel</button><span id="benchmarkProgress" class="muted"></span></div><p class="muted">5 warm-up, 30 sequential and 120 concurrent requests (8 at a time); items with a gold answer are scored. Own set: <code>docs/BENCHMARK_SETS.md</code>.</p><div id="benchmarkResults"></div>`;
+$('#benchmarkSet').value=localStorage.getItem('basal-ui.benchmarkSet')==='custom'?'custom':'bundled';
+$('#benchmarkPath').value=localStorage.getItem('basal-ui.benchmarkPath')||'';
+$('#benchmarkPath').hidden=$('#benchmarkSet').value!=='custom';
+$('#benchmarkSet').onchange=()=>{localStorage.setItem('basal-ui.benchmarkSet',$('#benchmarkSet').value);$('#benchmarkPath').hidden=$('#benchmarkSet').value!=='custom';};
+$('#benchmarkPath').oninput=()=>localStorage.setItem('basal-ui.benchmarkPath',$('#benchmarkPath').value);
+$('#runBenchmark').onclick=()=>act(async()=>{
+  const set=$('#benchmarkSet').value==='custom'?$('#benchmarkPath').value.trim():'bundled';
+  await api('/api/benchmark',{method:'POST',body:JSON.stringify({id:$('#benchmarkModel').value,set})});
+  toast('Benchmark started'); await refreshStatus();
+});
+$('#cancelBenchmark').onclick=()=>act(async()=>{await api('/api/benchmark',{method:'DELETE'});await refreshStatus();});
+function renderBenchmarkState(bench, ready) {
+  const select=$('#benchmarkModel'), current=select.value, ids=ready.map(m=>m.id);
+  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids))select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
+  if(ids.includes(current))select.value=current;
+  const running=Boolean(bench?.running);
+  $('#runBenchmark').disabled=running||!ids.length; $('#cancelBenchmark').hidden=!running;
+  $('#benchmarkProgress').textContent=!bench?(ids.length?'':'Load a model to benchmark it.'):running?`${shortName(bench.model)} · ${bench.phase} ${bench.done}/${bench.total}`:bench.phase==='error'?`Failed: ${bench.error}`:bench.phase==='cancelled'?'Cancelled':'';
+  if(benchRunning&&!running)loadStats();
+  benchRunning=running;
+}
+function renderBenchmarkResults() {
+  const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
+  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(x=>`<tr><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td title="${esc(x.set)}">${esc(x.set==='bundled'?'bundled':shortName(x.set))} (${x.items})</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td><td>${num(x.p50_ms,0)} ms</td><td>${num(x.p95_ms,0)} ms</td><td>${num(x.decisions_per_s)}</td><td>${num(x.questions_per_s)}</td><td>${num(x.input_tokens_per_s,0)}</td><td title="${esc(Object.entries(x.accuracy?.by_file||{}).map(([f,v])=>`${f}: ${pct(v)}`).join(', '))}">${pct(x.accuracy?.overall)}</td><td>${x.errors}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
+}
+function syncHistoryModels(models) {
+  const select=$('#historyModel'), current=select.value, ids=[...new Set([...models,...(current?[current]:[])])];
+  if(JSON.stringify([...select.options].map(o=>o.value).slice(1))===JSON.stringify(ids))return;
+  select.innerHTML='<option value="">All models</option>'+ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
+  select.value=current;
+}
+let historySequence=0;
+async function loadHistory(mode='reset') {
+  clearTimeout(historyTimer);
+  if($('#history').hidden)return;
+  const sequence=++historySequence;
+  const params=new URLSearchParams({limit:'100'}), query=$('#historySearch').value.trim();
+  if($('#historyModel').value)params.set('model',$('#historyModel').value);
+  if(historySource)params.set('source',historySource);
+  if(query)params.set('q',query);
+  if(mode==='more'&&historyBefore)params.set('before',historyBefore);
+  if(mode==='poll'&&historyAfter)params.set('after',historyAfter);
+  try{
+    const d=await api(`/api/history?${params}`), items=d.items||[];
+    if(sequence!==historySequence)return;  // the filter changed meanwhile: that query's own fetch renders
+    syncHistoryModels(d.models||[]);
+    if(mode==='reset'){historyRows=new Map();historyOpen.clear();}
+    items.forEach(x=>historyRows.set(x.id,x));
+    if(mode!=='poll')$('#historyMore').hidden=items.length<100;
+    const sorted=[...historyRows.values()].sort((a,b)=>b.ts-a.ts);
+    historyAfter=sorted[0]?.id||null; historyBefore=sorted.at(-1)?.id||null;
+    if(mode!=='poll'||items.length)renderHistory(sorted);
+  }catch(e){if(sequence!==historySequence)return;$('#historyTable').innerHTML=`<div class="error-box">${esc(e.message)}</div>`;}
+  if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);
+}
+function renderHistory(items) {
+  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>State</th><th>Answers</th><th>Latency</th><th>Status</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No decisions yet — try the Playground.</div>';
+  $('#historyTable').querySelectorAll('[data-history]').forEach(row=>{
+    row.onclick=()=>act(()=>toggleHistory(row));
+    if(historyOpen.has(row.dataset.history))row.after(historyDetailRow(historyOpen.get(row.dataset.history)));
+  });
+}
+async function toggleHistory(row) {
+  const id=row.dataset.history, next=row.nextElementSibling;
+  if(next?.classList.contains('history-detail')){next.remove();historyOpen.delete(id);return;}
+  const record=await api(`/api/history/${encodeURIComponent(id)}`);
+  historyOpen.set(id,record); row.after(historyDetailRow(record));
+}
+function historyDetailRow(x) {
+  const tr=document.createElement('tr'); tr.className='history-detail';
+  tr.innerHTML='<td colspan="7"><div class="history-panes"><div><strong>Request</strong><pre class="history-request"></pre></div><div><strong>Response</strong><pre class="history-response"></pre></div></div><div class="controls"><button type="button" class="copy-request">Copy request</button><button type="button" class="replay-request">Replay in Playground</button></div></td>';
+  $('.history-request',tr).textContent=JSON.stringify(x.request,null,2);
+  $('.history-response',tr).textContent=JSON.stringify(x.response,null,2);
+  $('.copy-request',tr).onclick=()=>copyText(JSON.stringify(x.request,null,2),'Request copied');
+  $('.replay-request',tr).onclick=()=>replayRequest(x);
+  return tr;
+}
+function replayRequest(x) {
+  if(!readyModels().some(m=>m.id===x.model)){toast(`Model ${x.model} is not loaded`,'error');return;}
+  selectedModel=x.model; localStorage.setItem('basal-ui.model',selectedModel);
+  $('#playgroundModel').value=selectedModel; setPlaygroundMedia(readyModels().find(m=>m.id===selectedModel)?.media||[]);
+  setChecked($('#editJsonToggle'),true); $('#builder').hidden=true; $('#editJsonArea').hidden=false;
+  $('#requestJson').value=JSON.stringify(x.request,null,2);
+  showView('playground',true);
+}
+function resetHistory(){historyAfter=null;historyBefore=null;loadHistory('reset');}
+$('#historySearch').oninput=()=>{clearTimeout(historyDebounce);historyDebounce=setTimeout(resetHistory,300);};
+$('#historyModel').onchange=resetHistory;
+$('#historySource').querySelectorAll('[data-source]').forEach(b=>b.classList.toggle('active',b.dataset.source===historySource));
+$('#historySource').onclick=e=>{const b=e.target.closest('[data-source]');if(!b)return;historySource=b.dataset.source;$('#historySource').querySelectorAll('[data-source]').forEach(x=>x.classList.toggle('active',x===b));resetHistory();};
+$('#historyMore').onclick=()=>loadHistory('more');
+$('#clearHistory').onclick=()=>act(async()=>{
+  if(!await confirmDialog({title:'Clear history?',description:'Every recorded decision (playground, API and MCP) is deleted.',confirmLabel:'Clear history',destructive:true}))return;
+  const d=await api('/api/history',{method:'DELETE'}); toast(`${d.cleared} decisions deleted`); resetHistory();
+});
+async function loadLogs() {
+  clearTimeout(logTimer);
+  if($('#logs').hidden)return;
+  const out=$('#logOutput'), source=logSource;
+  try{
+    const d=await api(`/api/logs?source=${encodeURIComponent(source)}&after=${logAfter}`);
+    if(source!==logSource)return;  // the user switched tabs meanwhile: that tab's own fetch renders
+    $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?' <span class="chip">gone</span>':''}</button>`).join('');
+    const atBottom=out.scrollTop+out.clientHeight>=out.scrollHeight-8;
+    if(d.lines.length){
+      out.append(document.createTextNode(d.lines.map(x=>source==='basal-ui'?`${clock(x.ts)} ${x.text}`:x.text).join('\n')+'\n'));
+      logAfter=d.lines.at(-1).seq;
+    }
+    $('#logEmpty').hidden=Boolean(out.textContent);
+    if($('#logFollow').checked&&atBottom)out.scrollTop=out.scrollHeight;
+  }catch(e){
+    if(source!==logSource)return;
+    if(source!=='basal-ui'){toast(e.message,'error');showView('logs/basal-ui',true);return;}
+  }
+  if(!$('#logs').hidden&&source===logSource)logTimer=setTimeout(loadLogs,2000);
+}
+$('#logSources').onclick=e=>{const b=e.target.closest('[data-logsource]');if(b)showView(`logs/${encodeURIComponent(b.dataset.logsource)}`,true);};
+$('#copyLogs').onclick=()=>copyText($('#logOutput').textContent,'Log copied');
+$('#clearLogs').onclick=()=>{$('#logOutput').textContent='';$('#logEmpty').hidden=false;};
+$('#downloadLogs').onclick=()=>{
+  const a=document.createElement('a'), url=URL.createObjectURL(new Blob([$('#logOutput').textContent],{type:'text/plain'}));
+  a.href=url; a.download=`${shortName(logSource)}-${new Date().toISOString().slice(0,10)}.log`; a.click(); URL.revokeObjectURL(url);
+};
+const PAGES={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.']};
+function showView(hash, updateHash=false) {
+  const raw=String(hash||'').replace(/^#/,''), slash=raw.indexOf('/');
+  const view=slash<0?raw:raw.slice(0,slash), arg=slash<0?'':raw.slice(slash+1), name=PAGES[view]?view:'overview';
+  $('#pageEyebrow').textContent=PAGES[name][0]; $('#pageTitle').textContent=PAGES[name][1]; $('#pageDescription').textContent=PAGES[name][2];
+  document.querySelectorAll('.view').forEach(v=>v.hidden=v.dataset.page!==name);
+  document.querySelectorAll('.side-nav [data-view]').forEach(b=>{const active=b.dataset.view===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+  const target=`#${name}${arg?`/${arg}`:''}`;
+  if(updateHash&&location.hash!==target)history.pushState(null,'',target);
+  shownHash=location.hash;
+  clearTimeout(historyTimer); clearTimeout(logTimer);
+  if(name==='history')loadHistory('reset');
+  if(name==='logs'){
+    let source=logSource; try{if(arg)source=decodeURIComponent(arg);}catch{}
+    if(source!==logSource){logSource=source;logAfter=0;$('#logOutput').textContent='';}
+    loadLogs();
+  }
+}
+const route=()=>{if(location.hash!==shownHash)showView(location.hash);};
+document.querySelectorAll('.side-nav [data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view,true));
+window.addEventListener('hashchange',route); window.addEventListener('popstate',route);
+function selectModelsTab(tab){for(const x of ['loaded','suggested','all']){$(`#${x==='all'?'allModels':x}`).hidden=x!==tab;const b=$(`#${x==='all'?'allModelsTab':x==='suggested'?'suggestedTab':'loadedTab'}`);b.classList.toggle('active',x===tab);b.setAttribute('aria-selected',String(x===tab));}localStorage.setItem('basal-ui.tab',tab);}
+$('#loadedTab').onclick=()=>selectModelsTab('loaded');$('#suggestedTab').onclick=()=>selectModelsTab('suggested');$('#allModelsTab').onclick=()=>selectModelsTab('all');
+selectModelsTab(['loaded','suggested','all'].includes(localStorage.getItem('basal-ui.tab'))?localStorage.getItem('basal-ui.tab'):'loaded');
+async function loadMemorySettings(){
+  try{
+    const d=await api('/api/memory'), budget=$('input#memoryBudget');
+    budget.placeholder=`Hardware budget: ${(d.hardware_budget_bytes/2**30).toFixed(1)} GiB`;
+    for(const [input,bytes] of [[budget,d.settings.budget_bytes],[$('#memoryReserve'),d.settings.reserve_bytes]]){
+      input.value=bytes==null?'':String(Number((bytes/2**30).toFixed(3)));
+      input.dataset.bytes=bytes==null?'':String(bytes); input.dataset.shown=input.value;  // an unedited field saves its exact bytes
+    }
+  }catch(e){$('#memoryError').textContent=e.message;$('#memoryError').hidden=false;}
+}
+$('#saveMemory').onclick=async()=>{
+  const bytesOf=input=>{const value=input.value.trim();if(value===input.dataset.shown&&input.dataset.bytes!==undefined)return input.dataset.bytes===''?null:Number(input.dataset.bytes);return value===''?null:Math.round(Number(value)*2**30);};
+  try{
+    await api('/api/memory',{method:'PUT',body:JSON.stringify({budget_bytes:bytesOf($('input#memoryBudget')),reserve_bytes:bytesOf($('#memoryReserve'))??0})});
+    $('#memoryError').hidden=true; toast('Memory settings saved'); await Promise.all([loadMemorySettings(),refreshStatus()]);
+  }catch(e){$('#memoryError').textContent=e.message;$('#memoryError').hidden=false;toast(e.message,'error');}
+};
+showView(location.hash);
+loadMemorySettings();
  (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=`Hardware unavailable: ${e.message}`;}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);})();
 </script>
 </body></html>

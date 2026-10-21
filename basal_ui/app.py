@@ -1,18 +1,21 @@
-"""basal-ui: a local web app that detects the hardware, suggests a basal model (size and format), downloads it,
-starts basal-serve for it and runs decisions in a playground.
+"""basal-ui: a local web app that detects the hardware, suggests basal models (size and format), downloads them,
+starts basal-serve for each and runs decisions in a playground.
 
   basal-ui --port 7860      then open http://127.0.0.1:7860
 
-The model runs in a basal-serve subprocess on a free local port; this app proxies /api/decide to its
-/v1/systemone, so a crashed or switched model never takes the UI down.
+Every loaded model runs in its own basal-serve subprocess on a free loopback port that only basal-ui knows (internal
+API key); /api/decide and the API server (basal/ui/gateway.py, one port for every model) forward to it, so a crashed
+or unloaded model never takes the UI down.
 """
 import argparse
+import asyncio
 from collections import deque
 from contextlib import asynccontextmanager
 import hashlib
 import os
 from pathlib import Path
 import secrets
+import shlex
 import signal
 import socket
 import subprocess
@@ -28,10 +31,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import catalog, hardware, settings
+from .gateway import Gateway
+from .history import History, make_record
+from .stats import Stats
 
 STATIC = Path(__file__).parent / "static"
 FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "1.5", "1.0"))}
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
+MODEL_LOGS_KEPT = 10  # log buffers of unloaded models kept for the Logs view
+RSS_INTERVAL_S = 2  # `ps` runs at most this often for the resident memory of the children
 
 
 def _lan_ip():
@@ -43,85 +51,166 @@ def _lan_ip():
         return socket.gethostname()
 
 
+def _fmt(n):
+    return f"{n / 1024**3:.1f} GiB"
+
+
+def rss_by_pgid() -> dict[int, int]:
+    """Resident memory (bytes) per process group: a basal-serve child leads its own group (start_new_session), which
+    also holds its engine's workers. Empty where ps is unavailable (Windows)."""
+    if os.name != "posix":
+        return {}
+    try:
+        out = subprocess.run(["ps", "-eo", "pgid=,rss="], capture_output=True, text=True, timeout=5,
+                             check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    totals: dict[int, int] = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            totals[int(parts[0])] = totals.get(int(parts[0]), 0) + int(parts[1]) * 1024
+    return totals
+
+
+class LogBuffer:
+    """The last lines of one source (a basal-serve child or basal-ui's own events), numbered for incremental reads."""
+
+    def __init__(self, maxlen=1000):
+        self.lines = deque(maxlen=maxlen)
+        self.seq = 0
+        self.lock = threading.Lock()
+
+    def append(self, text):
+        with self.lock:
+            self.seq += 1
+            self.lines.append({"seq": self.seq, "ts": time.time(), "text": text})
+
+    def since(self, seq=0):
+        with self.lock:
+            return [line for line in self.lines if line["seq"] > seq]
+
+    def last(self):
+        with self.lock:
+            return self.lines[-1]["text"] if self.lines else None
+
+
+class Downloads:
+    """Model downloads by repository, shared by the runners and the Download button. A download outlives the load that
+    started it (an unload leaves it finishing into the cache); a failed one stays reported for ERROR_KEEP_S."""
+    ERROR_KEEP_S = 60
+
+    def __init__(self, event=None):
+        self.lock = threading.Lock()
+        self.records: dict[str, dict] = {}
+        self.event = event or (lambda level, message: None)
+
+    def start(self, variant, cache_dir) -> dict:
+        with self.lock:
+            record = self.records.get(variant.repo)
+            if record and record["thread"].is_alive():
+                return record
+            record = {"bar": _byte_counter(), "total": variant.weights_bytes or 0, "path": None, "error": None,
+                      "ended": None}
+            record["thread"] = threading.Thread(target=self._run, args=(record, variant, cache_dir), daemon=True)
+            self.records[variant.repo] = record
+            record["thread"].start()
+        self.event("info", f"download started: {variant.repo}")
+        return record
+
+    def _run(self, record, variant, cache_dir):
+        from huggingface_hub import snapshot_download
+        try:
+            record["path"] = snapshot_download(variant.repo, cache_dir=cache_dir, tqdm_class=record["bar"],
+                                               **catalog.download_kwargs(variant))
+            self.event("info", f"download finished: {variant.repo}")
+        except Exception as exc:  # reported in the UI and re-raised by a waiting load
+            record["error"] = exc
+            self.event("error", f"download failed: {variant.repo}: {exc}")
+        finally:
+            record["ended"] = time.monotonic()
+
+    def alive(self, repo) -> bool:
+        with self.lock:
+            record = self.records.get(repo)
+            return bool(record and record["thread"].is_alive())
+
+    def any_alive(self) -> bool:
+        with self.lock:
+            return any(record["thread"].is_alive() for record in self.records.values())
+
+    def status(self) -> dict:
+        now, out = time.monotonic(), {}
+        with self.lock:
+            for repo, record in list(self.records.items()):
+                failed = record["error"] is not None and now - record["ended"] < self.ERROR_KEEP_S
+                if record["thread"].is_alive() or failed:
+                    done = record["bar"].done
+                    out[repo] = {"done_bytes": done, "total_bytes": max(record["total"], done),
+                                 "error": str(record["error"]) if record["error"] is not None else None}
+                else:
+                    del self.records[repo]
+        return out
+
+
+def _child_settings(serve):
+    """The serve settings a basal-serve child is started with (the rest belongs to the API server)."""
+    return {"log_decisions": serve["log_decisions"], "max_len": serve["max_len"]}
+
+
 class Runner:
-    """One model at a time: idle -> downloading -> starting -> ready, or error. Every load or stop starts a new
-    generation; a background load that finds its generation outdated stops instead of touching the state."""
+    """One model: idle -> downloading -> starting -> ready, or error. Every load or unload starts a new generation; a
+    background load that finds its generation outdated stops instead of touching the state."""
 
     def __init__(self, models_dir_fn=settings.models_dir, platform_fn=lambda: hardware.detect().platform,
-                 settings_mod=settings, internal_secret=None):
+                 settings_mod=settings, downloads=None, internal_secret=None, log=None, event=None):
         self.models_dir_fn = models_dir_fn
         self.platform_fn = platform_fn
         self.settings_mod = settings_mod
+        self.downloads = downloads if downloads is not None else Downloads()
         self.internal_secret = internal_secret or secrets.token_urlsafe(32)
+        self.log = log if log is not None else LogBuffer()
+        self.event = event or (lambda level, message: None)
         self.lock = threading.RLock()
         self.gen = 0
         self.process = None
-        self.downloads: dict[str, threading.Thread] = {}
-        self.logs = deque(maxlen=200)
-        self._lan_ip = None
+        self.rss_bytes = None
         self._reset()
 
     def _reset(self):
         self.state, self.model, self.model_repo, self.mode = "idle", None, None, None
         self.command, self.progress, self.error, self.base_url = None, None, None, None
         self.media_requested, self.media = False, []
-        self.serve_snapshot = None  # the serve settings the running basal-serve was started with
+        self.est_memory_bytes, self.models_entry, self.ready_at = None, None, None
+        self.serve_snapshot = None  # the child settings the running basal-serve was started with
+
+    @property
+    def pid(self):
+        return self.process.pid if self.process else None
 
     def status(self):
         with self.lock:
             if self.state == "ready" and self.process and self.process.poll() is not None:
                 self.state = "error"
-                self.error = f"basal-serve exited ({self.process.returncode}): {self.logs[-1] if self.logs else ''}"
-            config = self.serve_snapshot
-            restart_required = (self.state == "ready" and config is not None
-                                and config != self.settings_mod.serve_settings())
-            serving = None
-            if self.state == "ready" and config is not None and config["enabled"]:
-                host = config["host"]
-                serving_host = "127.0.0.1" if host == "127.0.0.1" else self.lan_ip()
-                serving = {"url": f"http://{serving_host}:{config['port']}", "host": host,
-                           "port": config["port"], "require_key": config["require_key"], "mcp": config["mcp"],
-                           "model_name": self.model, "restart_required": restart_required}
-            return {"state": self.state, "model": self.model, "mode": self.mode, "command": self.command,
-                    "progress": self.progress, "error": self.error, "logs": list(self.logs),
-                    "media_requested": self.media_requested, "media": self.media, "serving": serving,
-                    "restart_required": restart_required}
-
-    def lan_ip(self):
-        if self._lan_ip is None:
-            self._lan_ip = _lan_ip()
-        return self._lan_ip
-
-    def busy(self, repo: str) -> bool:
-        """A download of the repository is running (also one left in the background by an unload), or the loaded
-        or loading model comes from it."""
-        with self.lock:
-            download = self.downloads.get(repo)
-            return bool(download and download.is_alive()) or (self.model_repo == repo and self.state != "idle")
-
-    def while_idle(self, fn):
-        """fn() with no model and no download running, atomically with load()."""
-        with self.lock:
-            if self.state != "idle" or any(thread.is_alive() for thread in self.downloads.values()):
-                raise RuntimeError("unload the model before changing the models directory")
-            return fn()
-
-    def while_not_busy(self, repo: str, fn):
-        """fn() while nothing uses the repository, atomically with load()."""
-        with self.lock:
-            if self.busy(repo):
-                raise RuntimeError("unload the model first")
-            return fn()
+                self.error = f"basal-serve exited ({self.process.returncode}): {self.log.last() or ''}"
+                self.event("error", f"{self.model}: {self.error}")
+            restart_required = (self.state == "ready" and self.serve_snapshot is not None
+                                and self.serve_snapshot != _child_settings(self.settings_mod.serve_settings()))
+            return {"id": self.model, "model": self.model, "repo": self.model_repo, "state": self.state,
+                    "mode": self.mode, "command": self.command, "progress": self.progress, "error": self.error,
+                    "media_requested": self.media_requested, "media": self.media,
+                    "restart_required": restart_required, "est_memory_bytes": self.est_memory_bytes,
+                    "rss_bytes": self.rss_bytes, "base_url": self.base_url}
 
     def load(self, assessment, media=False):
         with self.lock:
             if self.state in ("downloading", "starting"):
-                raise RuntimeError("a model is already loading; unload it first")
-            old = self._detach_locked()
+                raise RuntimeError("the model is already loading; unload it first")
+            old, _ = self.detach()
             self.state, self.model, self.model_repo = "downloading", assessment.variant.id, assessment.variant.repo
             self.mode = "eager" if media else assessment.mode
             self.media_requested, self.media = media, []
-            self.logs.clear()
+            self.est_memory_bytes = assessment.est_memory_bytes
             gen = self.gen
             cache_dir = self.models_dir_fn()
             serve = self.settings_mod.serve_settings()
@@ -139,55 +228,46 @@ class Runner:
             return True
 
     def _download(self, v, gen, cache_dir):
-        from huggingface_hub import snapshot_download
-        bar = _byte_counter()
-        result = {}
-        worker = None
-
-        def download():
-            try:
-                result["path"] = _capture(
-                    lambda: snapshot_download(v.repo, cache_dir=cache_dir, tqdm_class=bar,
-                                              **catalog.download_kwargs(v))
-                )
-            finally:
-                with self.lock:
-                    if self.downloads.get(v.repo) is worker:
-                        self.downloads.pop(v.repo, None)
-
-        worker = threading.Thread(target=download, daemon=True)
-        with self.lock:
-            self.downloads[v.repo] = worker
-        worker.start()
-        while worker.is_alive():
-            done = bar.done
+        record = self.downloads.start(v, cache_dir)
+        while record["thread"].is_alive():
+            done = record["bar"].done
             if not self._update(gen, progress={"done_bytes": done, "total_bytes": max(v.weights_bytes or 0, done)}):
                 return None  # unloaded while downloading: the download finishes in the background, into the cache
-            worker.join(0.5)
-        path = result["path"]
-        if isinstance(path, Exception):
-            raise path
-        return Path(path)
+            record["thread"].join(0.5)
+        if record["error"] is not None:
+            raise record["error"]
+        return Path(record["path"])
 
     def _build_command(self, v, path, assessment, media, port, serve):
+        """The child is private: loopback, a free port, the internal key (basal-ui's admin key) required."""
         command = [sys.executable, "-m", "basal.server",
                    *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None),
-                   "--name", v.id,
-                   "--host", serve["host"] if serve["enabled"] else "127.0.0.1",
-                   "--port", str(serve["port"] if serve["enabled"] else port)]
-        if serve["enabled"]:
-            if serve["require_key"]:
-                command += ["--api-keys", str(self.settings_mod.keys_file(hashlib.sha256(
-                    self.internal_secret.encode()).hexdigest()))]
-            if serve["cors_origins"]:
-                command += ["--cors-origins", ",".join(serve["cors_origins"])]
-            if serve["log_decisions"]:
-                command += ["--log-decisions", serve["log_decisions"]]
-            if serve["mcp"]:
-                command += ["--mcp", "on"]
+                   "--name", v.id, "--host", "127.0.0.1", "--port", str(port),
+                   "--api-keys", str(self.settings_mod.internal_keys_file(hashlib.sha256(
+                       self.internal_secret.encode()).hexdigest()))]
+        if serve["log_decisions"]:
+            command += ["--log-decisions", serve["log_decisions"]]
         if assessment.mode in ("vllm", "sglang"):
             command += ["--max-len", str(serve["max_len"])]
         return command
+
+    def _models_entry(self, media):
+        """The child's GET /v1/models entry and, with media, its media kinds (required then, best effort else)."""
+        attempts, error = (5 if media else 1), None
+        for attempt in range(attempts):
+            try:
+                response = httpx.get(self.base_url + "/v1/models", headers=self._headers(), timeout=1)
+                response.raise_for_status()
+                models = response.json().get("models", [])
+                entry = models[0] if models else None
+                return entry, (entry.get("media", []) if media and entry else [])
+            except Exception as exc:  # noqa: BLE001
+                error = exc
+                if attempt < attempts - 1:
+                    time.sleep(0.5)
+        if media:
+            raise RuntimeError(f"could not read media capabilities from basal-serve: {error}")
+        return None, []
 
     def _start(self, assessment, gen, media=False, cache_dir=None, serve=None):
         v = assessment.variant
@@ -196,18 +276,9 @@ class Runner:
             path = catalog.is_downloaded(v, cache_dir) or self._download(v, gen, cache_dir)
             if path is None:
                 return
-            port = serve["port"] if serve["enabled"] else 0
-            host = serve["host"] if serve["enabled"] else "127.0.0.1"
             with socket.socket() as s:
-                try:
-                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    s.bind((host, port))
-                except OSError as exc:
-                    if serve["enabled"]:
-                        raise RuntimeError(f"port {port} on {host} is in use") from exc
-                    raise
-                if not port:
-                    port = s.getsockname()[1]
+                s.bind(("127.0.0.1", 0))
+                port = s.getsockname()[1]
             command = self._build_command(v, path, assessment, media, port, serve)
             options = ({"start_new_session": True} if os.name == "posix" else
                        {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)})
@@ -216,40 +287,26 @@ class Runner:
                     return
                 self.state, self.progress, self.command = "starting", None, command
                 self.base_url = f"http://127.0.0.1:{port}"
-                self.serve_snapshot = dict(serve)
+                self.serve_snapshot = _child_settings(serve)
                 self.process = proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                                        text=True, bufsize=1, **options)
+            self.event("info", f"{v.id}: basal-serve starting on 127.0.0.1:{port}: {shlex.join(map(str, command))}")
             threading.Thread(target=self._read_logs, args=(proc,), daemon=True).start()
             deadline = time.monotonic() + START_TIMEOUT_S
             while time.monotonic() < deadline:
                 if proc.poll() is not None:
                     time.sleep(0.2)  # let the log reader drain the last lines
-                    raise RuntimeError(f"basal-serve exited ({proc.returncode}): "
-                                       f"{self.logs[-1] if self.logs else 'no output'}")
+                    raise RuntimeError(f"basal-serve exited ({proc.returncode}): {self.log.last() or 'no output'}")
                 try:
                     if httpx.get(self.base_url + "/health", headers=self._headers(), timeout=1).status_code == 200:
-                        media_kinds = []
-                        if media:
-                            error = None
-                            for attempt in range(5):
-                                try:
-                                    response = httpx.get(self.base_url + "/v1/models", headers=self._headers(), timeout=1)
-                                    response.raise_for_status()
-                                    models = response.json().get("models", [])
-                                    media_kinds = models[0].get("media", []) if models else []
-                                    error = None
-                                    break
-                                except Exception as exc:
-                                    error = exc
-                                    if attempt < 4:
-                                        time.sleep(0.5)
-                            if error is not None:
-                                raise RuntimeError(f"could not read media capabilities from basal-serve: {error}")
+                        entry, media_kinds = self._models_entry(media)
                         with self.lock:
                             if gen != self.gen:
                                 return
                             self.state, self.media = "ready", media_kinds
-                            self.settings_mod.remember_model(v.id, media)
+                            self.models_entry, self.ready_at = entry, time.time()
+                            self.settings_mod.remember_loaded(v.id, media)
+                        self.event("info", f"{v.id}: ready")
                         return
                 except httpx.HTTPError:
                     pass
@@ -265,25 +322,27 @@ class Runner:
                     self.process = None
                     self.gen += 1
                     self.state, self.error = "error", str(exc)
+            if proc is not None or self.state == "error":
+                self.event("error", f"{v.id}: {exc}")
             self._terminate(proc)
 
     def _read_logs(self, proc):
         for line in proc.stdout:
-            with self.lock:
-                if proc is self.process:
-                    self.logs.append(line.rstrip())
+            self.log.append(line.rstrip())
 
     def unload(self):
-        with self.lock:
-            proc = self._detach_locked()
+        proc, _ = self.detach()
         self._terminate(proc)
         return self.status()
 
-    def _detach_locked(self):
-        self.gen += 1
-        proc, self.process = self.process, None
-        self._reset()
-        return proc
+    def detach(self):
+        """Start a new generation and forget the model; -> (the child to terminate, the memory estimate it held)."""
+        with self.lock:
+            self.gen += 1
+            proc, self.process = self.process, None
+            est = self.est_memory_bytes if self.state not in ("idle", "error") else None
+            self._reset()
+            return proc, est
 
     @staticmethod
     def _terminate(proc):
@@ -310,19 +369,284 @@ class Runner:
     def _headers(self):
         return {"Authorization": f"Bearer {self.internal_secret}"}
 
-    def decide(self, body):
+    def _url(self, path):
         with self.lock:
             if self.state != "ready":
-                raise RuntimeError("no model is ready; load one first")
-            url = self.base_url + "/v1/systemone"
-        return httpx.post(url, json=body, headers=self._headers(), timeout=120)
+                raise RuntimeError(f"model {self.model} is not ready ({self.state})")
+            return self.base_url + path
+
+    def decide(self, body, path="/v1/systemone"):
+        return httpx.post(self._url(path), json=body, headers=self._headers(), timeout=120)
+
+    async def adecide(self, client, body, path="/v1/systemone"):
+        return await client.post(self._url(path), json=body, headers=self._headers())
 
 
-def _capture(fn):
-    try:
-        return fn()
-    except Exception as exc:  # re-raised in the waiting thread
-        return exc
+class Fleet:
+    """The loaded models (one Runner each, in load order), their shared downloads, logs, statistics and history."""
+
+    def __init__(self, models_dir_fn, platform_fn, settings_mod, hardware_fn, stats=None, history=None):
+        self.models_dir_fn, self.platform_fn = models_dir_fn, platform_fn
+        self.settings_mod, self.hardware_fn = settings_mod, hardware_fn
+        self.stats, self.history = stats, history
+        self.internal_secret = secrets.token_urlsafe(32)
+        self.lock = threading.RLock()
+        self.runners: dict[str, Runner] = {}
+        self.logs: dict[str, LogBuffer] = {"basal-ui": LogBuffer()}
+        self.downloads = Downloads(self.event)
+        self.bench_state = None
+        self.bench_cancel = threading.Event()
+        self._lan_ip = None
+        self.retiring: dict[Runner, int | None] = {}  # unloaded runners whose child is still being terminated
+        self._rss_cache = (0.0, {})
+
+    def event(self, level, message):
+        self.logs["basal-ui"].append(f"{level} {message}")
+
+    def internal_sha256(self):
+        return hashlib.sha256(self.internal_secret.encode()).hexdigest()
+
+    def lan_ip(self):
+        if self._lan_ip is None:
+            self._lan_ip = _lan_ip()
+        return self._lan_ip
+
+    def _memory(self, rss_total=0):
+        config = self.settings_mod.memory_settings()
+        hw = self.hardware_fn()
+        budget = config["budget_bytes"] or hw.memory_bytes
+        committed = (sum(r.est_memory_bytes or 0 for r in self.runners.values() if r.state not in ("idle", "error"))
+                     + sum(est or 0 for est in self.retiring.values()))
+        return {"budget_bytes": budget, "reserve_bytes": config["reserve_bytes"],
+                "hardware_budget_bytes": hw.memory_bytes, "available_bytes": hw.available_bytes,
+                "committed_bytes": committed, "rss_bytes": rss_total,
+                "over": committed > budget - config["reserve_bytes"]}
+
+    def load(self, assessment, media=False):
+        model_id = assessment.variant.id
+        with self.lock:
+            existing = self.runners.get(model_id)
+            state = existing.status()["state"] if existing is not None else "idle"
+            if state not in ("idle", "error"):
+                raise RuntimeError(f"model {model_id} is already {'loaded' if state == 'ready' else 'loading'}")
+            memory = self._memory()  # an errored load being replaced has no process and does not count
+            limit = memory["budget_bytes"] - memory["reserve_bytes"]
+            needed = assessment.est_memory_bytes or 0
+            if memory["committed_bytes"] + needed > limit:
+                raise RuntimeError(
+                    f"over memory budget: {_fmt(memory['committed_bytes'])} loaded + {_fmt(needed)} needed > "
+                    f"{_fmt(limit)} ({_fmt(memory['budget_bytes'])} budget − {_fmt(memory['reserve_bytes'])} kept "
+                    "free); unload a model or raise the budget")
+            self.logs.pop(model_id, None)
+            self.logs[model_id] = log = LogBuffer()  # most recent last; a reload starts a fresh log
+            runner = Runner(models_dir_fn=self.models_dir_fn, platform_fn=self.platform_fn,
+                            settings_mod=self.settings_mod, downloads=self.downloads,
+                            internal_secret=self.internal_secret, log=log, event=self.event)
+            self.runners[model_id] = runner
+            self._prune_logs()
+            runner.load(assessment, media=media)
+        if existing is not None:
+            existing.unload()
+        self.event("info", f"load requested: {model_id}{' with media' if media else ''}")
+        return self.status()
+
+    def _prune_logs(self):
+        unloaded = [key for key in self.logs if key != "basal-ui" and key not in self.runners]
+        for key in unloaded[:max(0, len(self.logs) - 1 - MODEL_LOGS_KEPT)]:
+            del self.logs[key]
+
+    def unload(self, model_id=None, forget=True):
+        """Unload one model (KeyError when it is not loaded) or every model; forget=False keeps it for auto-load."""
+        with self.lock:
+            if model_id is not None and model_id not in self.runners:
+                raise KeyError(model_id)
+            ids = [model_id] if model_id is not None else list(self.runners)
+            retiring = []
+            for i in ids:
+                runner = self.runners.pop(i)
+                # detach under the fleet lock: the old load can no longer reach ready and remember itself after
+                # forget_loaded; its memory stays committed until the child is gone (a new load must wait for it)
+                proc, est = runner.detach()
+                retiring.append((runner, proc))
+                self.retiring[runner] = est
+                if forget:
+                    self.settings_mod.forget_loaded(i)
+            self._prune_logs()
+        for i, (runner, proc) in zip(ids, retiring):
+            Runner._terminate(proc)
+            with self.lock:
+                self.retiring.pop(runner, None)
+            self.event("info", f"unloaded: {i}")
+        return self.status()
+
+    def restart(self, assessment, media=False):
+        self.event("info", f"restart: {assessment.variant.id}")
+        self.unload(assessment.variant.id, forget=False)
+        return self.load(assessment, media=media)
+
+    def download(self, variant) -> bool:
+        """Start a runner-less download into the models directory; False when the model is on disk already.
+        Under the fleet lock, so the directory cannot change (while_idle) or the repository be deleted
+        (while_not_busy) between the check and the start."""
+        with self.lock:
+            cache_dir = self.models_dir_fn()
+            if catalog.is_downloaded(variant, cache_dir):
+                return False
+            self.downloads.start(variant, cache_dir)
+            return True
+
+    def status(self):
+        with self.lock:
+            runners = list(self.runners.values())
+        rss = self._rss() if any(r.process for r in runners) else {}
+        models = []
+        for runner in runners:
+            runner.rss_bytes = rss.get(runner.pid) if runner.pid else None
+            models.append(runner.status())
+        with self.lock:
+            memory = self._memory(sum(m["rss_bytes"] or 0 for m in models))
+            bench = dict(self.bench_state) if self.bench_state else None
+        return {"models": models, "downloads": self.downloads.status(), "memory": memory, "benchmark": bench}
+
+    def _rss(self):
+        """rss_by_pgid() at most every RSS_INTERVAL_S: the UI polls every second while a model loads."""
+        now = time.monotonic()
+        if now - self._rss_cache[0] > RSS_INTERVAL_S:
+            self._rss_cache = (now, rss_by_pgid())
+        return self._rss_cache[1]
+
+    def ready(self, model_id) -> Runner:
+        with self.lock:
+            runner = self.runners.get(model_id)
+        if runner is None:
+            raise KeyError(model_id)
+        state = runner.status()["state"]
+        if state != "ready":
+            raise RuntimeError(f"model {model_id} is not ready ({state})")
+        return runner
+
+    def loaded_ids(self):
+        with self.lock:
+            runners = list(self.runners.items())
+        return [model_id for model_id, runner in runners if runner.status()["state"] == "ready"]
+
+    def model_entries(self):
+        """The ready models for GET /v1/models: id, the child's own entry, the time it became ready."""
+        with self.lock:
+            runners = list(self.runners.items())
+        return [{"id": model_id, "entry": runner.models_entry, "created": int(runner.ready_at or 0)}
+                for model_id, runner in runners if runner.status()["state"] == "ready"]
+
+    def busy(self, repo) -> bool:
+        """A download of the repository is running (also one left in the background by an unload), or a loaded or
+        loading model comes from it."""
+        with self.lock:
+            return self.downloads.alive(repo) or any(r.model_repo == repo and r.state != "idle"
+                                                     for r in self.runners.values())
+
+    def while_idle(self, fn):
+        """fn() with no model and no download running, atomically with load()."""
+        with self.lock:
+            if self.runners or self.downloads.any_alive():
+                raise RuntimeError("unload every model before changing the models directory")
+            return fn()
+
+    def while_not_busy(self, repo, fn):
+        """fn() while nothing uses the repository, atomically with load()."""
+        with self.lock:
+            if self.busy(repo):
+                raise RuntimeError("unload the model first")
+            return fn()
+
+    def _record(self, model_id, body, path, source, status, data, latency_ms):
+        if source == "benchmark":
+            return
+        if self.stats is not None:
+            self.stats.record(model_id, data, latency_ms, ok=200 <= status < 300)
+        if self.history is not None:
+            request = {"model": model_id, **body} if path == "/v1/systemone" else body
+            self.history.append(make_record(model_id, source, request, status, data, latency_ms))
+
+    @staticmethod
+    def _json(response):
+        try:
+            return response.json()
+        except ValueError:
+            return {"error": response.text}
+
+    def decide(self, model_id, body, path="/v1/systemone", source="playground"):
+        runner = self.ready(model_id)
+        t0 = time.perf_counter()
+        try:
+            response = runner.decide(body, path)
+        except httpx.HTTPError as exc:
+            self._record(model_id, body, path, source, 502, {"error": f"basal-serve: {exc}"},
+                         (time.perf_counter() - t0) * 1000)
+            raise
+        self._record(model_id, body, path, source, response.status_code, self._json(response),
+                     (time.perf_counter() - t0) * 1000)
+        return response
+
+    async def adecide(self, model_id, body, path="/v1/systemone", source="api", client=None):
+        runner = self.ready(model_id)
+        t0 = time.perf_counter()
+        try:
+            response = await runner.adecide(client, body, path)
+        except httpx.HTTPError as exc:
+            self._record(model_id, body, path, source, 502, {"error": f"basal-serve: {exc}"},
+                         (time.perf_counter() - t0) * 1000)
+            raise
+        self._record(model_id, body, path, source, response.status_code, self._json(response),
+                     (time.perf_counter() - t0) * 1000)
+        return response
+
+    def benchmark(self, model_id, paths, label):
+        """Benchmark one ready model in the background; one benchmark at a time (RuntimeError otherwise)."""
+        from . import bench
+
+        with self.lock:
+            if self.bench_state and self.bench_state["running"]:
+                raise RuntimeError("a benchmark is already running")
+            self.ready(model_id)
+            self.bench_cancel.clear()
+            self.bench_state = {"model": model_id, "set": label, "phase": "warm-up", "done": 0, "total": 0,
+                                "error": None, "running": True}
+            state = dict(self.bench_state)
+
+        def progress(phase, done, total):
+            with self.lock:
+                self.bench_state.update(phase=phase, done=done, total=total)
+
+        def run():
+            try:
+                result = asyncio.run(bench.run_benchmark(self, model_id, paths, label, progress=progress,
+                                                         cancel=self.bench_cancel))
+                if self.stats is not None:
+                    self.stats.add_benchmark(model_id, result)
+                with self.lock:
+                    self.bench_state.update(phase="done", running=False)
+                self.event("info", f"benchmark finished: {model_id} on {label}")
+            except bench.Cancelled:
+                with self.lock:
+                    self.bench_state.update(phase="cancelled", running=False)
+                self.event("info", f"benchmark cancelled: {model_id}")
+            except Exception as exc:  # shown in the UI
+                with self.lock:
+                    self.bench_state.update(phase="error", error=str(exc), running=False)
+                self.event("error", f"benchmark failed: {model_id}: {exc}")
+
+        self.event("info", f"benchmark started: {model_id} on {label}")
+        threading.Thread(target=run, name="basal-ui-benchmark", daemon=True).start()
+        return state
+
+    def cancel_benchmark(self):
+        self.bench_cancel.set()
+        with self.lock:
+            return dict(self.bench_state) if self.bench_state else None
+
+    def shutdown(self):
+        self.bench_cancel.set()
+        self.unload(forget=False)
 
 
 class _Sink:
@@ -355,10 +679,14 @@ def _byte_counter():
     return Counter
 
 
-def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, runner=None,
-              settings_mod=settings, allowed_hosts=("127.0.0.1", "localhost", "::1")) -> FastAPI:
-    runner = runner or Runner(models_dir_fn=settings_mod.models_dir, platform_fn=lambda: hardware_fn().platform,
-                              settings_mod=settings_mod)
+def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fleet=None,
+               settings_mod=settings, allowed_hosts=("127.0.0.1", "localhost", "::1"), gateway=None, stats=None,
+               history=None) -> FastAPI:
+    stats = stats or Stats(settings_mod.stats_path())
+    history = history or History(settings_mod.history_path())
+    fleet = fleet or Fleet(models_dir_fn=settings_mod.models_dir, platform_fn=lambda: hardware_fn().platform,
+                           settings_mod=settings_mod, hardware_fn=hardware_fn, stats=stats, history=history)
+    gateway = gateway or Gateway(fleet, settings_mod, stats)
     allowed_hosts = tuple(allowed_hosts)
 
     def hw():
@@ -368,35 +696,47 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
     auto_load_lock = threading.Lock()
 
     def _auto_load():
-        last = settings_mod.last_model()
         try:
             variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
-            variant = next((v for v in variants if v.id == last["id"]), None)
-            if variant is None:
-                raise ValueError("model is unknown")
-            assessment = catalog.assess(variant, hw())
-            if not assessment.runnable and not last.get("media"):
-                raise ValueError(assessment.reason)
-            if last.get("media") and assessment.media_mode is None:
-                raise ValueError(assessment.media_reason)
-            with auto_load_lock:
-                if not auto_load_stop.is_set():
-                    runner.load(assessment, media=last.get("media", False))
-        except Exception as exc:
+        except Exception as exc:  # the catalog is unavailable: nothing to load
             print(f"basal-ui: auto-load skipped: {exc}", file=sys.stderr)
+            fleet.event("warn", f"auto-load skipped: {exc}")
+            return
+        for last in settings_mod.last_models():
+            if auto_load_stop.is_set():
+                return
+            try:
+                variant = next((v for v in variants if v.id == last["id"]), None)
+                if variant is None:
+                    raise ValueError("model is unknown")
+                assessment = catalog.assess(variant, hw())
+                if not assessment.runnable and not last.get("media"):
+                    raise ValueError(assessment.reason)
+                if last.get("media") and assessment.media_mode is None:
+                    raise ValueError(assessment.media_reason)
+                with auto_load_lock:
+                    if not auto_load_stop.is_set():
+                        fleet.load(assessment, media=last.get("media", False))
+                        fleet.event("info", f"auto-load: {last['id']}")
+            except Exception as exc:
+                print(f"basal-ui: auto-load of {last['id']} skipped: {exc}", file=sys.stderr)
+                fleet.event("warn", f"auto-load of {last['id']} skipped: {exc}")
 
     @asynccontextmanager
     async def lifespan(_app):
         auto_load_thread = None
-        if settings_mod.load().get("auto_load") and settings_mod.last_model():
+        if settings_mod.load().get("auto_load") and settings_mod.last_models():
             auto_load_thread = threading.Thread(target=_auto_load, daemon=True)
             auto_load_thread.start()
+        await asyncio.to_thread(gateway.start)
         yield
         with auto_load_lock:
             auto_load_stop.set()
         if auto_load_thread is not None:
             auto_load_thread.join(timeout=5)
-        runner.unload()
+        gateway.stop()
+        fleet.shutdown()
+        stats.close()
         settings_mod.remove_keys_file()
 
     app = FastAPI(title="basal-ui", lifespan=lifespan)
@@ -421,6 +761,16 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
         # revalidate on every load: a cached copy from an older basal-ui would talk to the new API
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
+    def find_variant(model_id):
+        variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
+        variant = next((v for v in variants if v.id == model_id), None)
+        if variant is None:
+            raise HTTPException(400, f"unknown model {model_id!r}")
+        return variant
+
+    def full_status():
+        return {**fleet.status(), "serving": gateway.status()}
+
     def serve_response():
         config = settings_mod.serve_settings()
         available = None
@@ -431,16 +781,8 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
             available = hint is None
         except ImportError as exc:
             hint = str(exc)
-        status = runner.status()
-        usage = {}
-        if status["state"] == "ready" and status.get("serving") and status["serving"]["require_key"]:
-            try:
-                response = httpx.get(runner.base_url + "/v1/keys", headers=runner._headers(), timeout=2)
-                response.raise_for_status()
-                usage = {item["name"]: item["last_used"] for item in response.json().get("keys", [])}
-            except httpx.HTTPError:
-                pass
-        lan = runner.lan_ip() if config["host"] == "0.0.0.0" else None
+        usage = gateway.key_usage()
+        lan = fleet.lan_ip() if config["host"] == "0.0.0.0" else None
         return {"settings": config, "auto_load": settings_mod.load().get("auto_load", False),
                 "keys": [{**{k: v for k, v in key.items() if k != "sha256"},
                           "last_used": usage.get(key["name"])} for key in settings_mod.keys()],
@@ -464,6 +806,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
             raise HTTPException(400, str(exc)) from exc
         return serve_response()
 
+    @app.post("/api/serve/restart")
+    def restart_serve():
+        fleet.event("info", "API server restart requested")
+        return gateway.restart()
+
     @app.post("/api/serve/keys", status_code=201)
     def post_key(body: dict = Body(...)):
         try:
@@ -480,19 +827,37 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
             raise HTTPException(404, str(exc)) from exc
         return {"deleted": name}
 
+    @app.get("/api/memory")
+    def get_memory():
+        current = hw()
+        return {"settings": settings_mod.memory_settings(), "hardware_budget_bytes": current.memory_bytes,
+                "available_bytes": current.available_bytes}
+
+    @app.put("/api/memory")
+    def put_memory(body: dict = Body(...)):
+        try:
+            settings_mod.update_memory(body)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return get_memory()
+
     @app.post("/api/restart", status_code=202)
-    def restart_model():
-        status = runner.status()
-        if status["state"] == "idle":
-            raise HTTPException(409, "no model is loaded")
-        if status["state"] in ("downloading", "starting"):
+    def restart_model(body: dict = Body(...)):
+        model_id = body.get("id")
+        current = next((m for m in fleet.status()["models"] if m["id"] == model_id), None)
+        if current is None:
+            raise HTTPException(404, f"model {model_id!r} is not loaded")
+        if current["state"] in ("downloading", "starting"):
             raise HTTPException(409, "model is still loading")
         variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
-        variant = next((v for v in variants if v.id == status["model"]), None)
+        variant = next((v for v in variants if v.id == model_id), None)
         if variant is None:
             raise HTTPException(400, "loaded model is no longer available")
-        assessment = catalog.assess(variant, hw())
-        return runner.load(assessment, media=status.get("media_requested", False))
+        try:
+            fleet.restart(catalog.assess(variant, hw()), media=current.get("media_requested", False))
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return full_status()
 
     @app.get("/api/hardware")
     def get_hardware():
@@ -514,7 +879,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
         if models_dir is not None and not isinstance(models_dir, str):
             raise HTTPException(400, "models_dir must be a string or null")
         try:
-            runner.while_idle(lambda: settings_mod.set_models_dir(models_dir))
+            fleet.while_idle(lambda: settings_mod.set_models_dir(models_dir))
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         except ValueError as exc:
@@ -541,23 +906,23 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
 
     @app.post("/api/models/delete")
     def delete_model(body: dict = Body(...)):
-        model_id = body.get("id")
-        variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
-        variant = next((v for v in variants if v.id == model_id), None)
-        if variant is None:
-            raise HTTPException(400, f"unknown model {model_id!r}")
+        variant = find_variant(body.get("id"))
         try:
-            freed = runner.while_not_busy(variant.repo, lambda: catalog.delete(variant, settings_mod.models_dir()))
+            freed = fleet.while_not_busy(variant.repo, lambda: catalog.delete(variant, settings_mod.models_dir()))
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"freed_bytes": freed}
 
+    @app.post("/api/download", status_code=202)
+    def download(body: dict = Body(...)):
+        variant = find_variant(body.get("id"))
+        if not fleet.download(variant):
+            raise HTTPException(409, "already on disk")
+        return full_status()
+
     @app.post("/api/load", status_code=202)
     def load(body: dict = Body(...)):
-        variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())
-        variant = next((v for v in variants if v.id == body.get("id")), None)
-        if variant is None:
-            raise HTTPException(400, f"unknown model {body.get('id')!r}")
+        variant = find_variant(body.get("id"))
         media = body.get("media", False)
         if not isinstance(media, bool):
             raise HTTPException(400, "media must be a boolean")
@@ -567,17 +932,23 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
         if media and assessment.media_mode is None:
             raise HTTPException(400, assessment.media_reason)
         try:
-            return runner.load(assessment, media=media)
+            fleet.load(assessment, media=media)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
+        return full_status()
 
     @app.post("/api/unload")
-    def unload():
-        return runner.unload()
+    def unload(body: dict | None = Body(None)):
+        model_id = (body or {}).get("id")
+        try:
+            fleet.unload(model_id)
+        except KeyError as exc:
+            raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
+        return full_status()
 
     @app.get("/api/status")
     def status():
-        return runner.status()
+        return full_status()
 
     @app.get("/api/examples")
     def get_examples():
@@ -586,14 +957,90 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, ru
 
     @app.post("/api/decide")
     def decide(body: dict = Body(...)):  # sync: runs in the threadpool, a slow decision does not block the UI
+        body = dict(body)
+        model_id = body.pop("model", None)
+        if not isinstance(model_id, str) or not model_id:
+            raise HTTPException(400, f"model is required; loaded: {fleet.loaded_ids()}")
         try:
-            r = runner.decide(body)
+            r = fleet.decide(model_id, body, source="playground")
+        except KeyError as exc:
+            raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(502, f"basal-serve: {exc}") from exc
         return Response(r.content, status_code=r.status_code,
                         media_type=r.headers.get("content-type", "application/json"))
+
+    @app.get("/api/stats")
+    def get_stats():
+        return stats.snapshot()
+
+    @app.delete("/api/stats")
+    def reset_stats():
+        stats.reset()
+        return {"reset": "all"}
+
+    @app.delete("/api/stats/{model_id:path}")
+    def reset_model_stats(model_id: str):
+        stats.reset(model_id)
+        return {"reset": model_id}
+
+    @app.post("/api/benchmark", status_code=202)
+    def post_benchmark(body: dict = Body(...)):
+        from . import bench
+
+        model_id = body.get("id")
+        try:
+            label, paths = bench.resolve_set(body.get("set", "bundled"))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        try:
+            return fleet.benchmark(model_id, paths, label)
+        except KeyError as exc:
+            raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.delete("/api/benchmark")
+    def cancel_benchmark():
+        return fleet.cancel_benchmark()
+
+    @app.get("/api/benchmarks")
+    def get_benchmarks():
+        return stats.snapshot()["benchmarks"]
+
+    @app.get("/api/history")
+    def get_history(model: str | None = None, source: str | None = None, q: str | None = None, limit: int = 100,
+                    before: str | None = None, after: str | None = None):
+        items = history.list(model=model or None, source=source or None, q=q or None,
+                             limit=max(1, min(limit, 500)), before=before, after=after)
+        return {"items": items, "models": history.models()}
+
+    @app.get("/api/history/{record_id}")
+    def get_history_record(record_id: str):
+        record = history.get(record_id)
+        if record is None:
+            raise HTTPException(404, f"unknown history record {record_id!r}")
+        return record
+
+    @app.delete("/api/history")
+    def clear_history():
+        return {"cleared": history.clear()}
+
+    @app.get("/api/logs")
+    def get_logs(source: str = "basal-ui", after: int = 0):
+        with fleet.lock:
+            buffers = dict(fleet.logs)
+            runners = dict(fleet.runners)
+        if source not in buffers:
+            raise HTTPException(404, f"unknown log source {source!r}")
+        sources = [{"id": "basal-ui", "state": "ui"}]
+        loaded = [key for key in runners if key in buffers]
+        gone = [key for key in buffers if key != "basal-ui" and key not in runners]
+        sources += [{"id": key, "state": runners[key].state} for key in loaded]
+        sources += [{"id": key, "state": "gone"} for key in gone]
+        return {"sources": sources, "lines": buffers[source].since(after)}
 
     return app
 

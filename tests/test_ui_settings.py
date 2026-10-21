@@ -157,6 +157,33 @@ def test_auto_load_setting_requires_boolean(tmp_path, monkeypatch):
         settings.set_auto_load("yes")
 
 
+def test_loaded_models_keep_load_order_update_media_and_migrate_the_single_model(tmp_path, monkeypatch):
+    config = tmp_path / "settings.json"
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(config))
+    config.write_text(json.dumps({"last_model": {"id": "old", "media": True}, "auto_load": True}))
+    assert settings.last_models() == [{"id": "old", "media": True}]
+    settings.remember_loaded("new", False)
+    settings.remember_loaded("old", False)
+    assert settings.last_models() == [{"id": "old", "media": False}, {"id": "new", "media": False}]
+    assert "last_model" not in json.loads(config.read_text())
+    settings.forget_loaded("old")
+    settings.forget_loaded("never-loaded")
+    assert settings.last_models() == [{"id": "new", "media": False}]
+
+
+def test_memory_settings_validate_budget_and_reserve(tmp_path, monkeypatch):
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
+    assert settings.memory_settings() == {"budget_bytes": None, "reserve_bytes": 2 * 1024**3}
+    for patch in ({"budget_bytes": 1024**3 - 1}, {"budget_bytes": "8G"}, {"reserve_bytes": -1},
+                  {"reserve_bytes": 1.5}, {"swap": 1}):
+        with pytest.raises(ValueError):
+            settings.update_memory(patch)
+    assert settings.update_memory({"budget_bytes": 1024**3, "reserve_bytes": 0}) == {
+        "budget_bytes": 1024**3, "reserve_bytes": 0}
+    assert settings.update_memory({"budget_bytes": None})["budget_bytes"] is None
+    assert settings.memory_settings() == {"budget_bytes": None, "reserve_bytes": 0}
+
+
 def test_cross_process_settings_updates_do_not_lose_keys(tmp_path, monkeypatch):
     config = tmp_path / "settings.json"
     monkeypatch.setenv("BASAL_UI_CONFIG", str(config))

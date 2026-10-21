@@ -1,4 +1,4 @@
-"""Persistent basal-ui settings: the models directory, the API server, its keys and the last model.
+"""Persistent basal-ui settings: the models directory, the API server and its keys, the loaded models, the memory budget.
 
 Every change is a read-modify-write of one JSON file under a thread and inter-process lock, written atomically (a private
 temp file renamed over the old one), so concurrent requests and processes never lose each other's changes. The file and
@@ -76,9 +76,14 @@ def _write_private(path: Path, text: str) -> None:
 def load() -> dict:
     try:
         value = json.loads(_settings_path().read_text())
-        return value if isinstance(value, dict) else {}
     except (OSError, ValueError):
         return {}
+    if not isinstance(value, dict):
+        return {}
+    legacy = value.pop("last_model", None)  # one model before basal-ui loaded several
+    if isinstance(legacy, dict) and "last_models" not in value:
+        value["last_models"] = [legacy]
+    return value
 
 
 @_locked
@@ -169,17 +174,70 @@ def set_auto_load(enabled: bool) -> bool:
 
 
 @_locked
-def remember_model(model_id: str, media: bool) -> None:
-    """The model that last reached ready, for auto-load at the next start."""
+def remember_loaded(model_id: str, media: bool) -> None:
+    """A model that reached ready, for auto-load at the next start (load order kept)."""
     data = load()
-    data["last_model"] = {"id": model_id, "media": bool(media)}
+    entries = last_models(data)
+    if any(e["id"] == model_id for e in entries):
+        entries = [{**e, "media": bool(media)} if e["id"] == model_id else e for e in entries]
+    else:
+        entries.append({"id": model_id, "media": bool(media)})
+    data["last_models"] = entries
     save(data)
 
 
+@_locked
+def forget_loaded(model_id: str) -> None:
+    data = load()
+    data["last_models"] = [e for e in last_models(data) if e["id"] != model_id]
+    save(data)
 
-def last_model() -> dict | None:
-    value = load().get("last_model")
-    return value if isinstance(value, dict) and isinstance(value.get("id"), str) else None
+
+def last_models(data: dict | None = None) -> list[dict]:
+    value = (load() if data is None else data).get("last_models")
+    return [e for e in value if isinstance(e, dict) and isinstance(e.get("id"), str)] if isinstance(value, list) else []
+
+
+DEFAULT_RESERVE = 2 * 1024**3
+
+
+def memory_settings() -> dict:
+    value = load().get("memory")
+    value = value if isinstance(value, dict) else {}
+    budget, reserve = value.get("budget_bytes"), value.get("reserve_bytes", DEFAULT_RESERVE)
+    return {"budget_bytes": budget if type(budget) is int else None,
+            "reserve_bytes": reserve if type(reserve) is int and reserve >= 0 else DEFAULT_RESERVE}
+
+
+@_locked
+def update_memory(patch: dict) -> dict:
+    """budget_bytes: null (the hardware budget) or at least 1 GiB; reserve_bytes: kept free, >= 0."""
+    unknown = set(patch) - {"budget_bytes", "reserve_bytes"}
+    if unknown:
+        raise ValueError(f"unknown memory setting: {sorted(unknown)[0]}")
+    value = {**memory_settings(), **patch}
+    if value["budget_bytes"] is not None and (type(value["budget_bytes"]) is not int
+                                              or value["budget_bytes"] < 1024**3):
+        raise ValueError("budget_bytes must be null or at least 1 GiB")
+    if type(value["reserve_bytes"]) is not int or value["reserve_bytes"] < 0:
+        raise ValueError("reserve_bytes must be a non-negative integer")
+    data = load()
+    data["memory"] = value
+    save(data)
+    return value
+
+
+def _sibling(suffix: str) -> Path:
+    path = _settings_path()
+    return path.with_name(f"{path.stem}.{suffix}")
+
+
+def stats_path() -> Path:
+    return _sibling("stats.json")
+
+
+def history_path() -> Path:
+    return _sibling("history.jsonl")
 
 
 def keys() -> list[dict]:
@@ -221,11 +279,18 @@ def delete_key(name: str) -> None:
     _sync_key_files(data)
 
 
-# Each basal-ui process gives its basal-serve a settings-specific key file, <stem>.keys-<pid>.json next to the
-# settings file: the user's keys (shared, from the settings) plus that process's internal admin key. Two basal-ui
+# Each basal-ui process writes two key files next to the settings file. <stem>.keys-<pid>.json holds the user's keys
+# (shared, from the settings) plus that process's internal admin key: the API server reads it. <stem>.internal-<pid>.json
+# holds the internal key alone: each basal-serve child reads it, so only basal-ui reaches a child. Two basal-ui
 # instances on one settings file therefore never overwrite each other's internal key, and key changes reach each file.
 def _keys_path(pid: int | None = None) -> Path:
     settings_path = _settings_path()
+    return settings_path.with_name(f"{settings_path.stem}.keys-{os.getpid() if pid is None else pid}.json")
+
+
+def _internal_keys_path() -> Path:
+    settings_path = _settings_path()
+    return settings_path.with_name(f"{settings_path.stem}.internal-{os.getpid()}.json")
     return settings_path.with_name(f"{settings_path.stem}.keys-{os.getpid() if pid is None else pid}.json")
 
 
@@ -267,7 +332,7 @@ def _sync_key_files(data: dict) -> None:
 
 @_locked
 def keys_file(internal_sha256: str) -> Path:
-    """This process's basal-serve key file (format: basal/auth.py): the user's keys and this app's own admin key."""
+    """This process's API server key file (format: basal/auth.py): the user's keys and this app's own admin key."""
     global _internal_sha256
     _internal_sha256 = internal_sha256
     path = _keys_path()
@@ -276,7 +341,15 @@ def keys_file(internal_sha256: str) -> Path:
     return path
 
 
+def internal_keys_file(internal_sha256: str) -> Path:
+    """The key file of a basal-serve child: this app's admin key only, so user keys never reach a child directly."""
+    path = _internal_keys_path()
+    _write_private(path, json.dumps({"keys": [{"name": "basal-ui", "sha256": internal_sha256, "admin": True}]}))
+    return path
+
+
 @_locked
 def remove_keys_file() -> None:
-    """Called when basal-ui exits: its basal-serve is gone, so is its key file."""
+    """Called when basal-ui exits: its API server and children are gone, so are its key files."""
     _keys_path().unlink(missing_ok=True)
+    _internal_keys_path().unlink(missing_ok=True)
