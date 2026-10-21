@@ -64,6 +64,14 @@ def states(client):
     return {m["id"]: m["state"] for m in client.get("/api/status").json()["models"]}
 
 
+def test_examples_include_a_full_request_of_every_advanced_type(tmp_path):
+    app, _ = app_for(tmp_path, [])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        examples = client.get("/api/examples").json()
+    types = {q["type"] for e in examples for q in e["request"]["questions"].values()}
+    assert {"multi", "act", "tool", "classify", "verify", "compress", "extract"} <= types
+
+
 def test_model_api_sorting_load_validation_and_decide_requires_a_loaded_model(tmp_path):
     large = Variant("large", "Remek/basal-2.0-4.5B-FP8", "basal-2.0", "4.5B", "FP8", "FP8", None, 100, False)
     app, _ = app_for(tmp_path, [MINI, large])

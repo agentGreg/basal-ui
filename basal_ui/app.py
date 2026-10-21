@@ -200,7 +200,7 @@ class Runner:
                     "mode": self.mode, "command": self.command, "progress": self.progress, "error": self.error,
                     "media_requested": self.media_requested, "media": self.media,
                     "restart_required": restart_required, "est_memory_bytes": self.est_memory_bytes,
-                    "rss_bytes": self.rss_bytes, "base_url": self.base_url}
+                    "rss_bytes": self.rss_bytes, "base_url": self.base_url, "entry": self.models_entry}
 
     def load(self, assessment, media=False):
         with self.lock:
@@ -253,7 +253,7 @@ class Runner:
 
     def _models_entry(self, media):
         """The child's GET /v1/models entry and, with media, its media kinds (required then, best effort else)."""
-        attempts, error = (5 if media else 1), None
+        attempts, error = (5 if media else 3), None
         for attempt in range(attempts):
             try:
                 response = httpx.get(self.base_url + "/v1/models", headers=self._headers(), timeout=1)

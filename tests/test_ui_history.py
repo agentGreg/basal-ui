@@ -48,6 +48,15 @@ def test_media_bytes_are_replaced_by_their_size_and_states_are_previewed():
     assert (r["status"], r["answers"], r["response"]) == (422, {}, {"error": "bad"})
 
 
+def test_records_flag_deferred_answers_and_truncated_states():
+    r = make_record("m", "api", {"state": "s", "questions": {"q": {"type": "act"}}}, 200,
+                    {"answers": {"q": {"type": "act", "deferred": True}},
+                     "usage": {"truncated": {"dropped_tokens": 3}}}, 1.0)
+    assert r["deferred"] is True and r["truncated"] is True
+    plain = record("a", "api", "s")
+    assert plain["deferred"] is False and plain["truncated"] is False
+
+
 def test_persistence_rotation_and_clear(tmp_path):
     path = tmp_path / "h.jsonl"
     history = History(path, keep=3)

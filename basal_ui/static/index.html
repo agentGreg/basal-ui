@@ -29,6 +29,9 @@
 .page-header h2{font-size:30px;letter-spacing:-1.2px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .model-row{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)}.model-row:last-child{border-bottom:0}.model-row-main,.model-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.model-row-meta{font-size:13px}.memory-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 6px}.memory-progress{display:flex;gap:1px;margin-bottom:6px}.memory-progress>span{flex:none;background:var(--green)}.memory-progress.over>span{background:var(--accent)}.download-progress{display:block;margin-top:4px}.log-view{max-height:calc(100vh - 260px);min-height:240px}.history-row{cursor:pointer}.history-state{max-width:360px;font-size:12px}.history-panes{display:grid;grid-template-columns:1fr 1fr;gap:12px}.history-panes pre{max-height:360px;overflow:auto;background:#232824;color:#f8f7f4;padding:10px;border-radius:4px;font:11px/1.5 var(--mono);white-space:pre-wrap}.stats-types td{border-top:0;padding-top:0}#logs .card>.tabs{margin-bottom:10px;flex-wrap:wrap}
+.reason.wide{max-width:none}.chips.safety{margin:6px 0}.answer code,.reason code{font:11px var(--mono)}
+.q-fields{display:grid;gap:8px;margin-top:8px}.qf{min-width:0}.qf>label{display:block;font-size:12px;font-weight:650;margin-bottom:5px}.qf>small{display:block;font-size:11px;margin-top:3px}.qf textarea{min-height:72px}.qf textarea.json{font:12px/1.5 var(--mono);min-height:120px}.qf-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;align-items:end}.qf-row input,.qf input[type=text]{width:100%}.qf-switch{font-size:13px;margin-right:14px}.cost-mode{margin:0 0 8px}.cost-table input{width:100%;min-width:70px}.cost-table td,.cost-table th{padding:4px}.common-fields{grid-template-columns:repeat(auto-fill,minmax(200px,max-content))}.common-fields .controls input{width:110px}
+.prob:not(.winner) .bar span{background:#c9cabc}.mini-table{margin:8px 0}.mini-table td,.mini-table th{padding:6px 8px}.mini-table tr.chosen td{font-weight:700}.ranking{margin:6px 0;padding-left:20px;font-size:13px}.compressed{white-space:pre-wrap}.source-view{border-top:1px solid var(--line);padding-top:12px;margin-top:6px}.source{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#fbfaf6;border:1px solid var(--line);border-radius:5px;padding:12px;font:13px/1.65 var(--sans)}mark{border-radius:3px;padding:0 2px;color:inherit}mark.evidence{background:#f5d9cd}mark.kept{background:var(--green-light);box-shadow:inset 0 -2px 0 #b9cdb6}mark.dropped{background:transparent;color:var(--muted)}mark.field{background:var(--omni-light);box-shadow:inset 0 -2px 0 #cfc3e2}.chip.muted{color:var(--muted)}
 </style>
 </head>
 <body><div class="app-shell">
@@ -47,7 +50,7 @@
 <section class="card" id="status" aria-live="polite"><div class="section-index">LOADED MODELS</div><div id="memoryBar"></div><div id="loadedModels"><div class="empty">No model loaded</div></div></section></section>
 <section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
 <section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
-<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div class="field"><label for="mediaLang">Language</label><select id="mediaLang"><option value="auto">auto</option><option value="pl">pl</option><option value="en">en</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
+<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label title="Append the dates, amounts and other facts basal extracts from the state (facts: auto)"><input id="factsToggle" type="checkbox"> Facts</label><select id="langSelect" aria-label="Language" title="Prompt language (lang)"><option value="auto">Language: auto</option><option value="pl">Polish (pl)</option><option value="en">English (en)</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
 <section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the models when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
 <section class="view" data-page="api"><section class="card"><h3>Memory</h3><div class="serve-fields"><div class="field"><label for="memoryBudget">Budget (GiB; empty uses the hardware budget)</label><input id="memoryBudget" type="number" min="1" step="0.1"></div><div class="field"><label for="memoryReserve">Keep free (GiB)</label><input id="memoryReserve" type="number" min="0" step="0.1" value="2"></div></div><button id="saveMemory" type="button">Save memory settings</button><div id="memoryError" class="error-box" role="alert" hidden></div></section></section>
 <section class="view" id="history" data-page="history"><section class="card"><div class="controls"><select id="historyModel"><option value="">All models</option></select><div id="historySource" class="tabs"><button data-source="">All</button><button data-source="playground">Playground</button><button data-source="api">API</button><button data-source="mcp">MCP</button></div><input type="search" id="historySearch" placeholder="Search state…"><button id="clearHistory" class="destructive">Clear history</button></div><div id="historyTable" class="table-wrap"></div><button id="historyMore" hidden>Load more</button></section></section>
@@ -64,7 +67,10 @@ async function api(path, options={}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json',...(options.headers||{})}, ...options});
   const text = await response.text(); let data;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!response.ok) throw new Error(data?.detail || (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) || `${response.status} ${response.statusText}`);
+  if (!response.ok) {  // basal-ui: {"detail": msg}; basal-serve 422: {"error": msg, "detail": [{"msg"}]}
+    const detail = typeof data?.detail === 'string' ? data.detail : typeof data?.error === 'string' ? data.error : Array.isArray(data?.detail) ? data.detail.map(d => d?.msg).filter(Boolean).join('; ') : null;
+    throw new Error(detail || (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) || `${response.status} ${response.statusText}`);
+  }
   return data;
 }
 function toast(message, type='success') {
@@ -297,41 +303,213 @@ async function loadExamples() {
     $('#examples').innerHTML='<option value="">Load an example…</option>'+examples.map((e,i)=>`<option value="${i}">${esc(e.file || e.id || `Example ${i+1}`)}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('');
   } catch(e) { $('#examples').innerHTML='<option value="">Examples unavailable</option>'; }
 }
+// Question builder: one card per question, a type-specific fieldset; fields the builder does not own stay on the card
+// (card._extra) and are merged back, so Edit JSON → builder → JSON keeps them.
+const QUESTION_TYPES=['choice','noul','score','multi','act','tool','classify','verify','compress','extract'];
+const EVIDENCE_TYPES=['choice','noul','score','act','tool'], MAX_ERROR_TYPES=['act','tool','classify','verify','extract'];
+const TASK_TYPES=['classify','verify','compress','extract'], TOOL_EXTRAS=['answer_directly','ask_user','none'];
+const SET_KEYS=['objective','threshold','min','max','fallback','fallback_threshold','exclusive'];
+const OWNED={choice:['criteria','levels','option_keys'],noul:['criteria','option_keys'],score:['criteria','levels','option_keys'],
+  multi:['criteria','option_keys',...SET_KEYS],act:['criteria','base','costs','defer_action','option_keys'],
+  tool:['tools','extra','rank','multi','description_chars'],classify:['labels','criteria','multi_label','none','threshold','min','max','objective'],
+  verify:['claims','binary'],compress:['unit','threshold','keep_ratio','min_keep'],extract:['schema']};
+const KEYED=/^([^\s:]{1,40}):\s*(\S.*)$/;  // "key: description"; a plain option text may contain colons too
+const textOf=v=>typeof v==='string'?v:JSON.stringify(v);
+const splitLines=text=>String(text||'').split('\n').map(x=>x.trim()).filter(Boolean);
 function parseOptions(text, type) {
-  const lines=text.split('\n').map(x=>x.trim()).filter(Boolean);
+  const lines=splitLines(text);
   if(type==='noul') { const c={}; if(lines[0]) c.true=lines[0]; if(lines[1]) c.false=lines[1]; return Object.keys(c).length?{criteria:c}:{}; }
   if(type==='score') return {criteria:lines};
-  const KEYED=/^([^\s:]{1,40}):\s*(\S.*)$/;  // "key: description"; a plain option text may contain colons too
   const hasDescriptions=lines.length>0&&lines.every(x=>KEYED.test(x));
   const criteria={};
   lines.forEach((line,i)=>{const m=line.match(KEYED); if(hasDescriptions) criteria[m[1]]=m[2]; else criteria[String(i)]=line;});
   return {criteria,option_keys:hasDescriptions?'show':'hide'};
 }
+// lines -> {key: description} when every line is "key: description", else the plain lines (a list)
+function parseKeyedList(text) {
+  const lines=splitLines(text);
+  if(lines.length&&lines.every(x=>KEYED.test(x)))return Object.fromEntries(lines.map(x=>{const m=x.match(KEYED);return [m[1],m[2]];}));
+  return lines;
+}
+function keyedText(value, hideKeys=false) {
+  if(Array.isArray(value))return value.map(textOf).join('\n');
+  if(value&&typeof value==='object')return hideKeys?Object.values(value).map(textOf).join('\n'):Object.entries(value).map(([k,v])=>v==null?String(k):`${k}: ${textOf(v)}`).join('\n');
+  return '';
+}
+const isYesNo=q=>q.base==='noul'||Boolean(q.criteria&&!Array.isArray(q.criteria)&&typeof q.criteria==='object'&&Object.keys(q.criteria).length&&Object.keys(q.criteria).every(k=>k==='true'||k==='false'));
+function criteriaText(q, type) {
+  const criteria=q.criteria ?? q.levels ?? {};
+  if(type==='noul'||(type==='act'&&isYesNo(q)))return Array.isArray(criteria)?'':[criteria.true,criteria.false].filter(x=>x!=null).map(textOf).join('\n');
+  return keyedText(criteria, q.option_keys==='hide'&&!Array.isArray(criteria));
+}
 function parseStructuredText(text) { const trimmed=text.trim(); if(trimmed.startsWith('{')||trimmed.startsWith('[')) { try{return JSON.parse(trimmed);}catch{}} return text; }
-function parseQuestionCard(card) {
-  const name=$('.q-name',card).value.trim() || 'question'; const type=$('.q-type',card).value;
-  return [name,{type,instructions:parseStructuredText($('.q-instructions-input',card).value),...parseOptions($('.q-options textarea',card).value,type)}];
+const qField=(label,input,help='',cls='')=>`<div class="qf${cls?` ${cls}`:''}"><label>${label}</label>${input}${help?`<small class="muted">${help}</small>`:''}</div>`;
+const qNum=(f,v,attrs='')=>`<input type="number" data-f="${f}" value="${esc(v??'')}" ${attrs}>`;
+const qText=(f,v,ph='')=>`<input type="text" data-f="${f}" value="${esc(v??'')}" placeholder="${esc(ph)}">`;
+const qArea=(f,v,ph='',cls='')=>`<textarea data-f="${f}"${cls?` class="${cls}"`:''} placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
+const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${label}</label>`;
+const qSelect=(f,options,v)=>`<select data-f="${f}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(label)}</option>`).join('')}</select>`;
+function setFields(q, threshold=true) {
+  const objective=q.objective||'threshold';
+  return `<div class="qf-row set-fields">${qField('Objective',qSelect('objective',[['threshold','threshold'],['exact','exact'],['iou','iou'],['f1','f1']],objective))}${threshold?qField('Threshold',qNum('threshold',q.threshold??'','min="0" max="1" step="0.01" placeholder="0.5"'),'','set-threshold'):''}${qField('Min',qNum('min',q.min,'min="0" step="1"'))}${qField('Max',qNum('max',q.max,'min="1" step="1"'))}${qField('Fallback key',qText('fallback',q.fallback,'none'))}${qField('Fallback threshold',qNum('fallback_threshold',q.fallback_threshold,'min="0" max="1" step="0.01"'))}${qField('Exclusive keys',qText('exclusive',(q.exclusive||[]).join(', '),'comma-separated'))}</div>`;
+}
+function costRowsOf(costs) {
+  return costs&&typeof costs==='object'&&!(Object.keys(costs).every(k=>k==='wrong'||k==='defer')&&typeof costs.wrong!=='object')
+    ?Object.entries(costs).map(([action,row])=>({action,costs:{...(row||{})}})):null;
+}
+function actFields(card, q) {
+  const simple=q.costs&&!costRowsOf(q.costs)?q.costs:{wrong:10,defer:1};
+  card._costMode=costRowsOf(q.costs)?'matrix':'simple'; card._costRows=costRowsOf(q.costs)||[]; card._costOutcomes=null;
+  return qSwitch('yesno',isYesNo(q),'Yes / no outcomes')+qField('Outcomes',qArea('criteria',criteriaText(q,'act'),'key: description, one outcome per line'),'Yes / no: first line describes true, second false.')
+    +`<div class="qf"><label>Costs</label><div class="tabs cost-mode"><button type="button" data-cost-mode="simple">Simple</button><button type="button" data-cost-mode="matrix">Matrix</button></div>`
+    +`<div class="qf-row cost-simple">${qField('Wrong action',qNum('cost_wrong',simple.wrong,'step="any"'))}${qField('Defer to a person',qNum('cost_defer',simple.defer,'step="any" placeholder="none"'))}</div>`
+    +`<div class="cost-matrix"><div class="table-wrap"><table class="cost-table"></table></div><button type="button" class="add-action">Add action</button>${qField('Defer action',qText('defer_action',q.defer_action,'defer or human'),'The action max_error falls back to.')}</div></div>`;
+}
+function renderTypeFields(card, type, q) {
+  let html='';
+  if(type==='choice')html=qField('Options / descriptions',qArea('criteria',criteriaText(q,type),'key: description, or one option per line'),'key: description uses explicit keys; plain lines use hidden keys 0…n.');
+  else if(type==='noul')html=qField('Yes / no descriptions',qArea('criteria',criteriaText(q,type),'true description\nfalse description'),'Optional: first line describes true, second describes false.');
+  else if(type==='score')html=qField('Score levels',qArea('criteria',criteriaText(q,type),'one level per line'),'Ordered from lowest to highest score.');
+  else if(type==='multi')html=qField('Labels',qArea('criteria',keyedText(q.criteria),'key: description, or one label per line'),'Each label is its own yes/no decision; the selected set follows the objective.')+setFields(q);
+  else if(type==='act')html=actFields(card,q);
+  else if(type==='tool'){
+    const extra=q.extra??(q.multi?[]:TOOL_EXTRAS);
+    html=qField('Tools (JSON array)',qArea('tools',q.tools?JSON.stringify(q.tools,null,2):'','[{"name": "get_weather", "description": "…", "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}}}]','json'),'OpenAI function, OpenAI Responses, MCP tools/list or Anthropic definitions.')
+      +`<div class="qf"><label>Other options</label><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${x}</label>`).join('')}</div></div>`
+      +`<div class="qf-row">${qField('Rank',qNum('rank',q.rank,'min="1" step="1" placeholder="off"'),'also the k most probable options')}${qField('Description chars',qNum('description_chars',q.description_chars,'min="0" step="1" placeholder="300"'),'0 = no cap')}</div>`+qSwitch('multi',q.multi,'Several tools (multi)');
+  }
+  else if(type==='classify')html=qField('Labels',qArea('labels',keyedText(q.labels??q.criteria),'key: description, or one label per line'))+qSwitch('multi_label',q.multi_label,'Several labels (multi-label)')+' '+qSwitch('none',q.none,'Add a "none" label','single-only')+`<div class="multi-only">${setFields(q)}</div>`;
+  else if(type==='verify')html=qField('Claims',qArea('claims',keyedText(q.claims),'key: claim text, or one claim per line'))+qSwitch('binary',q.binary,'Binary (supported / not supported)');
+  else if(type==='compress')html=`<div class="qf-row">${qField('Unit',qSelect('unit',[['sentence','sentence'],['line','line'],['paragraph','paragraph']],q.unit||'sentence'))}${qField('Threshold',qNum('threshold',q.threshold,'min="0" max="1" step="0.05" placeholder="0.5"'))}${qField('Keep ratio',qNum('keep_ratio',q.keep_ratio,'min="0" max="1" step="0.05" placeholder="off"'),'share of the characters kept (overrides threshold)')}${qField('Min keep',qNum('min_keep',q.min_keep,'min="0" step="1" placeholder="1"'))}</div>`;
+  else if(type==='extract')html=qField('Schema (JSON)',qArea('schema',q.schema?JSON.stringify(q.schema,null,2):'','{"type": "object", "properties": {"total": {"type": "number"}}}','json'),'string, number, integer, boolean, enum and arrays of enums; nested objects as dotted paths.');
+  const me=q.max_error, preset=me==null||Array.isArray(me)?'':[0.01,0.05].includes(Number(me))?String(Number(me)):'custom';
+  html+=`<div class="qf-row common-fields">${qSwitch('evidence',q.evidence===true,'Evidence spans','evidence-only')}<div class="qf max-error-only"><label>max_error</label><div class="controls">${qSelect('max_error',[['','none'],['0.01','0.01'],['0.05','0.05'],['custom','custom…']],preset)}${qNum('max_error_custom',preset==='custom'?me:'','min="0" max="1" step="0.001"')}</div></div></div><div class="q-error reason wide" hidden></div>`;
+  $('.q-fields',card).innerHTML=html;
+  $('.q-instructions-input',card).placeholder=['tool',...TASK_TYPES].includes(type)?'optional':'What should the model decide?';
+  if(type==='act')renderCostMatrix(card);
+  updateCardVisibility(card);
+}
+function actOutcomes(card) {
+  if($('[data-f="yesno"]',card)?.checked)return ['true','false'];
+  return Object.keys(parseOptions($('[data-f="criteria"]',card)?.value||'','choice').criteria);
+}
+function readCostRows(card) {
+  return [...card.querySelectorAll('.cost-table tbody tr')].map(tr=>({action:$('.cost-action',tr).value,costs:Object.fromEntries([...tr.querySelectorAll('.cost-cell')].map(i=>[i.dataset.outcome,i.value]))}));
+}
+function renderCostMatrix(card, force=false) {
+  const outcomes=actOutcomes(card), table=$('.cost-table',card);
+  if(!table)return;
+  if(!force&&JSON.stringify(outcomes)===JSON.stringify(card._costOutcomes))return;
+  if(!force&&card._costOutcomes)card._costRows=readCostRows(card);  // forced callers set _costRows themselves
+  card._costOutcomes=outcomes;
+  table.innerHTML=`<thead><tr><th>Action</th>${outcomes.map(o=>`<th>${esc(o)}</th>`).join('')}<th></th></tr></thead><tbody>${card._costRows.map((row,i)=>`<tr><td><input type="text" class="cost-action" value="${esc(row.action)}"></td>${outcomes.map(o=>`<td><input type="number" step="any" class="cost-cell" data-outcome="${esc(o)}" value="${esc(row.costs[o]??'')}"></td>`).join('')}<td><button type="button" class="remove-action" data-row="${i}">Remove</button></td></tr>`).join('')}</tbody>`;
+}
+function setCostMode(card, mode) {
+  if(card._costOutcomes)card._costRows=readCostRows(card);
+  if(mode==='matrix'&&card._costMode==='simple'&&!card._costRows.length){  // start from the simple costs
+    const outcomes=actOutcomes(card), w=$('[data-f="cost_wrong"]',card).value, d=$('[data-f="cost_defer"]',card).value;
+    card._costRows=outcomes.map(y=>({action:y,costs:Object.fromEntries(outcomes.map(z=>[z,z===y?0:w]))}));
+    if(d!=='')card._costRows.push({action:'defer',costs:Object.fromEntries(outcomes.map(z=>[z,d]))});
+    card._costOutcomes=null;
+  }
+  card._costMode=mode; renderCostMatrix(card,true); updateCardVisibility(card);
+}
+function updateCardVisibility(card) {
+  const type=$('.q-type',card).value, on=f=>Boolean($(`[data-f="${f}"]`,card)?.checked), show=(sel,visible)=>card.querySelectorAll(sel).forEach(x=>x.hidden=!visible);
+  const multiTool=type==='tool'&&on('multi');
+  show('.evidence-only',EVIDENCE_TYPES.includes(type)&&!multiTool);
+  show('.max-error-only',MAX_ERROR_TYPES.includes(type)&&!multiTool);
+  const custom=$('[data-f="max_error_custom"]',card); if(custom)custom.hidden=$('[data-f="max_error"]',card).value!=='custom';
+  const objective=$('[data-f="objective"]',card); show('.set-threshold',!objective||objective.value==='threshold');
+  show('.multi-only',on('multi_label')); show('.single-only',type==='classify'&&!on('multi_label'));
+  if(type==='act'){
+    show('.cost-simple',card._costMode==='simple'); show('.cost-matrix',card._costMode==='matrix');
+    card.querySelectorAll('[data-cost-mode]').forEach(b=>b.classList.toggle('active',b.dataset.costMode===card._costMode));
+  }
+}
+function parseQuestionCard(card, type=$('.q-type',card).value) {
+  const name=$('.q-name',card).value.trim() || 'question';
+  const el=f=>$(`[data-f="${f}"]`,card), str=f=>(el(f)?.value??'').trim(), num=f=>str(f)===''?undefined:Number(str(f)), on=f=>Boolean(el(f)?.checked);
+  const q={type}, errors=[], set=(k,v)=>{if(v!==undefined&&v!==''&&!(Array.isArray(v)&&!v.length))q[k]=v;};
+  const json=(f,check,message)=>{const text=str(f);if(!text){errors.push(message);return undefined;}try{const v=JSON.parse(text);if(check(v))return v;}catch{}errors.push(message);return undefined;};
+  const instructions=parseStructuredText($('.q-instructions-input',card).value);
+  if(instructions!==''||!['tool',...TASK_TYPES].includes(type))q.instructions=instructions;
+  const setOptions=(threshold=true)=>{
+    const objective=str('objective');
+    if(objective&&objective!=='threshold')q.objective=objective; else if(threshold)set('threshold',num('threshold'));
+    set('min',num('min')); set('max',num('max')); set('fallback',str('fallback')); set('fallback_threshold',num('fallback_threshold'));
+    set('exclusive',str('exclusive').split(',').map(x=>x.trim()).filter(Boolean));
+  };
+  if(['choice','noul','score'].includes(type))Object.assign(q,parseOptions(str('criteria'),type));
+  else if(type==='multi'){set('criteria',parseKeyedList(str('criteria'))); setOptions();}
+  else if(type==='act'){
+    if(on('yesno')){const c=parseOptions(str('criteria'),'noul').criteria;if(c)q.criteria=c;else q.base='noul';}
+    else Object.assign(q,parseOptions(str('criteria'),'choice'));
+    if(card._costMode==='matrix'){
+      const rows=readCostRows(card).filter(r=>r.action.trim());
+      q.costs=Object.fromEntries(rows.map(r=>[r.action.trim(),Object.fromEntries(Object.entries(r.costs).map(([o,v])=>[o,v===''?0:Number(v)]))]));
+      set('defer_action',str('defer_action'));
+    } else {
+      q.costs={wrong:num('cost_wrong')??0}; if(num('cost_defer')!==undefined)q.costs.defer=num('cost_defer');
+    }
+  }
+  else if(type==='tool'){
+    set('tools',json('tools',v=>Array.isArray(v)&&v.length>0,'tools must be a JSON array of tool definitions'));
+    const multi=on('multi'), extra=TOOL_EXTRAS.filter(x=>$(`[data-extra="${x}"]`,card)?.checked);
+    if(multi){q.multi=true; if(extra.length)q.extra=extra;} else if(extra.length!==TOOL_EXTRAS.length)q.extra=extra;
+    set('rank',num('rank')); if(num('description_chars')!==undefined&&num('description_chars')!==300)q.description_chars=num('description_chars');
+  }
+  else if(type==='classify'){
+    set('labels',parseKeyedList(str('labels')));
+    if(on('multi_label')){q.multi_label=true;setOptions();} else if(on('none'))q.none=true;
+  }
+  else if(type==='verify'){set('claims',parseKeyedList(str('claims'))); if(on('binary'))q.binary=true;}
+  else if(type==='compress'){
+    if(str('unit')&&str('unit')!=='sentence')q.unit=str('unit');
+    if(num('threshold')!==undefined&&num('threshold')!==0.5)q.threshold=num('threshold');
+    set('keep_ratio',num('keep_ratio')); if(num('min_keep')!==undefined&&num('min_keep')!==1)q.min_keep=num('min_keep');
+  }
+  else if(type==='extract')set('schema',json('schema',v=>v&&typeof v==='object'&&!Array.isArray(v)&&v.properties&&typeof v.properties==='object','schema must be a JSON object with properties'));
+  const multiTool=type==='tool'&&q.multi;
+  if(EVIDENCE_TYPES.includes(type)&&!multiTool&&on('evidence'))q.evidence=true;
+  if(MAX_ERROR_TYPES.includes(type)&&!multiTool){const me=str('max_error');if(me==='custom')set('max_error',num('max_error_custom'));else if(me)q.max_error=Number(me);}
+  card._error=errors.join('\n')||null;
+  const box=$('.q-error',card); if(box){box.textContent=card._error||'';box.hidden=!card._error;}
+  return [name,{...card._extra,...q}];
+}
+function extraOf(q, type) {
+  const owned=new Set(['type','instructions','evidence',...OWNED[type]]);
+  if(!Array.isArray(q.max_error))owned.add('max_error');  // a list of targets (tasks) is kept as given
+  return Object.fromEntries(Object.entries(q||{}).filter(([k])=>!owned.has(k)));
 }
 function mediaRequestFields() {
   const fields = {};
   if (selectedMedia.length) fields.media = selectedMedia.map(({kind,data}) => ({type:kind,data}));
   if (selectedMedia.some(item => item.kind === 'image')) fields.detail = $('#mediaDetail').value;
-  if ($('#mediaLang').value !== 'auto') fields.lang = $('#mediaLang').value;
   return fields;
 }
+// request-level options of the playground head; in Edit JSON mode they patch the JSON
+function requestOptionFields() {
+  const fields={};
+  if($('#factsToggle').checked)fields.facts='auto';
+  if($('#langSelect').value!=='auto')fields.lang=$('#langSelect').value;
+  return fields;
+}
+const REQUEST_OPTION_KEYS=['facts','lang'];
 function buildRequest() {
   const questions={}; for(const card of document.querySelectorAll('.question')) { const [name,q]=parseQuestionCard(card); questions[name]=q; }
-  return {state:parseStructuredText($('#stateInput').value),questions,...mediaRequestFields()};
+  return {state:parseStructuredText($('#stateInput').value),questions,...requestOptionFields(),...mediaRequestFields()};
 }
-function syncRequest(force=false) {
+function syncRequest(force=false, keys=['media','detail']) {
   const textarea = $('#requestJson');
   if ($('#editJsonToggle').checked && !force) {
     let request;
     try { request = JSON.parse(textarea.value); }
     catch (e) { showMediaError(e.message); return; }
     if (!request || typeof request !== 'object' || Array.isArray(request)) { showMediaError('request JSON must be an object'); return; }
-    delete request.media; delete request.detail; delete request.lang;
-    Object.assign(request, mediaRequestFields());
+    keys.forEach(k=>delete request[k]);
+    const fields={...requestOptionFields(),...mediaRequestFields()};
+    keys.forEach(k=>{if(k in fields)request[k]=fields[k];});
     textarea.value = JSON.stringify(request, null, 2);
     showMediaError();
   } else if (force || !$('#editJsonToggle').checked) {
@@ -340,23 +518,38 @@ function syncRequest(force=false) {
 }
 function addQuestion(name='question', q={type:'choice',instructions:'',criteria:{}}) {
   const card=document.createElement('div'); card.className='question';
-  const type=['choice','noul','score'].includes(q.type)?q.type:'choice';
-  let criteria=q.criteria ?? q.levels ?? {};
-  let optionText='';
-  if(type==='noul') optionText=[criteria.true||'',criteria.false||''].filter(Boolean).join('\n');
-  else if(Array.isArray(criteria)) optionText=criteria.join('\n');
-  else if(criteria&&typeof criteria==='object'&&q.option_keys==='hide') optionText=Object.values(criteria).map(v=>typeof v==='string'?v:JSON.stringify(v)).join('\n');
-  else if(criteria&&typeof criteria==='object') optionText=Object.entries(criteria).map(([k,v])=>v==null?String(k):`${k}: ${typeof v==='string'?v:JSON.stringify(v)}`).join('\n');
-  card.innerHTML=`<div class="q-head"><div><label>Name</label><input class="q-name" type="text" value="${esc(name)}"></div><div><label>Type</label><select class="q-type"><option value="choice">choice</option><option value="noul">noul</option><option value="score">score</option></select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label>Instructions</label><textarea class="q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:JSON.stringify(q.instructions||''))}</textarea></div><div class="q-options"><label class="option-label">Options / descriptions <small>(one per line)</small></label><textarea placeholder="key: description, or one option per line">${esc(optionText)}</textarea><small class="option-help"></small></div>`;
+  const type=QUESTION_TYPES.includes(q.type)?q.type:'choice';
+  card._extra=extraOf(q,type); card._type=type;
+  card.innerHTML=`<div class="q-head"><div><label>Name</label><input class="q-name" type="text" value="${esc(name)}"></div><div><label>Type</label><select class="q-type">${QUESTION_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label>Instructions</label><textarea class="q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
   $('.q-type',card).value=type;
-  $('.q-name',card).addEventListener('input',syncRequest); $('.q-type',card).addEventListener('change',()=>{updateOptionHelp(card);syncRequest();});
-  $('.q-instructions-input',card).addEventListener('input',syncRequest); $('.q-options textarea',card).addEventListener('input',syncRequest);
-  $('.remove-question',card).addEventListener('click',()=>{card.remove();syncRequest();});
-  $('#questions').append(card); updateOptionHelp(card); syncRequest();
+  renderTypeFields(card,type,q);
+  card.addEventListener('input',e=>{
+    if(e.target.matches('[data-f="criteria"]')&&$('.q-type',card).value==='act')renderCostMatrix(card);
+    syncRequest();
+  });
+  card.addEventListener('change',e=>{
+    if(e.target.matches('.q-type')){
+      const next=e.target.value, [,current]=parseQuestionCard(card,card._type);
+      card._type=next; card._extra=Object.fromEntries(Object.entries(card._extra).filter(([k])=>!OWNED[next].includes(k)));
+      renderTypeFields(card,next,{...current,type:next});
+    } else {
+      if(e.target.matches('[data-f="yesno"]'))renderCostMatrix(card);
+      updateCardVisibility(card);
+    }
+    syncRequest();
+  });
+  card.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    if(b.matches('.remove-question')){card.remove();syncRequest();}
+    else if(b.dataset.costMode){setCostMode(card,b.dataset.costMode);syncRequest();}
+    else if(b.matches('.add-action')){card._costRows=readCostRows(card);card._costRows.push({action:'',costs:{}});renderCostMatrix(card,true);syncRequest();}
+    else if(b.matches('.remove-action')){card._costRows=readCostRows(card);card._costRows.splice(Number(b.dataset.row),1);renderCostMatrix(card,true);syncRequest();}
+  });
+  $('#questions').append(card); syncRequest();
 }
-function updateOptionHelp(card) { const type=$('.q-type',card).value; $('.option-label',card).firstChild.textContent=type==='noul'?'Yes / no descriptions ':type==='score'?'Score levels ':'Options / descriptions '; $('.option-help',card).textContent=type==='noul'?'Optional: first line describes true, second describes false.':type==='score'?'Ordered from lowest to highest score.':'key: description uses explicit keys; plain lines use hidden keys 0…n.'; }
 function setRequest(req) {
   $('#stateInput').value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
+  setChecked($('#factsToggle'),req.facts==='auto'); $('#langSelect').value=['pl','en'].includes(req.lang)?req.lang:'auto';
   $('#questions').innerHTML='';
   for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
   if(!Object.keys(req.questions||{}).length) addQuestion();
@@ -369,33 +562,169 @@ function resultHeadline(name, answer, requestQuestion) {
   if(type==='score') { const legend=answer.legend; const score=Number(answer.score ?? answer.expected_score); const top=legend&&Number.isFinite(score)?legend[String(Math.round(score))]:null; return `Expected level ${Number.isFinite(score)?score.toFixed(2):'—'}${top?` · nearest: ${top}`:''}`; }
   return null;
 }
-function renderResults(data, request) {
-  const answers=data?.answers || data || {}; let html='';
-  for(const [name,answer] of Object.entries(answers)) {
-    const q=request.questions?.[name]||{}, probs=answer?.probabilities;
-    const calibration = answer?.calibration === 'text' ? '<div class="answer-meta">calibration fitted on text</div>' : '';
-    if(!answer || !probs || typeof probs!=='object') { html+=`<article class="answer"><h3>${esc(name)}</h3>${calibration}<pre>${esc(JSON.stringify(answer,null,2))}</pre></article>`; continue; }
-    const headline=resultHeadline(name,answer,q), type=answer.type||q.type||'unknown';
-    const entries=Object.entries(probs).sort((a,b)=>Number(b[1])-Number(a[1]));
-    const bars=entries.map(([k,v],i)=>{const p=Math.max(0,Math.min(1,Number(v)||0));return `<div class="prob ${i===0?'winner':''}"><span>${esc(k)}${q.criteria&&q.criteria[k]?` · ${esc(q.criteria[k])}`:''}</span><div class="bar"><span style="width:${p*100}%"></span></div><strong>${(p*100).toFixed(1)}%</strong></div>`;}).join('');
-    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span></h3>${headline?`<div class="headline">${esc(headline)}</div>`:''}<div class="answer-meta">Confidence: ${answer.confidence==null?'—':`${(Number(answer.confidence)*100).toFixed(1)}%`}</div>${calibration}${bars}</article>`;
+// decision safety: deferral, automation against the served model's certified thresholds, calibration validity
+const modelEntry=id=>(statusCache?.models||[]).find(m=>m.id===id)?.entry||null;
+const uncalibrated=entry=>Boolean(entry?.temperature_per_prim)&&!Object.keys(entry.temperature_per_prim).length;
+function decisionBase(answer,q) {
+  const type=answer.type||q.type;
+  if(type==='tool')return 'choice';  // a single tool decision is deferred against the choice threshold
+  if(type!=='act')return type;
+  if(q.base)return q.base;
+  const keys=q.criteria&&!Array.isArray(q.criteria)?Object.keys(q.criteria):[];
+  return keys.length&&keys.every(k=>k==='true'||k==='false')?'noul':'choice';
+}
+function automationBadge(answer,q,entry) {
+  const type=decisionBase(answer,q);
+  if(!entry||!['choice','noul','score'].includes(type)||answer.confidence==null)return '';
+  const cert=entry.certified||{}, t1=cert['0.01']?.[type], t5=cert['0.05']?.[type];
+  if(t1==null&&t5==null)return '<span class="muted">No certificate for this type</span>';
+  const c=Number(answer.confidence), shown=t=>t==null?'—':Number(t).toFixed(4);
+  const title=`certified ${type} thresholds: 1% error ≥ ${shown(t1)}, 5% error ≥ ${shown(t5)}`;
+  const [cls,text]=t1!=null&&c>=t1?['fit-fits','Automatable at 1% error']:t5!=null&&c>=t5?['fit-tight','Automatable at 5% error']:['fit-too_large','Below the certified thresholds — review'];
+  return `<span class="badge ${cls}" title="${esc(title)}">${text}</span>`;
+}
+function calibrationChip(answer,entry) {
+  const c=answer.calibration;
+  if(c==='validated')return '<span class="badge fit-fits">calibrated</span>';
+  if(c==='unvalidated')return `<span class="badge fit-tight">${answer.type==='act'?'calibration not validated for this question shape':'unvalidated — fitted on other option orders'}</span>`;
+  if(c==='text')return '<span class="badge fit-tight">fitted on text (media request)</span>';
+  if(c==='per decision')return '<span class="badge fit-unknown">per decision</span>';
+  if(c==null&&uncalibrated(entry))return '<span class="badge fit-tight">uncalibrated probabilities</span>';
+  return '';
+}
+// a task answer's `automated`: {max_error: true (use as is) | false (review) | null (no certificate for the task)}
+function automatedChips(automated) {
+  if(!automated||typeof automated!=='object')return '';
+  return Object.entries(automated).map(([risk,v])=>{
+    const at=`${(Number(risk)*100).toFixed(0)}%`;
+    return v===true?`<span class="badge fit-fits" title="max_error ${esc(risk)}">${at}: automated</span>`:v===false?`<span class="badge fit-tight" title="max_error ${esc(risk)}">${at}: review</span>`:`<span class="badge fit-unknown" title="max_error ${esc(risk)}">${at}: no certificate</span>`;
+  }).join(' ');
+}
+function safetyStrip(answer,q,entry) {
+  const parts=[];
+  if(answer.deferred===true)parts.push(`<span class="badge fit-too_large">Deferred to a person</span>${answer.refused!=null?` <span class="muted"><code>refused</code>: ${esc(answer.refused)}</span>`:''}`);
+  parts.push(automationBadge(answer,q,entry),calibrationChip(answer,entry),automatedChips(answer.automated));
+  const html=parts.filter(Boolean).join(' ');
+  const reason=typeof answer.max_error==='string'?`<span class="reason">${esc(answer.max_error)}</span>`:'';
+  return html||reason?`<div class="chips safety">${html}</div>${reason}`:'';
+}
+function resultBanners(entry,u) {
+  let html=entry?.calibration_warning?`<div class="error-box">${esc(entry.calibration_warning)}</div>`:'';
+  const t=u?.truncated;
+  if(t)html+=`<div class="error-box">State truncated to the context: dropped ${esc(t.dropped_tokens)} of ${esc(t.state_tokens)} tokens (kept ${esc(t.head_tokens)} from the start, ${esc(t.tail_tokens)} from the end)</div>`;
+  return html;
+}
+const clamp01=v=>Math.max(0,Math.min(1,Number(v)||0));
+function labelOf(q,k) {
+  const c=q.labels??q.criteria;
+  return c&&typeof c==='object'&&!Array.isArray(c)&&c[k]!=null?textOf(c[k]):null;
+}
+// probability bars, most probable first; `marked` = the keys drawn as chosen (default: the most probable)
+function probBars(probs, q={}, marked=null) {
+  const entries=Object.entries(probs||{}).sort((a,b)=>Number(b[1])-Number(a[1]));
+  const chosen=marked??new Set(entries.length?[entries[0][0]]:[]);
+  return entries.map(([k,v])=>{const p=clamp01(v), d=labelOf(q,k);return `<div class="prob ${chosen.has(k)?'winner':''}"><span title="${esc(d?`${k} · ${d}`:k)}">${esc(k)}${d?` · ${esc(d)}`:''}</span><div class="bar"><span style="width:${p*100}%"></span></div><strong>${(p*100).toFixed(1)}%</strong></div>`;}).join('');
+}
+const metaLine=text=>`<div class="answer-meta">${text}</div>`;
+const confidenceLine=answer=>metaLine(`Confidence: ${answer.confidence==null?'—':pct(answer.confidence)}`);
+const chipList=(items,empty)=>items.length?`<div class="chips">${items.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:`<div class="muted">${esc(empty)}</div>`;
+const headlineDiv=text=>`<div class="headline">${text}</div>`;
+const RESULT_VIEWS={
+  multi(a,q){
+    const sel=a.selected||[], objective=a.objective&&a.objective!=='threshold';
+    const constraints=Object.entries(a.constraints_applied||{}).map(([k,v])=>`<span class="chip muted">${esc(k)}: ${esc(textOf(v))}</span>`).join('');
+    return chipList(sel.map(k=>labelOf(q,k)?`${k} · ${labelOf(q,k)}`:k),'none selected')+metaLine(`${objective?`expected ${esc(a.objective)} score ${num(a.expected_score,3)} · `:''}set confidence ${pct(a.set_confidence)}${a.threshold!=null?` · threshold ${esc(a.threshold)}`:''}`)+(constraints?`<div class="chips">${constraints}</div>`:'')+probBars(a.probabilities,q,new Set(sel));
+  },
+  act(a,q){
+    const costs=Object.entries(a.expected_costs||{}).sort((x,y)=>x[1]-y[1]);
+    const table=costs.length?`<table class="mini-table"><thead><tr><th>Action</th><th>Expected cost</th></tr></thead><tbody>${costs.map(([k,v])=>`<tr${k===a.action?' class="chosen"':''}><td>${esc(k)}</td><td>${num(v,3)}</td></tr>`).join('')}</tbody></table>`:'';
+    return headlineDiv(`${esc(a.action)}${a.deferred?' <span class="badge fit-too_large">deferred</span>':''}`)+confidenceLine(a)+table+metaLine(`Most probable outcome: ${esc(a.answer)}`)+probBars(a.probabilities,q,new Set([a.answer]));
+  },
+  tool(a){
+    const head=a.multi?chipList(a.tools||[],'no tool'):headlineDiv(esc(a.tool??'no tool'));
+    const ranking=a.ranking?`<ol class="ranking">${a.ranking.map(r=>`<li><code>${esc(r.tool)}</code> · ${pct(r.probability)}</li>`).join('')}</ol>`:'';
+    return head+`<div class="chips"><span class="chip">call: ${a.call?'true':'false'}</span></div>`+metaLine(a.multi?`set confidence ${pct(a.set_confidence)}`:`Confidence: ${pct(a.confidence)}`)+ranking+probBars(a.probabilities,{},new Set(a.multi?a.tools||[]:[a.tool]));
+  },
+  classify(a,q){
+    const multi=Array.isArray(a.labels);
+    const head=multi?chipList(a.labels,'no label'):headlineDiv(`${esc(a.label)}${labelOf(q,a.label)?` · ${esc(labelOf(q,a.label))}`:''}`);
+    return head+metaLine(multi?`set confidence ${pct(a.set_confidence)}`:`Confidence: ${pct(a.confidence)}`)+probBars(a.scores,q,new Set(multi?a.labels:[a.label]));
+  },
+  verify(a,q){
+    const claims=q.claims, text=k=>Array.isArray(claims)?claims[Number(k)]:claims?.[k];
+    const verdict=v=>`<span class="badge ${v==='supported'?'fit-fits':v==='contradicted'?'fit-too_large':'fit-tight'}">${esc(v)}</span>`;
+    const rows=Object.entries(a.claims||{}).map(([k,c])=>`<tr><td><code>${esc(k)}</code> ${esc(textOf(text(k)??''))}</td><td>${verdict(c.verdict)}</td><td>${pct(c.confidence)}</td><td>${automatedChips(c.automated)}</td></tr>`).join('');
+    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Automated</th></tr></thead><tbody>${rows}</tbody></table></div>`+metaLine(`All supported: ${a.all_supported?'yes':'no'}${(a.not_supported||[]).length?` · not supported: ${esc(a.not_supported.join(', '))}`:''}`);
+  },
+  compress(a){
+    return `<pre class="compressed">${esc(a.compressed)}</pre>`+metaLine(`kept ${(a.kept||[]).length} of ${(a.units||[]).length} ${esc(a.unit)}s · ${esc(a.compressed_chars)}/${esc(a.original_chars)} chars (${esc(a.ratio)})`);
+  },
+  extract(a){
+    const rows=Object.entries(a.fields||{}).map(([path,f])=>`<tr><td><code>${esc(path)}</code></td><td>${esc(f.value==null?'—':textOf(f.value))}${f.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${pct(f.confidence)}</td><td>${esc(f.source)}</td><td>${automatedChips(f.automated)}</td></tr>`).join('');
+    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>Field</th><th>Value</th><th>Confidence</th><th>Source</th><th>Automated</th></tr></thead><tbody>${rows}</tbody></table></div><details><summary>data</summary><pre>${esc(JSON.stringify(a.data,null,2))}</pre></details>`;
+  },
+};
+function decisionView(name, a, q) {
+  const headline=resultHeadline(name,a,q);
+  return (headline?headlineDiv(esc(headline)):'')+confidenceLine(a)+probBars(a.probabilities,q);
+}
+// the request's state with spans marked: evidence of decisions, kept / dropped compress units, extracted fields
+function sourceSpans(answers, request) {
+  const spans=[];
+  for(const [name,a] of Object.entries(answers||{})) {
+    if(!a||typeof a!=='object')continue;
+    (Array.isArray(a.evidence)?a.evidence:[]).forEach(e=>spans.push({start:e.start,end:e.end,kind:'evidence',label:name,probability:e.probability}));
+    if(a.type==='compress'){const kept=new Set(a.kept||[]);(a.units||[]).forEach((u,i)=>spans.push({...u,kind:kept.has(i)?'kept':'dropped',label:`${name} · ${a.unit} ${i}`}));}
+    if(a.type==='extract')Object.entries(a.fields||{}).forEach(([path,f])=>{if(Number.isInteger(f.start)&&Number.isInteger(f.end))spans.push({start:f.start,end:f.end,kind:'field',label:`${name} · ${path}`,probability:f.confidence});});
   }
+  return spans.filter(s=>Number.isInteger(s.start)&&Number.isInteger(s.end)&&s.end>s.start);
+}
+function renderSource(state, spans) {
+  const accepted=[];
+  for(const s of [...spans].sort((a,b)=>(Number(b.probability)||0)-(Number(a.probability)||0)))  // overlaps: the more probable span
+    if(!accepted.some(x=>s.start<x.end&&x.start<s.end))accepted.push(s);
+  accepted.sort((a,b)=>a.start-b.start);
+  let html='', at=0;
+  for(const s of accepted) {
+    const title=`${s.label}${s.probability==null?'':` · ${pct(s.probability)}`}`, text=esc(state.slice(s.start,s.end));
+    html+=esc(state.slice(at,s.start))+`<mark class="${s.kind}" title="${esc(title)}">${s.kind==='dropped'?`<s>${text}</s>`:text}</mark>`; at=s.end;
+  }
+  html+=esc(state.slice(at));
+  const kinds=[...new Set(accepted.map(s=>s.kind))];
+  return `<div class="source-view"><div class="section-head"><strong>Source</strong><span class="chips">${kinds.map(k=>`<mark class="${k}">${esc(k)}</mark>`).join(' ')}</span></div><pre class="source">${html}</pre></div>`;
+}
+function renderResults(data, request) {
+  const answers=data?.answers || data || {}, entry=modelEntry(request.model); let html='';
+  for(const [name,answer] of Object.entries(answers)) {
+    const q=request.questions?.[name]||{};
+    if(!answer||typeof answer!=='object'){html+=`<article class="answer"><h3>${esc(name)}</h3><pre>${esc(JSON.stringify(answer,null,2))}</pre></article>`;continue;}
+    const type=answer.type||q.type||'unknown', view=RESULT_VIEWS[type];
+    const body=view?view(answer,q):answer.probabilities&&typeof answer.probabilities==='object'?decisionView(name,answer,q):`<pre>${esc(JSON.stringify(answer,null,2))}</pre>`;
+    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span>${answer.experimental?'<span class="badge experimental">experimental</span>':''}</h3>${safetyStrip(answer,q,entry)}${body}</article>`;
+  }
+  const spans=typeof request.state==='string'?sourceSpans(answers,request):[];
   const u=data?.usage, mediaUsage=u?.media;
   const mediaSummary=mediaUsage?` · Media: ${mediaUsage.images??0} images, ${mediaUsage.audio??0} audio, ${mediaUsage.media_tokens??0} tokens`:'';
   const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${mediaSummary}</div>`:'';
-  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong></div>`+(html ? usage+html : '<div class="empty">No answers returned.</div>');
+  const meter=u&&entry?.context?`<div class="answer-meta">Longest prompt ${esc(u.longest_prompt_tokens??'—')} / ${esc(entry.context.limit??'—')} tokens · policy ${esc(entry.context.overflow)}</div>`:'';
+  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong></div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : '<div class="empty">No answers returned.</div>');
   $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
 }
+function showDecideError(message) { $('#decideError').textContent=message; $('#decideError').hidden=false; }
 async function sendDecision() {
   $('#decideError').hidden=true; $('#results').innerHTML='';
   let request;
   try { request=$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
-  catch(e) { $('#decideError').textContent=`Invalid JSON: ${e.message}`; $('#decideError').hidden=false; return; }
-  if(!request||typeof request!=='object'||Array.isArray(request)) { $('#decideError').textContent='The request must be a JSON object.'; $('#decideError').hidden=false; return; }
+  catch(e) { showDecideError(`Invalid JSON: ${e.message}`); return; }
+  if(!request||typeof request!=='object'||Array.isArray(request)) { showDecideError('The request must be a JSON object.'); return; }
+  if(!$('#editJsonToggle').checked){
+    const invalid=[...document.querySelectorAll('.question')].filter(card=>card._error);
+    if(invalid.length){showDecideError(invalid.map(card=>`${$('.q-name',card).value||'question'}: ${card._error}`).join('\n'));return;}
+  }
   request.model=selectedModel;
   if($('#editJsonToggle').checked)$('#requestJson').value=JSON.stringify(request,null,2);
   try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request); }
-  catch(e) { $('#decideError').textContent=e.message; $('#decideError').hidden=false; }
+  catch(e) { showDecideError(e.message); toast(e.message,'error'); }
 }
 $('#refreshModels').addEventListener('click',()=>loadModels(true));
 $('#downloadedToggle').addEventListener('change',rerenderFilters);
@@ -412,7 +741,8 @@ $('#stateInput').addEventListener('input',syncRequest);
 $('#editJsonToggle').addEventListener('change',()=>{if($('#editJsonToggle').checked) syncRequest(true);else syncRequest();$('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;});
 $('#mediaInput').addEventListener('change',event=>selectMedia(Array.from(event.target.files||[])));
 $('#mediaDetail').addEventListener('change',()=>syncRequest());
-$('#mediaLang').addEventListener('change',()=>syncRequest());
+$('#factsToggle').addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS));
+$('#langSelect').addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS));
 $('#mediaLightboxClose').addEventListener('click',()=>$('#mediaLightbox').close());
 $('#mediaLightbox').addEventListener('click',e=>{if(e.target===$('#mediaLightbox'))$('#mediaLightbox').close();});
 window.addEventListener('beforeunload',()=>selectedMedia.forEach(item=>URL.revokeObjectURL(item.url)));
@@ -611,7 +941,10 @@ function renderLoadedRows(models) {
   $('#loadedModels').innerHTML=models.length?models.map(m=>{
     const stats=statsData.models?.[m.id], p=m.progress;
     const progress=p?`<div class="progress-wrap"><div class="progress"><span style="width:${p.total_bytes?Math.min(100,p.done_bytes/p.total_bytes*100):0}%"></span></div><small>${gb(p.done_bytes)} / ${gb(p.total_bytes)}</small></div>`:'';
-    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions"><button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button><a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button></div></div>`;
+    const chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${uncalibrated(m.entry)?'<span class="badge fit-tight" title="temperature_per_prim is {}: the probabilities are the raw model outputs">uncalibrated</span>':''}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
+    const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
+    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button><a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
   }).join(''):'<div class="empty">No model loaded · <a href="#models">Load a model</a></div>';
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
@@ -715,7 +1048,8 @@ async function loadHistory(mode='reset') {
   if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);
 }
 function renderHistory(items) {
-  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>State</th><th>Answers</th><th>Latency</th><th>Status</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No decisions yet — try the Playground.</div>';
+  const flags=x=>`${x.deferred?' <span class="badge fit-too_large">deferred</span>':''}${x.truncated?' <span class="badge fit-tight">truncated</span>':''}`;
+  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>State</th><th>Answers</th><th>Latency</th><th>Status</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No decisions yet — try the Playground.</div>';
   $('#historyTable').querySelectorAll('[data-history]').forEach(row=>{
     row.onclick=()=>act(()=>toggleHistory(row));
     if(historyOpen.has(row.dataset.history))row.after(historyDetailRow(historyOpen.get(row.dataset.history)));

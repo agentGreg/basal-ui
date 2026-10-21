@@ -26,11 +26,12 @@ def _strip_media(value):
 
 
 def _best(answer: dict):
-    for key in ("choice", "action", "tool", "score"):
+    for key in ("choice", "action", "tool", "label", "score"):
         if key in answer and answer[key] is not None:
             return str(answer[key])
-    if isinstance(answer.get("selected"), list):
-        return ", ".join(map(str, answer["selected"]))
+    for key in ("selected", "labels", "tools"):  # multi, multi-label classify, multi tool
+        if isinstance(answer.get(key), list):
+            return ", ".join(map(str, answer[key]))
     for key in ("noul", "probability"):  # systemone noul, decisions-API predicate: the probability of yes
         if isinstance(answer.get(key), (int, float)):
             return "true" if answer[key] >= 0.5 else "false"
@@ -47,13 +48,16 @@ def make_record(model, source, body, status, response_json, latency_ms) -> dict:
     answers = response_json.get("answers") if isinstance(response_json, dict) else None
     usage = response_json.get("usage") if isinstance(response_json, dict) else None
     questions = body.get("questions")
+    items = answer_items(answers)
     return {"id": "h_" + uuid.uuid4().hex, "ts": time.time(), "model": model, "source": source, "status": status,
             "latency_ms": round(latency_ms, 2),
             "input_tokens": usage.get("input_tokens") if isinstance(usage, dict) else None,
             "questions": len(questions) if isinstance(questions, (dict, list)) else None,
             "state_preview": _preview(body),
             "answers": {name: {"type": a.get("type"), "best": _best(a), "confidence": best_probability(a)}
-                        for name, a in answer_items(answers)},
+                        for name, a in items},
+            "deferred": any(a.get("deferred") is True for _, a in items),
+            "truncated": bool(usage.get("truncated")) if isinstance(usage, dict) else False,
             "request": _strip_media(body), "response": response_json}
 
 
