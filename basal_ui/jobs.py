@@ -4,6 +4,8 @@ import threading
 import time
 from collections import deque
 
+import httpx
+
 
 class LogBuffer:
     """The last lines of one source (a basal-serve child, a job or basal-ui's own events), numbered for incremental
@@ -87,15 +89,23 @@ class Jobs:
 
         def run():
             try:
-                job.finish("done", result=target(job, *args))
+                result = target(job, *args)
+                job.finish("done_with_warnings" if isinstance(result, dict) and result.get("warnings") else "done",
+                           result=result)
                 self.event("info", f"{kind} finished: {label}")
             except Cancelled:
                 job.finish("cancelled")
                 self.event("info", f"{kind} cancelled: {label}")
             except (Exception, SystemExit) as exc:  # noqa: BLE001 — shown in the UI and the job's log (basal's
                 # engines and CLIs refuse with SystemExit)
-                job.log.append(f"error: {exc}")
-                job.finish("error", error=str(exc))
+                message = str(exc)
+                if isinstance(exc, httpx.HTTPStatusError):
+                    response = exc.response
+                    message = f"HTTP {response.status_code}: {response.text}"
+                    if response.headers.get("x-request-id"):
+                        message += f" [request {response.headers['x-request-id']}]"
+                job.log.append(f"error: {message}")
+                job.finish("error", error=message)
                 self.event("error", f"{kind} failed: {label}: {exc}")
 
         self.event("info", f"{kind} started: {label}")

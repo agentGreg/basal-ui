@@ -72,13 +72,19 @@ const $ = (s, root=document) => root.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const gb = n => n == null ? '—' : `${(Number(n) / 1e9).toFixed(1)} GB`;
 let modelData = [], hw = null, examples = [], pollTimer = null, loadedMedia = [], selectedMedia = [], mediaSelection = 0, statusSequence = 0;
+function httpFailure(status,message) {
+  const hint={422:'Invalid request: revise the input.',503:'Service unavailable: if GPU memory is exhausted, shorten the input or unload another model before retrying manually.',500:'Internal server error: inspect model logs and request ID.'}[status];
+  return `${status?`HTTP ${status}. `:''}${hint?hint+' ':''}${message}`;
+}
 async function api(path, options={}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json',...(options.headers||{})}, ...options});
   const text = await response.text(); let data;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!response.ok) {  // basal-ui: {"detail": msg}; basal-serve 422: {"error": msg, "detail": [{"msg"}]}
     const detail = typeof data?.detail === 'string' ? data.detail : typeof data?.error === 'string' ? data.error : Array.isArray(data?.detail) ? data.detail.map(d => d?.msg).filter(Boolean).join('; ') : null;
-    throw new Error(detail || (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) || `${response.status} ${response.statusText}`);
+    const message=detail||data?.error?.message||(typeof data==='string'?data:JSON.stringify(data,null,2))||response.statusText;
+    const id=response.headers.get('x-request-id');
+    throw new Error(`${httpFailure(response.status,message)}${id?` [request ${id}]`:''}`);
   }
   return data;
 }
@@ -814,8 +820,10 @@ async function sendDecision() {
   }
   request.model=selectedModel;
   if($('#editJsonToggle').checked)$('#requestJson').value=JSON.stringify(request,null,2);
+  $('#sendButton').disabled=true;
   try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request); }
   catch(e) { showDecideError(e.message); toast(e.message,'error'); }
+  finally { $('#sendButton').disabled=false; }
 }
 $('#refreshModels').addEventListener('click',()=>loadModels(true));
 $('#downloadedToggle').addEventListener('change',rerenderFilters);
@@ -1046,10 +1054,11 @@ function renderLoadedRows(models) {
     const stats=statsData.models?.[m.id], p=m.progress;
     const progress=p?`<div class="progress-wrap"><div class="progress"><span style="width:${p.total_bytes?Math.min(100,p.done_bytes/p.total_bytes*100):0}%"></span></div><small>${gb(p.done_bytes)} / ${gb(p.total_bytes)}</small></div>`:'';
     const chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${uncalibrated(m.entry)?'<span class="badge fit-tight" title="temperature_per_prim is {}: the probabilities are the raw model outputs">uncalibrated</span>':''}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
+    const health=m.health, load=health?.reachable===false?'unreachable':health?.reachable!==true?'load unavailable':health.running==null||health.queued==null?'load counters unavailable':health.running===0&&health.queued===0?'idle':`${health.running} running · ${health.queued} queued`;
     const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
     const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,true):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
     const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="load option">${esc(v===true?k:v===false?`no ${k}`:`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
-    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
   }).join(''):'<div class="empty">No model loaded · <a href="#models">Load a model</a></div>';
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
@@ -1214,7 +1223,7 @@ function allThresholds(f) {
 function renderCalibrationState(job) {
   const running=Boolean(job?.running);
   $('#cancelCalibration').hidden=!running; $('#runCalibration').disabled=running||!$('#calibrationModel').value;
-  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`Failed: ${job.error}`:job.phase==='cancelled'?'Cancelled':job.phase==='done'?`Done: ${shortName(job.result?.file||'')}`:'';
+  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`Failed: ${job.error}`:job.phase==='cancelled'?'Cancelled':['done','done_with_warnings'].includes(job.phase)?`${job.phase==='done_with_warnings'?'Completed with warnings':'Completed (see report for certification)'}: ${shortName(job.result?.file||'')}${job.result?.warnings?.length?' · '+job.result.warnings.join(' · '):''}`:'';
   if(calibrationRunning&&!running)loadCalibrations();
   calibrationRunning=running;
 }
@@ -1234,7 +1243,7 @@ function renderCalibrationFiles(id, d) {
     const fitted=f?.fitted_on&&typeof f.fitted_on==='object'?f.fitted_on:null, gates=f?.gates||{};
     const automated=Object.entries(gates.automated_at||{}).map(([k,v])=>`${(Number(k)*100).toFixed(0)}%: ${pct(v)} at ${pct(gates.automated_error?.[k])} error`).join(' · ');
     const checked=(d.selected||'')===value;
-    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?' <span class="chip">imported</span>':''}${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
+    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?' <span class="chip">imported</span>':''}${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}${(f?.warnings||[]).map(w=>`<span class="reason">${esc(w)}</span>`).join('')}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
   };
   const shipped=d.shipped?row(d.shipped,'',`shipped · ${shortName(d.shipped.file)}`):'';
   $('#calibrationFiles').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
@@ -1250,7 +1259,7 @@ function renderCalibrationFiles(id, d) {
 // Load options: the engine mode and basal-serve's runtime settings of one load (basal/ui/options.py)
 const GRAPH_MODES=['fast','fast-nocompile','fast-exit','fp8','nvfp4'];
 const OPTION_SECTIONS=[
-  ['Engine',['ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads']],
+  ['Engine',['ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads','mlx_packed']],
   ['Determinism & orders',['deterministic','orders','auto_tau','auto_band']],
   ['Batching',['max_batch','wait_ms','batch_window_ms','soam']],
   ['Caching',['state_cache_gb','prefix_cache']],
@@ -1261,6 +1270,7 @@ const OPTION_SECTIONS=[
   ['Experimental',['think','think_tokens','think_python','think_url','think_calibration','think_model','think_adapter','think_memory','think_max_len','think_log','early_exit']],
 ];
 const OPTION_FIELDS={
+  mlx_packed:{label:'MLX packed (opt-in)',kind:'bool',modes:['mlx','mlx-q8']},
   quant:{label:'Quantisation',kind:'select',values:[[null,'as the mode'],['fp8','fp8'],['nvfp4','nvfp4'],['q8','q8 (mlx)']],modes:[...GRAPH_MODES,'mlx','mlx-q8']},
   attn:{label:'Attention kernel',kind:'select',values:['auto','fa2','fa3','fa4','cudnn'],modes:GRAPH_MODES},
   gemma_attn:{label:'Gemma 4 attention (graph engine)',kind:'select',values:['auto','math','flex','fa3','fa3+math'],modes:GRAPH_MODES},
@@ -1280,7 +1290,7 @@ const OPTION_FIELDS={
   strict_calibration:{label:'Refuse a calibration fitted on another model (--strict-calibration)',kind:'bool'},
   vllm_preset:{label:'vLLM preset',kind:'select',values:['default','deterministic'],modes:['vllm']},
   gpu_memory:{label:'GPU memory share',kind:'num',attrs:'min="0.05" max="1" step="0.05"',modes:['vllm','sglang']},
-  device:{label:'Device',kind:'select',values:[[null,'auto'],'cuda','mps','cpu'],modes:['eager']},
+  device:{label:'Device',kind:'select',values:[[null,'auto'],'cuda','mps','cpu'],modes:['eager','mps']},
   ollama_url:{label:'Ollama URL',kind:'text',modes:['ollama']},
   ollama_model:{label:'Ollama model',kind:'text',placeholder:'derived from the model',modes:['ollama']},
   llamacpp_url:{label:'llama-server URL',kind:'text',modes:['llamacpp']},
@@ -1334,7 +1344,7 @@ function renderOptionsForm(values) {
   const mode=list.some(m=>m.mode===values.mode)?values.mode:defaultMode;
   const modes=`<div class="option-modes">${list.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].</p>':''}`;
   const experimental='<p class="muted option-note" id="optExperimentalNote"></p>';
-  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:''}</fieldset>`).join('');
+  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:title==='Caching'?'<p class="muted">State cache reuses the longest cached prefix of growing or edited states, then computes the changed suffix. Its GB budget consumes GPU memory alongside weights and graphs; reduce it if memory is tight. No cache-hit counters are reported.</p>':title==='Kernels (CUDA graph engine)'?'<p class="muted">auto uses compact rows where supported. default uses padded graphs; fine captures more shapes and takes longer to start. compact needs supported attention kernels and more GPU memory (about 6 GB extra on measured RTX 3090 runs). Unsupported combinations show the engine’s refusal in the model row and Logs.</p>':title==='Engine'?'<p class="muted" id="optPackedNote"></p>':''}</fieldset>`).join('');
   $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});
   $('#optionsForm').onchange=()=>updateOptionVisibility();
   updateOptionVisibility();
@@ -1343,6 +1353,10 @@ const optionModes=()=>optionsState.media?optionsState.data.media_modes:optionsSt
 function selectedOptionMode() { return $('#optionsForm input[name=optMode]:checked')?.value||optionModes().find(m=>m.default)?.mode; }
 function updateOptionVisibility() {
   const mode=selectedOptionMode(), think=optionsState.data.think||{};
+  const packed=$('#opt-mlx_packed'), packedReason=optionsState.data.mlx_packed_reason;
+  packed.disabled=Boolean(packedReason)||optionsState.media||!['mlx','mlx-q8'].includes(mode);
+  $('#optPackedNote').textContent=mode==='mps'?'Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.':packedReason||'MLX packed is off by default. Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path. Probabilities can differ from the shipped KV-cache calibration.';
+  $('#opt-device option[value=cuda]').disabled=mode==='mps';
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
   // thinking: basal-2.0 4.5B with vLLM (here, in another environment, or a running server); early exit: fast-exit
   const thinkBox=$('#opt-think'), exitBox=$('#opt-early_exit');
@@ -1386,12 +1400,14 @@ $('#optionsCancel').onclick=()=>$('#loadOptions').close();
 $('#optionsReset').onclick=()=>renderOptionsForm(optionsState.data.defaults);
 $('#optionsApply').onclick=async()=>{
   const {id,media,restart,data}=optionsState, options=collectOptions(), remember=$('#optionsRemember').checked;
+  $('#optionsApply').disabled=true;
   try{
     if(remember||data.saved)await api('/api/models/options',{method:'PUT',body:JSON.stringify({id,options:remember?options:{}})});
     if(restart)await api('/api/restart',{method:'POST',body:JSON.stringify({id,options})});
     else{statusSequence++;clearSelectedMedia();await api('/api/load',{method:'POST',body:JSON.stringify({id,...(media?{media:true}:{}),options})});}
     $('#loadOptions').close(); toast(restart?`Restarting ${shortName(id)}`:'Model load started'); await refreshStatus();
   }catch(e){$('#optionsError').textContent=e.message;$('#optionsError').hidden=false;}
+  finally{$('#optionsApply').disabled=false;}
 };
 function syncHistoryModels(models) {
   const select=$('#historyModel'), current=select.value, ids=[...new Set([...models,...(current?[current]:[])])];
@@ -1524,7 +1540,7 @@ function showBatchResult(r) {
 }
 async function loadBatchRows() {
   const d=await api(`/api/batch/rows?offset=${batchRowsLoaded}&limit=100`);
-  const rows=d.rows.map(x=>`<tr><td>${esc(x.id)}</td><td>${x.option!=null?`<span class="chip">${esc(x.prediction)}: ${esc(x.option)} (${pct(x.confidence)})</span>`:Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(answerBest(a)??'—')}${a?.confidence!=null?` (${pct(a.confidence)})`:''}</span>`).join(' ')}${x.correct===true?' <span class="badge fit-fits">correct</span>':x.correct===false?' <span class="badge fit-too_large">wrong</span>':''}</td><td>${num(x.latency_ms,1)} ms</td><td>${x.error?`<span class="reason">${esc(textOf(x.error))}</span>`:''}</td></tr>`).join('');
+  const rows=d.rows.map(x=>`<tr><td>${esc(x.id)}</td><td>${x.option!=null?`<span class="chip">${esc(x.prediction)}: ${esc(x.option)} (${pct(x.confidence)})</span>`:Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(answerBest(a)??'—')}${a?.confidence!=null?` (${pct(a.confidence)})`:''}</span>`).join(' ')}${x.correct===true?' <span class="badge fit-fits">correct</span>':x.correct===false?' <span class="badge fit-too_large">wrong</span>':''}</td><td>${num(x.latency_ms,1)} ms</td><td>${x.error?`<span class="reason">${esc(httpFailure(x.status,textOf(x.error)))}${x.request_id?` [request ${esc(x.request_id)}]`:""}</span>`:''}</td></tr>`).join('');
   if(!batchRowsLoaded)$('#batchRows').innerHTML=`<table><thead><tr><th>Id</th><th>Answer</th><th>Latency</th><th>Error</th></tr></thead><tbody></tbody></table>`;
   $('#batchRows tbody').insertAdjacentHTML('beforeend',rows);
   batchRowsLoaded+=d.rows.length; $('#batchMore').hidden=batchRowsLoaded>=d.total;

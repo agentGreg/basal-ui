@@ -84,6 +84,7 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
     n = WARMUP + n_seq + n_conc
     order = [i % len(items) for i in range(n)]  # small sets are reused
     scored: dict[int, bool] = {}
+    error_statuses = {}
     progress = job.progress
 
     def check():
@@ -102,6 +103,11 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
             check()
             t0 = time.perf_counter()
             response = await fleet.adecide(model_id, body(items[index]), source="benchmark", client=client)
+            if response.status_code >= 400:
+                key = str(response.status_code)
+                error_statuses[key] = error_statuses.get(key, 0) + 1
+                if error_statuses[key] == 1:
+                    job.log.append(f"HTTP {key}: {response.text[:1000]} [request {response.headers.get('x-request-id', 'unavailable')}]")
             return time.perf_counter() - t0, response
 
         for done, index in enumerate(order[:WARMUP]):
@@ -155,6 +161,7 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
             "mean_ms": statistics.fmean(latencies) if latencies else None,
             "decisions_per_s": ok / wall if wall else None, "questions_per_s": ok / wall if wall else None,
             "input_tokens_per_s": tokens / wall if wall else None, "errors": len(results) - ok,
+            "error_statuses": error_statuses,
             "accuracy": {"overall": sum(values) / len(values) if values else None,
                          "by_file": {stem: sum(v) / len(v) for stem, v in sorted(by_file.items())}}}
 
@@ -261,13 +268,15 @@ def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
             try:
                 row, top = offline.measure_mode(mode, md, qs, fmt, lat_n, ref_mode or mode, ref, None, gguf,
                                                 options.get("ollama_model"), options["ollama_url"],
-                                                options["llamacpp_url"])
+                                                options["llamacpp_url"], options.get("mlx_packed", False))
             except (Exception, SystemExit) as exc:  # noqa: BLE001 — the other modes still run
                 rows.append({"mode": mode, "error": str(exc)})
                 job.log.append(f"{mode}: {exc}")
                 continue
             if ref is None:
                 ref, ref_mode = top, mode
+            if mode in ("mlx", "mlx-q8"):
+                row["mlx_packed"] = options.get("mlx_packed", False)
             rows.append(row)
             job.log.append(json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()}))
         job.progress("done", len(modes), len(modes))

@@ -166,10 +166,32 @@ class Runner:
         self.est_memory_bytes, self.models_entry, self.ready_at = None, None, None
         self.serve_snapshot = None  # the child settings the running basal-serve was started with
         self.extra_args, self.temporary, self.options = (), False, {}
+        self.health = {"reachable": None, "running": None, "queued": None}
+        self.health_checked = 0.0
+        self.health_polling = False
 
     @property
     def pid(self):
         return self.process.pid if self.process else None
+
+    def _poll_health(self, gen, url):
+        health = {"reachable": False, "running": None, "queued": None}
+        try:
+            response = httpx.get(url + "/health", headers=self._headers(), timeout=0.5)
+            response.raise_for_status()
+            data = response.json()
+            health["reachable"] = isinstance(data, dict) and data.get("status") == "ok"
+            if health["reachable"]:
+                for key in ("running", "queued"):
+                    value = data.get(key)
+                    if type(value) is int and value >= 0:
+                        health[key] = value
+        except (httpx.HTTPError, ValueError):
+            pass
+        finally:
+            with self.lock:
+                if gen == self.gen:
+                    self.health, self.health_polling = health, False
 
     def status(self):
         with self.lock:
@@ -177,6 +199,9 @@ class Runner:
                 self.state = "error"
                 self.error = f"basal-serve exited ({self.process.returncode}): {self.log.last() or ''}"
                 self.event("error", f"{self.model}: {self.error}")
+            if self.state == "ready" and self.base_url and not self.health_polling and time.monotonic() - self.health_checked >= 5:
+                self.health_checked, self.health_polling = time.monotonic(), True
+                threading.Thread(target=self._poll_health, args=(self.gen, self.base_url), daemon=True).start()
             restart_required = (self.state == "ready" and self.serve_snapshot is not None and not self.temporary
                                 and self.serve_snapshot != _child_settings(
                                     self.settings_mod.serve_settings(),
@@ -186,7 +211,8 @@ class Runner:
                     "media_requested": self.media_requested, "media": self.media,
                     "restart_required": restart_required, "est_memory_bytes": self.est_memory_bytes,
                     "rss_bytes": self.rss_bytes, "base_url": self.base_url, "entry": self.models_entry,
-                    "options": dict(self.options)}
+                    "options": dict(self.options), "health": dict(self.health) if self.state == "ready" else
+                    {"reachable": None, "running": None, "queued": None}}
 
     def load(self, assessment, media=False, options=None, extra_args=(), temporary=False):
         """options: load options (basal/ui/options.py; their mode replaces the assessment's, except with media);
@@ -251,6 +277,8 @@ class Runner:
             command += ["--log-decisions", serve["log_decisions"]]
         if assessment.mode in ("vllm", "sglang") and self.options.get("max_len") is None:
             command += ["--max-len", str(serve["max_len"])]
+        if not media and assessment.mode == "mps" and self.platform_fn() != "apple" and not self.options.get("device"):
+            command += ["--device", "cpu"]
         return command + load_options.args(self.options) + list(self.extra_args)
 
     def _models_entry(self, media):
@@ -752,7 +780,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             assessment = dataclasses.replace(assessment, mode=merged["mode"])
         elif not assessment.runnable:
             raise ValueError(assessment.reason)
-        load_options.check_combination(variant, current, merged, "eager" if media else assessment.mode)
+        load_options.check_combination(variant, current, merged, assessment.mode, media)
         return assessment, load_options.non_default(merged)
 
     auto_load_stop = threading.Event()
@@ -995,6 +1023,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
                 "saved": bool(saved), "defaults": load_options.DEFAULTS,
                 "media_modes": load_options.available_media_modes(assessment, current),
+                "mlx_packed_reason": load_options.mlx_packed_unavailable(variant, current),
                 "think": {"model": family_ok, "vllm": "vllm" in current.engines,
                           "reason": None if family_ok else load_options.THINK_REASON}}
 
@@ -1002,7 +1031,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def put_model_options(body: dict = Body(...)):
         variant = find_variant(body.get("id"))
         try:
-            merged = load_options.validate(body.get("options"), catalog.assess(variant, hw()).mode)
+            current = hw()
+            default_mode = catalog.assess(variant, current).mode
+            merged = load_options.validate(body.get("options"), default_mode)
+            load_options.check_combination(variant, current, merged, default_mode)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         settings_mod.set_load_options(variant.id, load_options.non_default(merged))
@@ -1079,6 +1111,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         except httpx.HTTPError as exc:
             raise HTTPException(502, f"basal-serve: {exc}") from exc
         return Response(r.content, status_code=r.status_code,
+                        headers={k: r.headers[k] for k in ("x-request-id", "x-typesafe-request-id") if k in r.headers},
                         media_type=r.headers.get("content-type", "application/json"))
 
     @app.get("/api/stats")

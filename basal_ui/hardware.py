@@ -76,6 +76,9 @@ def _static() -> Hardware:
             props = torch.cuda.get_device_properties(0)
             capability = torch.cuda.get_device_capability(0)
             engines.add("cuda")
+            from basal.engine import gemma_fast_kernels
+            if gemma_fast_kernels() is not None:
+                engines.add("gemma-fast")
             if getattr(torch.version, "hip", None):  # ROCm PyTorch; Strix Halo = gfx1151 (Radeon 8060S)
                 engines.add("rocm")
                 arch = getattr(props, "gcnArchName", None)

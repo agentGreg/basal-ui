@@ -95,12 +95,12 @@ def test_media_loads_are_eager_or_vllm_where_cuda_has_vllm():
 
 
 def test_available_modes_follow_the_hardware_and_the_variant():
-    assert available(BF16, CPU) == {"eager", "ollama", "llamacpp"}
+    assert available(BF16, CPU) == {"eager", "mps", "ollama", "llamacpp"}
     gguf_cpu = Hardware("cpu", "cpu", 1024**4, None, None, frozenset({"gguf"}))
     assert available(GGUF, gguf_cpu) == {"gguf", "ollama", "llamacpp"}
     cuda = available(BF16, CUDA)
     assert {"fast", "fast-nocompile", "fp8", "eager", "vllm", "sglang"} <= cuda
-    assert not cuda & {"tpu", "strix", "mlx", "mps", "nvfp4", "fast-exit"}
+    assert not cuda & {"tpu", "strix", "mlx", "nvfp4", "fast-exit"}
     reasons = {m["mode"]: m["reason"] for m in options.available_modes(BF16, CUDA, catalog.assess(BF16, CUDA))}
     assert reasons["fast-exit"] == "exit heads ship with basal-1.0" and "TPU" in reasons["tpu"]
     assert [m["mode"] for m in options.available_modes(BF16, CUDA, catalog.assess(BF16, CUDA)) if m["default"]] == ["fast"]

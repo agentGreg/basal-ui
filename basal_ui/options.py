@@ -17,7 +17,7 @@ DEFAULTS = {
     "long_share": 0.5, "long_slice_ms": 10.0, "context_overflow": "truncate", "truncate_head": 1 / 3, "max_len": None,
     "vllm_preset": "default", "gpu_memory": 0.6, "ollama_url": "http://127.0.0.1:11434", "ollama_model": None,
     "llamacpp_url": "http://127.0.0.1:8080", "http_parallel": 1, "device": None, "think": False, "think_tokens": 256,
-    "think_python": None, "think_url": None, "early_exit": "off",
+    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False,
     # the CUDA graph engine's kernel switches
     "merge": "auto", "lean": "off", "tree": "dense", "batches": "auto", "readout_layer": "off", "template_prefix": "auto",
     "fp8_accum": "fast",
@@ -37,7 +37,7 @@ CHOICES = {
     "template_prefix": ("auto", "on", "off"), "fp8_accum": ("fast", "full"), "eager_forward": (None, "basal", "hf"),
     "vllm_fast_prefill": ("auto", "off"), "dtype": ("bfloat16", "float16", "float32"),
 }
-BOOLS = ("deterministic", "soam", "prefix_cache", "long_lane", "think", "ple_offload", "strict_calibration")
+BOOLS = ("deterministic", "soam", "prefix_cache", "long_lane", "think", "ple_offload", "strict_calibration", "mlx_packed")
 # key: (minimum, maximum, integer, minimum excluded)
 NUMBERS = {
     "auto_tau": (0, 1, False, False), "max_batch": (1, None, True, False), "wait_ms": (0, None, False, False),
@@ -132,7 +132,7 @@ def args(options: dict) -> list[str]:
         flag = "--" + key.replace("_", "-")
         if key == "mode":
             continue
-        if key in ("deterministic", "strict_calibration"):
+        if key in ("deterministic", "strict_calibration", "mlx_packed"):
             flags.append(flag)
         elif key in ("soam", "prefix_cache", "long_lane", "ple_offload"):
             flags += [flag, "on" if value else "off"]
@@ -143,6 +143,7 @@ def args(options: dict) -> list[str]:
         else:
             flags += [flag, _value(value)]
     return flags
+
 
 
 
@@ -164,8 +165,7 @@ def available_modes(v, hw, assessment) -> list[dict]:
         "mlx": ("MLX runs on Apple Silicon only" if hw.platform != "apple" else
                 "install basal[mlx]" if "mlx" not in hw.engines else
                 None if mlx_port else f"MLX reads MLX ports or bf16 weights, not {v.port}"),
-        "mps": (None if "mps" in hw.engines and v.port == "bf16" else "needs Apple Silicon and bf16 weights"
-                if "mps" not in hw.engines else f"mps reads bf16 weights, not {v.port}"),
+        "mps": None if v.port == "bf16" else f"mps reads bf16 weights, not {v.port}",
         "gguf": ("install basal[gguf] (llama-cpp-python)" if "gguf" not in hw.engines
                  else None if v.port == "GGUF" else "needs a GGUF variant"),
         "strix": (None if "strix" in hw.engines else
@@ -203,8 +203,29 @@ def think_unavailable(v, hw, options=None) -> str | None:
     return None
 
 
-def check_combination(v, hw, options, default_mode):
+def mlx_packed_unavailable(v, hw):
+    if hw.platform != "apple" or "mlx" not in hw.engines:
+        return "MLX packed needs Apple Silicon with basal[mlx]"
+    if v.family not in ("basal-1.0", "basal-1.5", "basal-2.0") or not (v.port == "bf16" or v.port.startswith("MLX")):
+        return "MLX packed needs a Llama basal-1.x or basal-2.0 model in bf16 or MLX format"
+    return None
+
+
+def check_combination(v, hw, options, default_mode, media=False):
     """ValueError for the experimental options this variant or machine cannot use (merged options)."""
+    mode = options["mode"] or ("eager" if media else default_mode)
+    if options["mlx_packed"]:
+        reason = mlx_packed_unavailable(v, hw)
+        if media or mode not in ("mlx", "mlx-q8"):
+            reason = "--mlx-packed needs --mode mlx or mlx-q8 without media"
+        if reason:
+            raise ValueError(reason)
+    if options["batches"] not in ("auto", "default") and MODES[mode][0] not in ("graph", "exit"):
+        raise ValueError("--batches compact/fine needs the CUDA graph engine")
+    if mode == "mps" and options["device"] == "cuda":
+        raise ValueError("--mode mps runs on Apple Silicon or CPU; choose --device mps or cpu")
+    if options["device"] == "mps" and "mps" not in hw.engines:
+        raise ValueError("--device mps needs an available Apple Silicon MPS device")
     if options["think"]:
         reason = think_unavailable(v, hw, options)
         if reason:

@@ -133,6 +133,11 @@ def _cuda_graph(v: Variant, hw: Hardware) -> str | None:
     return None
 
 
+def omni_fast(hw: Hardware) -> bool:
+    """The upstream Gemma fast default: FA3 on Hopper or FlexAttention on sm_120."""
+    return hw.platform == "cuda" and ("gemma-fast" in hw.engines or (hw.cuda_capability or (0, 0))[0] == 12)
+
+
 def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
     """(basal-serve --mode, None) or (None, why this machine cannot serve the variant)."""
     cap = hw.cuda_capability or (0, 0)
@@ -163,9 +168,9 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
     # bf16 weights
     if hw.platform == "cuda":
         if hw.cuda_capability and hw.cuda_capability < (8, 0) and not v.experimental:
-            return None, ("The basal engine needs an NVIDIA GPU with compute capability 8.0+ (Ampere or newer); "
-                          "on this GPU use a GGUF file with basal[gguf].")
-        return ("eager" if v.experimental else "fast"), None  # basal-omni: eager runs on every GPU (docs/OMNI.md)
+            return None, "The basal engine needs an NVIDIA GPU with compute capability 8.0+ (Ampere or newer); " \
+                        "on this GPU use a GGUF file with basal[gguf]."
+        return ("eager" if v.experimental and not omni_fast(hw) else "fast"), None
     if hw.platform == "apple":
         if "mlx" in hw.engines:
             return "mlx", None

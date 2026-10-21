@@ -55,11 +55,20 @@ def load(path) -> dict:
     return cal
 
 
+def report_warnings(report):
+    """Keep engine warning text, including FIT/CERT summaries and strict-check omissions."""
+    return list(dict.fromkeys(line.strip().removeprefix("warning: ") for line in report.splitlines()
+                             if line.strip().startswith("warning:") or
+                             (line.strip().startswith("--strict:") and "0 families tested" in line)))
+
+
 def summary(path, local_dir=None) -> dict:
     """What the Calibration table shows of a calibration file; `warning` when it belongs to another model (as
     basal-serve warns at start-up)."""
     cal = json.loads(Path(path).read_text())
-    out = {"fitted_on": cal.get("fitted_on"), "gates": cal.get("gates"), "thresholds": certified_table(cal),
+    report_path = Path(path).with_suffix(".report.txt")
+    warnings = report_warnings(report_path.read_text()) if report_path.exists() else []
+    out = {"warnings": warnings, "fitted_on": cal.get("fitted_on"), "gates": cal.get("gates"), "thresholds": certified_table(cal),
            "task_thresholds": cal.get("task_thresholds") or {}, "temperature_per_prim": cal.get("temperature_per_prim"),
            "engine": cal.get("engine"), "has_report": Path(path).with_suffix(".report.txt").exists(),
            "imported": Path(path).name.startswith("imported-")}
@@ -172,6 +181,7 @@ def _basal_calibrate(job, argv, writer):
                                writer.lines[-1] if writer.lines else f"basal-calibrate exited ({exc.code})") from None
     finally:
         writer.flush()
+        Path(argv[argv.index("--out") + 1]).with_suffix(".report.txt").write_text("\n".join(writer.lines) + "\n")
 
 
 def _free_engine_memory():

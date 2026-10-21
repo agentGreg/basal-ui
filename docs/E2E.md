@@ -41,6 +41,7 @@ the hardware allows.
 | `test_safety.py` | decision safety | the entry's `certified` thresholds and `context`; `act` with `max_error` deferred below the certified threshold (or without one); a state over the context truncated with consistent token counts; History's `deferred` / `truncated` flags |
 | `test_question_types.py` | every question type | each `advanced.jsonl` request (multi, act, tool, classify, verify, compress, extract) answers in its own shape: keys, sets, costs, verdicts, kept units and their offsets, extracted values and their spans; per-type statistics; `facts` and `lang`; evidence spans or its refusal |
 | `test_calibration.py` | custom calibration | task questions (classify) fitted with the engine in basal-ui's process and its memory released; a file of another model imported with basal-serve's warning and its report; a fit against a temporary uncalibrated child, its report and listing, the child's memory released; selecting the file: Restart to apply, `--calibration`, no calibration warning; back to the shipped file; cancel; refused inputs (with the problem line) |
+| `test_engine231.py` | 2.3.1 integration | real CPU packed and MLX packed loads, inference and restart; child health idle counters; Chromium with explicitly simulated 422/503/500 responses, missing/unreachable counters, warning rendering, packed and cache help |
 | `test_load_options.py` | load options | the 16 modes with reasons for the unavailable ones and the default available; options in the command; `--context-overflow refuse` returning 422; invalid / unavailable options refused; basal-serve's own refusal (prefix cache with `--deterministic`) on the model's row; remembered options used by a plain load |
 | `test_batch.py` | batch | every line answered in order, the summary, paging, the download; not counted in the statistics; cancel without an output file; refused files |
 | `test_measurements.py` | benchmarks | the preset (44 items), a load test (questions per request), a determinism check on a model loaded with `deterministic` (identical answers), two engine modes in process agreeing on 90% or more with the memory released |
@@ -57,3 +58,23 @@ Use the session `ui` fixture and its helpers (`tests/e2e/support.py`): `ui.load(
 with exactly those options (restarting it if needed), `ui.run_job(path, body, kind)` starts a background job and waits
 for it, `ui.detail(method, path, body, status)` returns the message of a refused request. Tests share one basal-ui,
 so each one loads what it needs and puts back what it changes (options, calibration selection, memory settings).
+
+## Focused 2.3.1 gate
+
+Run `uv run pytest -q tests/test_ui_engine231.py` for simulated capability, option lifecycle (including auto-load),
+health caching/missing fields, both HTTP error envelopes, gateway/Playground forwarding, Batch error records, and
+calibration warning tests. Run the hardware/browser gate with existing local models only:
+
+```sh
+BASAL_E2E=1 HF_HUB_OFFLINE=1 \
+BASAL_E2E_MODEL=Remek/basal-2.0-mini-MLX-8bit \
+BASAL_E2E_BF16_MODEL=Remek/basal-2.0-mini \
+uv run pytest -q tests/e2e/test_engine231.py
+```
+
+The example selects Apple Silicon models; change the selections for another host. MLX checks skip with a reason
+when unavailable. CPU packed runs on the host CPU, even on an Apple machine. The browser error/health-warning edge
+cases use simulated responses, so their success does not prove a physical GPU OOM or NVIDIA graph acceptance.
+NVIDIA compact/fine and sm_120 routing still require hardware-specific acceptance; capability tests alone do not
+prove the kernels. Calibration jobs may finish as `done_with_warnings`; the release helper treats that as completed
+work and the tests must inspect its warnings/thresholds instead of treating completion as certification.

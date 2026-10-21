@@ -168,7 +168,7 @@ class UI:
         """Start a job, wait for it; -> its final state, which must be done."""
         self.post(path, body)
         job = self.wait_job(kind, timeout)
-        assert job["phase"] == "done", f"{kind} ended {job['phase']}: {job['error']}"
+        assert job["phase"] in ("done", "done_with_warnings"), f"{kind} ended {job['phase']}: {job['error']}"
         return job
 
 
