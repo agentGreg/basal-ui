@@ -12,6 +12,7 @@ import asyncio
 from contextlib import asynccontextmanager
 import dataclasses
 import hashlib
+import json
 import os
 from pathlib import Path
 import secrets
@@ -395,6 +396,7 @@ class Fleet:
         self.downloads = Downloads(self.event)
         self.jobs = Jobs(self.logs, self.event)
         self.temporary: dict[str, Runner] = {}  # private children of jobs (basal-calibrate's uncalibrated server)
+        self.reserved: dict[str, int] = {}  # memory of models a job loads into basal-ui's own process
         self._lan_ip = None
         self.retiring: dict[Runner, int | None] = {}  # unloaded runners whose child is still being terminated
         self._rss_cache = (0.0, {})
@@ -416,7 +418,7 @@ class Fleet:
         budget = config["budget_bytes"] or hw.memory_bytes
         committed = (sum(r.est_memory_bytes or 0 for r in self.runners.values() if r.state not in ("idle", "error"))
                      + sum(r.est_memory_bytes or 0 for r in self.temporary.values() if r.state not in ("idle", "error"))
-                     + sum(est or 0 for est in self.retiring.values()))
+                     + sum(est or 0 for est in self.retiring.values()) + sum(self.reserved.values()))
         return {"budget_bytes": budget, "reserve_bytes": config["reserve_bytes"],
                 "hardware_budget_bytes": hw.memory_bytes, "available_bytes": hw.available_bytes,
                 "committed_bytes": committed, "rss_bytes": rss_total,
@@ -452,6 +454,19 @@ class Fleet:
             runner = self.temporary.pop(kind, None)
         if runner is not None:
             runner.unload()
+
+    def reserve(self, kind, needed):
+        """Count `needed` bytes for a job that loads a model into basal-ui's own process (RuntimeError over the
+        budget); release(kind) frees them."""
+        with self.lock:
+            if kind in self.reserved:
+                raise RuntimeError(f"a {kind} job already holds memory")
+            self.check_budget(needed)
+            self.reserved[kind] = needed or 0
+
+    def release(self, kind):
+        with self.lock:
+            self.reserved.pop(kind, None)
 
     def load(self, assessment, media=False, options=None):
         model_id = assessment.variant.id
@@ -674,6 +689,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                            settings_mod=settings_mod, hardware_fn=hardware_fn, stats=stats, history=history)
     gateway = gateway or Gateway(fleet, settings_mod, stats)
     allowed_hosts = tuple(allowed_hosts)
+    from basal.viz import examples as viz_examples
+    from basal.viz import make_app as viz_app
+
+    from .inspect import Inspector
+    inspector = Inspector()
 
     def hw():
         return hardware_fn()
@@ -694,6 +714,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 raise ValueError(f"--mode {merged['mode']}: {mode['reason']}")
         elif not assessment.runnable:
             raise ValueError(assessment.reason)
+        load_options.check_combination(variant, current, merged, assessment.mode)
         return assessment, load_options.non_default(merged)
 
     auto_load_stop = threading.Event()
@@ -728,6 +749,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if settings_mod.load().get("auto_load") and settings_mod.last_models():
             auto_load_thread = threading.Thread(target=_auto_load, daemon=True)
             auto_load_thread.start()
+        inspector.bind(asyncio.get_running_loop())  # the explainer's batching loop runs on this one
         await asyncio.to_thread(gateway.start)
         yield
         with auto_load_lock:
@@ -735,6 +757,8 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if auto_load_thread is not None:
             auto_load_thread.join(timeout=5)
         gateway.stop()
+        inspector.stop()
+        fleet.release("inspect")
         fleet.shutdown()
         stats.close()
         settings_mod.remove_keys_file()
@@ -743,6 +767,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
     if STATIC.is_dir():
         app.mount("/static", StaticFiles(directory=STATIC), name="static")
+    app.mount("/viz", viz_app(inspector.explainer, viz_examples))  # basal-viz for the Inspect view
 
     @app.middleware("http")
     async def refuse_cross_origin(request: Request, call_next):
@@ -769,7 +794,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return variant
 
     def full_status():
-        return {**fleet.status(), "serving": gateway.status()}
+        return {**fleet.status(), "serving": gateway.status(), "inspect": inspector.state()}
 
     def serve_response():
         config = settings_mod.serve_settings()
@@ -920,8 +945,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             merged = load_options.validate(saved, assessment.mode)
         except ValueError:  # options saved by another basal-ui version
             merged = dict(load_options.DEFAULTS)
+        family_ok = variant.family == "basal-2.0" and variant.tier == "4.5B"
         return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
-                "saved": bool(saved), "defaults": load_options.DEFAULTS}
+                "saved": bool(saved), "defaults": load_options.DEFAULTS,
+                "think": {"model": family_ok, "vllm": "vllm" in current.engines,
+                          "reason": None if family_ok else load_options.THINK_REASON}}
 
     @app.put("/api/models/options")
     def put_model_options(body: dict = Body(...)):
@@ -1017,20 +1045,80 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
     @app.post("/api/benchmark", status_code=202)
     def post_benchmark(body: dict = Body(...)):
+        """kind benchmark (the preset), loadtest, determinism (a loaded model) or modes (a downloaded model, loaded
+        in basal-ui's process mode by mode); one measurement at a time."""
         from . import bench
 
-        model_id = body.get("id")
+        model_id, kind = body.get("id"), body.get("kind", "benchmark")
+        if kind not in ("benchmark", "loadtest", "determinism", "modes"):
+            raise HTTPException(400, "kind must be benchmark, loadtest, determinism or modes")
+        if kind == "modes":
+            return start_modes(model_id, body)
         try:
             label, paths = bench.resolve_set(body.get("set", "bundled"))
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         try:
-            fleet.ready(model_id)
-            return fleet.jobs.start("benchmark", model_id, label, bench.benchmark_job, fleet, model_id, paths, label)
+            runner = fleet.ready(model_id)
+            if kind == "benchmark":
+                return fleet.jobs.start("benchmark", model_id, label, bench.benchmark_job, fleet, model_id, paths,
+                                        label)
+            try:
+                params = bench.loadtest_params(body.get("params") or {}, kind,
+                                               (runner.models_entry or {}).get("early_exit") or [])
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            if params["synthetic"]:
+                label = f"synthetic {params['synthetic']} tokens"
+            return fleet.jobs.start("benchmark", model_id, f"{kind}: {label}", bench.loadtest_job, fleet, model_id,
+                                    label, paths, params)
         except KeyError as exc:
             raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
+
+    def modes_context(variant):
+        """(local dir, assessment, merged load options, the modes a comparison may run) of a downloaded variant."""
+        from . import bench
+
+        local_dir = downloaded(variant)
+        current = hw()
+        assessment = catalog.assess(variant, current)
+        options = load_options.validate(settings_mod.load_options(variant.id), assessment.mode)
+        return local_dir, assessment, options, bench.comparison_modes(
+            load_options.available_modes(variant, current, assessment))
+
+    def start_modes(model_id, body):
+        from . import bench
+
+        variant = find_variant(model_id)
+        local_dir, assessment, options, selectable = modes_context(variant)
+        modes, n, lat_n = body.get("modes"), body.get("n", 100), body.get("lat_n", 30)
+        if not isinstance(modes, list) or not modes or len(set(modes)) != len(modes):
+            raise HTTPException(400, "modes must be a list of distinct modes")
+        unknown = [m for m in modes if m not in selectable]
+        if unknown:
+            raise HTTPException(400, f"{unknown[0]} cannot run here; selectable: {selectable}")
+        for key, value, lo in (("n", n, 10), ("lat_n", lat_n, 5)):
+            if isinstance(value, bool) or not isinstance(value, int) or value < lo:
+                raise HTTPException(400, f"{key} must be an integer >= {lo}")
+        if fleet.jobs.get("benchmark") is not None and fleet.jobs.get("benchmark").running:
+            raise HTTPException(409, "a benchmark job is already running")
+        try:
+            fleet.reserve("modes", bench.comparison_memory(modes, assessment.est_memory_bytes))
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        try:
+            return fleet.jobs.start("benchmark", variant.id, f"modes: {', '.join(modes)}", bench.modes_job, fleet,
+                                    variant, local_dir, modes, n, lat_n, options)
+        except RuntimeError as exc:
+            fleet.release("modes")
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.get("/api/modes")
+    def get_comparison_modes(id: str):
+        variant = find_variant(id)
+        return {"modes": modes_context(variant)[3]}
 
     @app.delete("/api/benchmark")
     def cancel_benchmark():
@@ -1127,6 +1215,123 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             return {"report": Path(file).with_suffix(".report.txt").read_text()}
         except OSError as exc:
             raise HTTPException(404, f"no report for {file}") from exc
+
+    @app.post("/api/inspect", status_code=202)
+    def post_inspect(body: dict = Body(...)):
+        from . import calibration
+        from .inspect import inspectable
+
+        variant = find_variant(body.get("id"))
+        reason = inspectable(variant)
+        if reason:
+            raise HTTPException(400, reason)
+        local_dir = downloaded(variant)
+        cal = body.get("calibration")
+        if cal is not None and cal not in {f["file"] for f in calibration.listing(variant.id, settings_mod)}:
+            raise HTTPException(400, f"{cal!r} is not a calibration basal-ui fitted for {variant.id}")
+        job = fleet.jobs.get("inspect")
+        if job is not None and job.running:
+            raise HTTPException(409, "the inspector is loading a model")
+        inspector.stop()
+        fleet.release("inspect")
+        current = hw()
+        try:
+            fleet.reserve("inspect", catalog.assess(variant, current).est_memory_bytes)
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+        def start(job):
+            try:
+                return inspector.start(job, variant, local_dir, current, cal)
+            except BaseException:
+                fleet.release("inspect")
+                raise
+
+        try:
+            return fleet.jobs.start("inspect", variant.id, variant.id, start)
+        except RuntimeError as exc:
+            fleet.release("inspect")
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.delete("/api/inspect")
+    def stop_inspect():
+        fleet.jobs.cancel("inspect")
+        inspector.stop()
+        fleet.release("inspect")
+        fleet.event("info", "inspector stopped")
+        return inspector.state()
+
+    @app.get("/api/inspect")
+    def get_inspect():
+        return inspector.state()
+
+    @app.post("/api/batch", status_code=202)
+    def post_batch(body: dict = Body(...)):
+        from . import batch
+
+        model_id = body.get("id")
+        source = body.get("input")
+        if not isinstance(source, str) or not source.strip():
+            raise HTTPException(400, "input must be the path of a JSONL file (docs/SERVING.md#inference-on-a-jsonl-file)")
+        source = Path(source).expanduser()
+        try:
+            lines = [line for line in source.read_text().splitlines() if line.strip()]
+        except (OSError, UnicodeDecodeError) as exc:
+            raise HTTPException(400, f"cannot read {source}: {getattr(exc, 'strerror', None) or exc}") from exc
+        for n, line in enumerate(lines, 1):
+            try:
+                item = json.loads(line)
+            except ValueError:
+                item = None
+            if not isinstance(item, dict) or not ("questions" in item or "options" in item):
+                raise HTTPException(400, f"{source.name}: line {n} is neither a simple item (state, question, "
+                                         "options) nor a /v1/systemone request")
+        if not lines:
+            raise HTTPException(400, f"{source} has no lines")
+        out = Path(body["output"]).expanduser() if body.get("output") else batch.default_output(source)
+        if not out.parent.is_dir() or not os.access(out.parent, os.W_OK):
+            raise HTTPException(400, f"cannot write to {out.parent}")
+        concurrency = body.get("concurrency", 16)
+        if isinstance(concurrency, bool) or not isinstance(concurrency, int) or not 1 <= concurrency <= 256:
+            raise HTTPException(400, "concurrency must be an integer between 1 and 256")
+        try:
+            runner = fleet.ready(model_id)
+        except KeyError as exc:
+            raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        early_exit = body.get("early_exit")
+        levels = (runner.models_entry or {}).get("early_exit") or []
+        if early_exit is not None and early_exit not in levels:
+            raise HTTPException(400, f"early_exit must be one of {levels} for {model_id}" if levels else
+                                f"{model_id} has no early exits (basal-serve --mode fast-exit)")
+        try:
+            return fleet.jobs.start("batch", model_id, f"{model_id} on {source.name}", batch.run_batch, fleet,
+                                    model_id, source, out, concurrency, early_exit)
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.delete("/api/batch")
+    def cancel_batch():
+        return fleet.jobs.cancel("batch")
+
+    def batch_output():
+        job = fleet.jobs.get("batch")
+        state = job.state() if job is not None else None
+        if not state or state["phase"] != "done" or not Path(state["result"]["output"]).is_file():
+            raise HTTPException(404, "no finished batch")
+        return Path(state["result"]["output"])
+
+    @app.get("/api/batch/rows")
+    def get_batch_rows(offset: int = 0, limit: int = 100):
+        from . import batch
+
+        return batch.rows(batch_output(), max(0, offset), max(1, min(limit, 1000)))
+
+    @app.get("/api/batch/download")
+    def download_batch():
+        path = batch_output()
+        return FileResponse(path, filename=path.name, media_type="application/x-ndjson")
 
     @app.get("/api/benchmarks")
     def get_benchmarks():

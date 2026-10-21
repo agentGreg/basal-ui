@@ -92,7 +92,8 @@ class Jobs:
             except Cancelled:
                 job.finish("cancelled")
                 self.event("info", f"{kind} cancelled: {label}")
-            except Exception as exc:  # noqa: BLE001 — shown in the UI and the job's log
+            except (Exception, SystemExit) as exc:  # noqa: BLE001 — shown in the UI and the job's log (basal's
+                # engines and CLIs refuse with SystemExit)
                 job.log.append(f"error: {exc}")
                 job.finish("error", error=str(exc))
                 self.event("error", f"{kind} failed: {label}: {exc}")

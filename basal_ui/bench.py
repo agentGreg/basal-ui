@@ -1,13 +1,17 @@
-"""Benchmark one loaded model from basal-ui: latency (sequential), throughput (concurrent) and accuracy on the items
-with a `gold` answer, over the bundled example questions or a custom JSONL set (docs/BENCHMARK_SETS.md)."""
+"""Measurements of one model from basal-ui: the benchmark preset (latency, throughput and accuracy over the bundled
+examples or a custom JSONL set, docs/BENCHMARK_SETS.md), configurable load tests and determinism checks (basal-loadtest
+against the model's basal-serve) and engine-mode comparisons (basal-bench, the model loaded in basal-ui's process)."""
 import asyncio
 import json
 import statistics
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 
+from basal import bench as offline
+from basal import loadtest
 from basal.bench import DEFAULT_QUESTIONS
 from basal.loadtest import body
 
@@ -160,4 +164,119 @@ def benchmark_job(job, fleet, model_id, paths, label):
     result = asyncio.run(run_benchmark(fleet, model_id, paths, label, job))
     if fleet.stats is not None:
         fleet.stats.add_benchmark(model_id, result)
+    return result
+
+
+LOADTEST_DEFAULTS = {"synthetic": None, "long_frac": 0.0, "seed": 0, "questions_per_request": 1, "n_seq": 200,
+                     "n_conc": 1000, "concurrency": 32, "early_exit": None, "determinism": 0}
+
+
+def _int(params, key, lo, hi=None):
+    value = params[key]
+    if isinstance(value, bool) or not isinstance(value, int) or value < lo or (hi is not None and value > hi):
+        raise ValueError(f"{key} must be an integer" + (f" between {lo} and {hi}" if hi is not None else f" >= {lo}"))
+    return value
+
+
+def loadtest_params(params, kind, early_exit_levels) -> dict:
+    """The parameters of a load test or determinism check merged over LOADTEST_DEFAULTS; ValueError names the bad one."""
+    if not isinstance(params, dict):
+        raise ValueError("params must be an object")
+    unknown = set(params) - set(LOADTEST_DEFAULTS)
+    if unknown:
+        raise ValueError(f"unknown parameter: {sorted(unknown)[0]}")
+    p = {**LOADTEST_DEFAULTS, **params}
+    for key in ("n_seq", "n_conc", "concurrency"):
+        _int(p, key, 1)
+    _int(p, "questions_per_request", 1, 5)
+    _int(p, "seed", 0)
+    _int(p, "determinism", 0)
+    if kind == "determinism" and p["determinism"] < 1:
+        p["determinism"] = 50
+    if kind == "loadtest":
+        p["determinism"] = 0
+    if p["synthetic"] is not None:
+        _int(p, "synthetic", 50)
+    if isinstance(p["long_frac"], bool) or not isinstance(p["long_frac"], (int, float)) or not 0 <= p["long_frac"] <= 1:
+        raise ValueError("long_frac must be between 0 and 1")
+    if p["early_exit"] is not None and p["early_exit"] not in early_exit_levels:
+        raise ValueError(f"early_exit must be one of {early_exit_levels}" if early_exit_levels else
+                         "the model has no early exits (basal-serve --mode fast-exit)")
+    return p
+
+
+def loadtest_job(job, fleet, model_id, label, paths, params):
+    """basal-loadtest (or --determinism N) against the model's basal-serve; the result is kept with the benchmarks."""
+    runner = fleet.ready(model_id)
+
+    def progress(phase, done, total):
+        job.check()
+        job.progress(phase, done, total)
+
+    a = SimpleNamespace(url=runner.base_url + "/v1/systemone", headers=runner._headers(), questions=paths,
+                        progress=progress, out=None, **params)
+    if params["determinism"]:
+        kind, out = "determinism", asyncio.run(loadtest.determinism(a, loadtest.determinism_bodies(a)))
+    else:
+        kind, out = "loadtest", asyncio.run(loadtest.run(a))
+    out.pop("url", None)
+    result = {"kind": kind, "model": model_id, "set": label, "params": params, "when": time.time(), **out}
+    if fleet.stats is not None:
+        fleet.stats.add_benchmark(model_id, result)
+    return result
+
+
+def comparison_modes(available) -> list[str]:
+    """The modes a comparison may run: the available basal-serve modes (basal/ui/options.available_modes) plus the
+    basal-bench references eager-fp32, vllm@deterministic and fast-exit@<policy> where their engine is available."""
+    modes = [m["mode"] for m in available if m["available"]]
+    out = (["eager-fp32"] if "eager" in modes else []) + modes
+    if "vllm" in modes:
+        out.append("vllm@deterministic")
+    if "fast-exit" in modes:
+        out += [f"fast-exit@{p}" for p in ("off", "0.999", "0.995", "0.99", "0.98")]
+    return out
+
+
+def comparison_memory(modes, est_memory_bytes) -> int:
+    """The memory a comparison holds at its peak: one mode at a time, eager-fp32 at twice the bf16 weights."""
+    return (2 if "eager-fp32" in modes else 1) * (est_memory_bytes or 0)
+
+
+def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
+    """basal-bench in basal-ui's process: every mode loaded, measured and freed in turn; the first mode that runs is the
+    reference of the agreement, a mode that fails to load or run is kept with its error. The memory reserved by the
+    caller is released at the end. Kept with the benchmarks."""
+    try:
+        md = offline.resolve(str(local_dir), metadata_only=all(
+            offline.MODES.get(m.split("@")[0], ("",))[0] in offline.GGUF_KINDS for m in modes))
+        qs = offline.load_questions(DEFAULT_QUESTIONS, n)
+        fmt = offline.model_format(md)
+        gguf = str(Path(local_dir) / variant.gguf_file) if variant.gguf_file else None
+        ref, ref_mode, rows = None, None, []
+        for i, mode in enumerate(modes):
+            job.check()
+            job.progress(mode, i, len(modes))
+            job.log.append(f"{mode}: loading")
+            try:
+                row, top = offline.measure_mode(mode, md, qs, fmt, lat_n, ref_mode or mode, ref, None, gguf,
+                                                options.get("ollama_model"), options["ollama_url"],
+                                                options["llamacpp_url"])
+            except (Exception, SystemExit) as exc:  # noqa: BLE001 — the other modes still run
+                rows.append({"mode": mode, "error": str(exc)})
+                job.log.append(f"{mode}: {exc}")
+                continue
+            if ref is None:
+                ref, ref_mode = top, mode
+            rows.append(row)
+            job.log.append(json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()}))
+        job.progress("done", len(modes), len(modes))
+        if not any("error" not in r for r in rows):
+            raise RuntimeError("; ".join(f"{r['mode']}: {r['error']}" for r in rows))
+    finally:
+        fleet.release("modes")
+    result = {"kind": "modes", "model": variant.id, "set": "bundled", "items": len(qs), "when": time.time(),
+              "modes": rows}
+    if fleet.stats is not None:
+        fleet.stats.add_benchmark(variant.id, result)
     return result

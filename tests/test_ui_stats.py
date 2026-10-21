@@ -54,10 +54,10 @@ def test_persistence_round_trip_and_reset_of_one_model(tmp_path, stats):
     assert list(Stats(tmp_path / "stats.json").snapshot()["models"]) == ["b"]
 
 
-def test_benchmark_results_keep_the_last_five(stats):
-    for i in range(7):
+def test_benchmark_results_keep_the_last_twenty(stats):
+    for i in range(22):
         stats.add_benchmark("a", {"run": i})
-    assert [r["run"] for r in stats.snapshot()["benchmarks"]["a"]] == [2, 3, 4, 5, 6]
+    assert [r["run"] for r in stats.snapshot()["benchmarks"]["a"]] == list(range(2, 22))
 
 
 def test_corrupt_file_starts_empty(tmp_path):

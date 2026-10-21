@@ -34,6 +34,8 @@
 .prob:not(.winner) .bar span{background:#c9cabc}.mini-table{margin:8px 0}.mini-table td,.mini-table th{padding:6px 8px}.mini-table tr.chosen td{font-weight:700}.ranking{margin:6px 0;padding-left:20px;font-size:13px}.compressed{white-space:pre-wrap}.source-view{border-top:1px solid var(--line);padding-top:12px;margin-top:6px}.source{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#fbfaf6;border:1px solid var(--line);border-radius:5px;padding:12px;font:13px/1.65 var(--sans)}mark{border-radius:3px;padding:0 2px;color:inherit}mark.evidence{background:#f5d9cd}mark.kept{background:var(--green-light);box-shadow:inset 0 -2px 0 #b9cdb6}mark.dropped{background:transparent;color:var(--muted)}mark.field{background:var(--omni-light);box-shadow:inset 0 -2px 0 #cfc3e2}.chip.muted{color:var(--muted)}
 .report-dialog{width:min(960px,calc(100vw - 32px))}.report-dialog pre{max-height:65vh}#calibrationBlock,#benchmarks{margin-top:18px}
 .options-dialog{width:min(980px,calc(100vw - 32px));max-height:92vh}.option-section{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}.option-section legend{font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 4px}.option-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-bottom:8px}.option-mode{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;border:1px solid var(--line);border-radius:5px;padding:6px 8px}.option-mode small{flex-basis:100%;font-size:11px;color:var(--muted);line-height:1.3}.option-mode.unavailable{opacity:.55}.option-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px;align-items:end}.opt-field>label{display:block;font-size:12px;font-weight:650;margin-bottom:4px}.opt-field input[type=number],.opt-field input[type=text],.opt-field select{width:100%}.opt-field .controls input{width:80px}button.options-model{margin-left:6px}.dialog-actions label{margin-right:auto;font-size:13px}
+#vizFrame{display:block;width:100%;height:calc(100vh - 220px);min-height:600px;border:1px solid var(--line);border-radius:6px;margin-top:10px;background:var(--white)}
+.think-block{font-size:13px;margin:6px 0;padding:8px 10px;border-left:3px solid var(--omni);background:var(--omni-light);border-radius:4px}.option-note{font-size:12px;margin-top:8px}
 </style>
 </head>
 <body><div class="app-shell">
@@ -42,6 +44,8 @@
 <button type="button" data-view="models"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg>Models</button>
 <button type="button" data-view="manager"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v13H3zM8 7l2-3h4l2 3m-5 4v5m-2-2h4"/></svg>Model manager</button>
 <button type="button" data-view="playground"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-6 7 6 7m8-14 6 7-6 7m-3-16-2 18"/></svg>Playground</button>
+<button type="button" data-view="batch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v4H4zM4 10h16v4H4zM4 15h16v4H4z"/></svg>Batch</button>
+<button type="button" data-view="inspect"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5M8 11h6M11 8v6"/></svg>Inspect</button>
 <button type="button" data-view="api"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"/></svg>API server</button>
 <button type="button" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</button>
 <button type="button" data-view="logs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Logs</button>
@@ -52,7 +56,9 @@
 <section class="card" id="status" aria-live="polite"><div class="section-index">LOADED MODELS</div><div id="memoryBar"></div><div id="loadedModels"><div class="empty">No model loaded</div></div></section></section>
 <section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div><div id="calibrationBlock"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
 <section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
-<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label title="Append the dates, amounts and other facts basal extracts from the state (facts: auto)"><input id="factsToggle" type="checkbox"> Facts</label><select id="langSelect" aria-label="Language" title="Prompt language (lang)"><option value="auto">Language: auto</option><option value="pl">Polish (pl)</option><option value="en">English (en)</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
+<section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label title="Append the dates, amounts and other facts basal extracts from the state (facts: auto)"><input id="factsToggle" type="checkbox"> Facts</label><select id="langSelect" aria-label="Language" title="Prompt language (lang)"><option value="auto">Language: auto</option><option value="pl">Polish (pl)</option><option value="en">English (en)</option></select><select id="thinkSelect" aria-label="Thinking" title="think: reason before low-margin decisions (a model loaded with Thinking)" hidden><option value="">Think: auto</option><option value="off">Think: off</option><option value="force">Think: force</option></select><label id="thinkTextLabel" title="think_text: return the reasoning" hidden><input id="thinkTextToggle" type="checkbox"> Show reasoning</label><select id="earlyExitSelect" aria-label="Early exit" title="early_exit: the agreement level of the exit heads (--mode fast-exit)" hidden></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
+<section class="view" id="batch" data-page="batch"><section class="card"><div class="controls"><select id="batchModel" aria-label="Model"></select><input id="batchInput" type="text" placeholder="/path/to/requests.jsonl" size="34" aria-label="Input JSONL"><input id="batchOutput" type="text" placeholder="output: <input>.answers.jsonl" size="34" aria-label="Output JSONL"><label>Concurrency <input id="batchConcurrency" type="number" min="1" max="256" value="16"></label><select id="batchEarlyExit" aria-label="Early exit" hidden></select><button id="runBatch" class="primary" type="button">Run</button><button id="cancelBatch" type="button" hidden>Cancel</button></div><p class="muted">One simple item (<code>{"state", "question", "options", "gold"?}</code>) or one <code>/v1/systemone</code> request per line; one answer per line in the same order (format: <code>docs/SERVING.md#inference-on-a-jsonl-file</code>). Batch requests go straight to the model: they are not counted in the statistics or the history.</p><div id="batchProgress"></div><div id="batchSummary"></div><div class="controls"><button id="downloadBatch" type="button" hidden>Download answers</button><button id="copyBatchPath" type="button" hidden>Copy output path</button></div><div id="batchRows" class="table-wrap"></div><button id="batchMore" type="button" hidden>Load more</button></section></section>
+<section class="view" id="inspect" data-page="inspect"><section class="card"><div class="controls"><select id="inspectModel" aria-label="Model to inspect"></select><select id="inspectCalibration" aria-label="Calibration"><option value="">shipped calibration</option></select><button id="startInspect" class="primary" type="button">Start</button><button id="stopInspect" type="button" hidden>Stop</button><span id="inspectState" class="muted"></span><a class="dashboard-link" href="#logs/job%3Ainspect">Logs</a></div><p class="muted">basal-viz loads the bf16 PyTorch weights of basal-1.0, basal-1.5 or basal-2.0 into basal-ui’s process (counted in the memory budget) and shows the prompt of every option order, its tokens, the decision after every layer and the calibration. <strong>Inspect this decision</strong> in the Playground sends the request here.</p><iframe id="vizFrame" title="basal-viz" hidden></iframe></section></section>
 <section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the models when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
 <section class="view" data-page="api"><section class="card"><h3>Memory</h3><div class="serve-fields"><div class="field"><label for="memoryBudget">Budget (GiB; empty uses the hardware budget)</label><input id="memoryBudget" type="number" min="1" step="0.1"></div><div class="field"><label for="memoryReserve">Keep free (GiB)</label><input id="memoryReserve" type="number" min="0" step="0.1" value="2"></div></div><button id="saveMemory" type="button">Save memory settings</button><div id="memoryError" class="error-box" role="alert" hidden></div></section></section>
 <section class="view" id="history" data-page="history"><section class="card"><div class="controls"><select id="historyModel"><option value="">All models</option></select><div id="historySource" class="tabs"><button data-source="">All</button><button data-source="playground">Playground</button><button data-source="api">API</button><button data-source="mcp">MCP</button></div><input type="search" id="historySearch" placeholder="Search state…"><button id="clearHistory" class="destructive">Clear history</button></div><div id="historyTable" class="table-wrap"></div><button id="historyMore" hidden>Load more</button></section></section>
@@ -126,7 +132,7 @@ function familyOrder(family) {
 function tierOrder(tier) { return ({mini:0,'1.5B':1,'4.5B':2,max:3,ultra:4})[tier] ?? 9; }
 function renderModels(data) {
   modelData = data.models || [];
-  renderDiskModels(); renderCalibrationModels();
+  renderDiskModels(); renderCalibrationModels(); renderInspectModels();
   const suggestions = data.suggestions || [];
   renderSuggestions(suggestions);
   const overviewSuggestion=$('#overviewSuggested'), firstSuggestion=$('#suggested .suggestion-card');
@@ -495,9 +501,19 @@ function requestOptionFields() {
   const fields={};
   if($('#factsToggle').checked)fields.facts='auto';
   if($('#langSelect').value!=='auto')fields.lang=$('#langSelect').value;
+  if(!$('#thinkSelect').hidden&&$('#thinkSelect').value)fields.think=$('#thinkSelect').value;
+  if(!$('#thinkTextLabel').hidden&&$('#thinkTextToggle').checked)fields.think_text=true;
+  if(!$('#earlyExitSelect').hidden&&$('#earlyExitSelect').value)fields.early_exit=$('#earlyExitSelect').value;
   return fields;
 }
-const REQUEST_OPTION_KEYS=['facts','lang'];
+const REQUEST_OPTION_KEYS=['facts','lang','think','think_text','early_exit'];
+// think / early_exit appear for a model loaded with Thinking / with early-exit levels (--mode fast-exit)
+function setPlaygroundExperimental(model) {
+  const think=Boolean(model?.options?.think), levels=model?.entry?.early_exit||[], select=$('#earlyExitSelect');
+  $('#thinkSelect').hidden=$('#thinkTextLabel').hidden=!think;
+  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(['',...levels]))select.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?`Early exit: ${esc(l)}`:'Early exit: server default'}</option>`).join('');
+  select.hidden=!levels.length;
+}
 function buildRequest() {
   const questions={}; for(const card of document.querySelectorAll('.question')) { const [name,q]=parseQuestionCard(card); questions[name]=q; }
   return {state:parseStructuredText($('#stateInput').value),questions,...requestOptionFields(),...mediaRequestFields()};
@@ -552,6 +568,8 @@ function addQuestion(name='question', q={type:'choice',instructions:'',criteria:
 function setRequest(req) {
   $('#stateInput').value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
   setChecked($('#factsToggle'),req.facts==='auto'); $('#langSelect').value=['pl','en'].includes(req.lang)?req.lang:'auto';
+  $('#thinkSelect').value=['off','force'].includes(req.think)?req.think:''; setChecked($('#thinkTextToggle'),req.think_text===true);
+  if([...$('#earlyExitSelect').options].some(o=>o.value===req.early_exit))$('#earlyExitSelect').value=req.early_exit; else $('#earlyExitSelect').value='';
   $('#questions').innerHTML='';
   for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
   if(!Object.keys(req.questions||{}).length) addQuestion();
@@ -695,6 +713,13 @@ function renderSource(state, spans) {
   const kinds=[...new Set(accepted.map(s=>s.kind))];
   return `<div class="source-view"><div class="section-head"><strong>Source</strong><span class="chips">${kinds.map(k=>`<mark class="${k}">${esc(k)}</mark>`).join(' ')}</span></div><pre class="source">${html}</pre></div>`;
 }
+// thinking (basal/think.py): readout 2 after the reasoning, with the answer it replaced
+function thinkBlock(a) {
+  const t=a.think, used=a.meta?.think;
+  if(t?.skipped)return `<div class="chips"><span class="chip muted">thinking skipped (${esc(t.skipped)})</span></div>`;
+  if(!t||t.tokens==null)return used?`<div class="chips"><span class="chip muted">no reasoning</span></div>`:'';
+  return `<div class="think-block"><span class="chip">reasoned</span> ${esc(t.tokens)} tokens · ${num(t.ms,0)} ms · calibration ${esc(t.calibration??'—')}; without thinking: ${pct(t.no_think?.confidence)}${t.text?`<details><summary>Reasoning</summary><pre>${esc(t.text)}</pre></details>`:''}</div>`;
+}
 function renderResults(data, request) {
   const answers=data?.answers || data || {}, entry=modelEntry(request.model); let html='';
   for(const [name,answer] of Object.entries(answers)) {
@@ -702,14 +727,16 @@ function renderResults(data, request) {
     if(!answer||typeof answer!=='object'){html+=`<article class="answer"><h3>${esc(name)}</h3><pre>${esc(JSON.stringify(answer,null,2))}</pre></article>`;continue;}
     const type=answer.type||q.type||'unknown', view=RESULT_VIEWS[type];
     const body=view?view(answer,q):answer.probabilities&&typeof answer.probabilities==='object'?decisionView(name,answer,q):`<pre>${esc(JSON.stringify(answer,null,2))}</pre>`;
-    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span>${answer.experimental?'<span class="badge experimental">experimental</span>':''}</h3>${safetyStrip(answer,q,entry)}${body}</article>`;
+    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span>${answer.experimental?'<span class="badge experimental">experimental</span>':''}</h3>${safetyStrip(answer,q,entry)}${thinkBlock(answer)}${body}</article>`;
   }
   const spans=typeof request.state==='string'?sourceSpans(answers,request):[];
   const u=data?.usage, mediaUsage=u?.media;
   const mediaSummary=mediaUsage?` · Media: ${mediaUsage.images??0} images, ${mediaUsage.audio??0} audio, ${mediaUsage.media_tokens??0} tokens`:'';
-  const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${mediaSummary}</div>`:'';
+  const thinkUsage=u?.think_questions!=null?` · Thought on: ${u.think_questions} · Output tokens: ${u.output_tokens??0}`:'';
+  const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${mediaSummary}${thinkUsage}</div>`:'';
   const meter=u&&entry?.context?`<div class="answer-meta">Longest prompt ${esc(u.longest_prompt_tokens??'—')} / ${esc(entry.context.limit??'—')} tokens · policy ${esc(entry.context.overflow)}</div>`:'';
-  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong></div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : '<div class="empty">No answers returned.</div>');
+  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong>${html&&!request.media?'<button type="button" id="inspectDecision">Inspect this decision</button>':''}</div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : '<div class="empty">No answers returned.</div>');
+  const inspectButton=$('#inspectDecision'); if(inspectButton)inspectButton.onclick=()=>inspectDecision(request);
   $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
 }
 function showDecideError(message) { $('#decideError').textContent=message; $('#decideError').hidden=false; }
@@ -745,6 +772,7 @@ $('#mediaInput').addEventListener('change',event=>selectMedia(Array.from(event.t
 $('#mediaDetail').addEventListener('change',()=>syncRequest());
 $('#factsToggle').addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS));
 $('#langSelect').addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS));
+['#thinkSelect','#thinkTextToggle','#earlyExitSelect'].forEach(s=>$(s).addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS)));
 $('#mediaLightboxClose').addEventListener('click',()=>$('#mediaLightbox').close());
 $('#mediaLightbox').addEventListener('click',e=>{if(e.target===$('#mediaLightbox'))$('#mediaLightbox').close();});
 window.addEventListener('beforeunload',()=>selectedMedia.forEach(item=>URL.revokeObjectURL(item.url)));
@@ -927,7 +955,8 @@ function renderStatus(s) {
   renderMemoryBar(s.memory||{},models);
   renderLoadedRows(models);
   renderPlaygroundModels(ready);
-  renderBenchmarkState(s.jobs?.benchmark,ready); renderCalibrationState(s.jobs?.calibrate);
+  renderBenchmarkState(s.jobs?.benchmark,ready); renderCalibrationState(s.jobs?.calibrate); renderBatchState(s.jobs?.batch,ready);
+  renderInspectState(s.inspect,s.jobs?.inspect);
   if(serveData)renderServeStatus(s);
   loadStats();
   const jobsRunning=Object.values(s.jobs||{}).some(j=>j.running);
@@ -962,6 +991,7 @@ function renderPlaygroundModels(ready) {
   select.value=selectedModel; select.disabled=!ready.length;
   $('#playgroundForm').disabled=!ready.length; $('#playgroundHint').hidden=Boolean(ready.length);
   setPlaygroundMedia(ready.find(m=>m.id===selectedModel)?.media||[]);
+  setPlaygroundExperimental(ready.find(m=>m.id===selectedModel));
 }
 function setPlaygroundMedia(kinds) {
   if(JSON.stringify(kinds)===JSON.stringify(loadedMedia))return;
@@ -969,7 +999,7 @@ function setPlaygroundMedia(kinds) {
   $('#mediaField').hidden=!kinds.length;
   $('#mediaInput').accept=[kinds.includes('image')?'image/*':'',kinds.includes('audio')?'audio/*':''].filter(Boolean).join(',');
 }
-$('#playgroundModel').addEventListener('change',e=>{selectedModel=e.target.value;localStorage.setItem('basal-ui.model',selectedModel);setPlaygroundMedia(readyModels().find(m=>m.id===selectedModel)?.media||[]);if(serveData)renderConnect();});
+$('#playgroundModel').addEventListener('change',e=>{selectedModel=e.target.value;localStorage.setItem('basal-ui.model',selectedModel);const model=readyModels().find(m=>m.id===selectedModel);setPlaygroundMedia(model?.media||[]);setPlaygroundExperimental(model);syncRequest(false,REQUEST_OPTION_KEYS);if(serveData)renderConnect();});
 async function unloadOne(id){await api('/api/unload',{method:'POST',body:JSON.stringify({id})});await refreshStatus();}
 async function restartOne(id){await api('/api/restart',{method:'POST',body:JSON.stringify({id})});toast(`Restarting ${shortName(id)}`);await refreshStatus();}
 $('#footerUnload').onclick=()=>act(async()=>{
@@ -995,31 +1025,82 @@ function renderStats() {
   $('#statsTable').querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset statistics?',description:`The counters of ${b.dataset.reset} start from zero.`,confirmLabel:'Reset',destructive:true})){await api(`/api/stats/${encodeURIComponent(b.dataset.reset)}`,{method:'DELETE'});toast('Statistics reset');await loadStats();}}));
   const all=$('#resetAllStats'); if(all)all.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset all statistics?',description:'The counters of every model start from zero. Benchmark results stay.',confirmLabel:'Reset all',destructive:true})){await api('/api/stats',{method:'DELETE'});toast('Statistics reset');await loadStats();}});
 }
-$('#benchmarks').innerHTML=`<div class="section-head"><h3>Benchmarks</h3></div><div class="controls"><select id="benchmarkModel" aria-label="Model to benchmark"></select><select id="benchmarkSet" aria-label="Benchmark set"><option value="bundled">Bundled examples (44 items)</option><option value="custom">Custom path…</option></select><input id="benchmarkPath" type="text" placeholder="/path/to/set.jsonl or a directory of .jsonl" hidden><button type="button" id="runBenchmark">Benchmark</button><button type="button" id="cancelBenchmark" hidden>Cancel</button><span id="benchmarkProgress" class="muted"></span></div><p class="muted">5 warm-up, 30 sequential and 120 concurrent requests (8 at a time); items with a gold answer are scored. Own set: <code>docs/BENCHMARK_SETS.md</code>.</p><div id="benchmarkResults"></div>`;
+const BENCH_HINTS={benchmark:'5 warm-up, 30 sequential and 120 concurrent requests (8 at a time); items with a gold answer are scored. Own set: <code>docs/BENCHMARK_SETS.md</code>.',
+  loadtest:'basal-loadtest against the model: 10 warm-up, sequential requests for the latency, then the concurrent ones for the throughput. Synthetic states of about N tokens replace the set when given.',
+  determinism:'basal-loadtest --determinism: N requests alone, then the same N mixed with N others at the concurrency; a model loaded with Deterministic must return identical probabilities.',
+  modes:'basal-bench in basal-ui’s process: each mode is loaded, measured and freed in turn (the first is the reference of the agreement). Needs the model’s memory once more (twice for eager-fp32) while it runs.'};
+$('#benchmarks').innerHTML=`<div class="section-head"><h3>Benchmarks</h3></div><div class="controls"><select id="benchmarkKind" aria-label="Measurement"><option value="benchmark">Benchmark (preset)</option><option value="loadtest">Load test</option><option value="determinism">Determinism check</option><option value="modes">Compare engine modes</option></select><select id="benchmarkModel" aria-label="Model to benchmark"></select><select id="benchmarkSet" aria-label="Benchmark set"><option value="bundled">Bundled examples (44 items)</option><option value="custom">Custom path…</option></select><input id="benchmarkPath" type="text" placeholder="/path/to/set.jsonl or a directory of .jsonl" hidden><button type="button" id="runBenchmark">Run</button><button type="button" id="cancelBenchmark" hidden>Cancel</button><span id="benchmarkProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Abenchmark">Logs</a></div>
+<div class="bench-params" data-kinds="loadtest determinism"><div class="qf-row"><div class="qf"><label>Synthetic tokens</label><input type="number" id="bpSynthetic" min="50" step="50" placeholder="use the set"></div><div class="qf" data-kinds="loadtest"><label>Sequential</label><input type="number" id="bpNSeq" min="1" value="200"></div><div class="qf" data-kinds="loadtest"><label>Concurrent</label><input type="number" id="bpNConc" min="1" value="1000"></div><div class="qf"><label>Concurrency</label><input type="number" id="bpConcurrency" min="1" value="32"></div><div class="qf" data-kinds="loadtest"><label>Questions per request</label><input type="number" id="bpQpr" min="1" max="5" value="1"></div><div class="qf" data-kinds="loadtest"><label>Seed</label><input type="number" id="bpSeed" min="0" value="0"></div><div class="qf" data-kinds="loadtest"><label>Long share</label><input type="number" id="bpLong" min="0" max="1" step="0.1" value="0"></div><div class="qf" data-kinds="determinism"><label>Requests (N)</label><input type="number" id="bpN" min="1" value="50"></div><div class="qf" data-kinds="loadtest" id="bpEarlyExitField" hidden><label>Early exit</label><select id="bpEarlyExit"></select></div></div></div>
+<div class="bench-params" data-kinds="modes"><div id="bpModes" class="controls"></div><div class="qf-row"><div class="qf"><label>Questions (n)</label><input type="number" id="bpModesN" min="10" value="100"></div><div class="qf"><label>Latency samples</label><input type="number" id="bpLatN" min="5" value="30"></div></div></div>
+<p class="muted" id="benchmarkHint"></p><div id="benchmarkResults"></div>`;
 $('#benchmarkSet').value=localStorage.getItem('basal-ui.benchmarkSet')==='custom'?'custom':'bundled';
 $('#benchmarkPath').value=localStorage.getItem('basal-ui.benchmarkPath')||'';
-$('#benchmarkPath').hidden=$('#benchmarkSet').value!=='custom';
-$('#benchmarkSet').onchange=()=>{localStorage.setItem('basal-ui.benchmarkSet',$('#benchmarkSet').value);$('#benchmarkPath').hidden=$('#benchmarkSet').value!=='custom';};
+$('#benchmarkKind').value=localStorage.getItem('basal-ui.benchmarkKind')||'benchmark';
+$('#benchmarkSet').onchange=()=>{localStorage.setItem('basal-ui.benchmarkSet',$('#benchmarkSet').value);updateBenchmarkForm();};
 $('#benchmarkPath').oninput=()=>localStorage.setItem('basal-ui.benchmarkPath',$('#benchmarkPath').value);
+$('#benchmarkKind').onchange=()=>{localStorage.setItem('basal-ui.benchmarkKind',$('#benchmarkKind').value);benchModelsSignature='';renderBenchmarkState(statusCache?.jobs?.benchmark,readyModels());};
+$('#benchmarkModel').onchange=()=>{updateBenchmarkForm();if($('#benchmarkKind').value==='modes')loadComparisonModes();};
+let benchModelsSignature='', comparisonFor='';
+function updateBenchmarkForm() {
+  const kind=$('#benchmarkKind').value;
+  document.querySelectorAll('#benchmarks [data-kinds]').forEach(x=>x.hidden=!x.dataset.kinds.split(' ').includes(kind));
+  $('#benchmarkSet').hidden=kind==='modes'; $('#benchmarkPath').hidden=kind==='modes'||$('#benchmarkSet').value!=='custom';
+  const levels=modelEntry($('#benchmarkModel').value)?.early_exit||[];
+  $('#bpEarlyExit').innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l||'off'}</option>`).join('');
+  $('#bpEarlyExitField').hidden=kind!=='loadtest'||!levels.length;
+  $('#benchmarkHint').innerHTML=BENCH_HINTS[kind];
+}
+async function loadComparisonModes() {
+  const id=$('#benchmarkModel').value;
+  if(!id||id===comparisonFor)return;
+  comparisonFor=id;
+  try{
+    const d=await api(`/api/modes?id=${encodeURIComponent(id)}`);
+    const preset=new Set(d.modes.filter(m=>!['ollama','llamacpp'].includes(m)).slice(0,2));  // external services: opt in
+    $('#bpModes').innerHTML=d.modes.map(m=>`<label><input type="checkbox" role="switch" data-mode="${esc(m)}"${preset.has(m)?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(m)}</label>`).join('')||'<span class="muted">No mode can run this model here.</span>';
+  }catch(e){comparisonFor='';$('#bpModes').innerHTML=`<span class="reason">${esc(e.message)}</span>`;}
+}
+const intOf=sel=>$(sel).value===''?undefined:Number($(sel).value);
 $('#runBenchmark').onclick=()=>act(async()=>{
-  const set=$('#benchmarkSet').value==='custom'?$('#benchmarkPath').value.trim():'bundled';
-  await api('/api/benchmark',{method:'POST',body:JSON.stringify({id:$('#benchmarkModel').value,set})});
-  toast('Benchmark started'); await refreshStatus();
+  const kind=$('#benchmarkKind').value, body={id:$('#benchmarkModel').value,kind};
+  if(kind!=='modes')body.set=$('#benchmarkSet').value==='custom'?$('#benchmarkPath').value.trim():'bundled';
+  if(kind==='loadtest')body.params={n_seq:intOf('#bpNSeq'),n_conc:intOf('#bpNConc'),concurrency:intOf('#bpConcurrency'),questions_per_request:intOf('#bpQpr'),seed:intOf('#bpSeed'),long_frac:intOf('#bpLong'),synthetic:intOf('#bpSynthetic')??null,early_exit:$('#bpEarlyExit').value||null};
+  if(kind==='determinism')body.params={determinism:intOf('#bpN'),concurrency:intOf('#bpConcurrency'),synthetic:intOf('#bpSynthetic')??null};
+  if(kind==='modes')Object.assign(body,{modes:[...document.querySelectorAll('#bpModes [data-mode]:checked')].map(x=>x.dataset.mode),n:intOf('#bpModesN'),lat_n:intOf('#bpLatN')});
+  if(body.params)body.params=Object.fromEntries(Object.entries(body.params).filter(([,v])=>v!==undefined));
+  await api('/api/benchmark',{method:'POST',body:JSON.stringify(body)});
+  toast(`${$('#benchmarkKind').selectedOptions[0].textContent} started`); await refreshStatus();
 });
 $('#cancelBenchmark').onclick=()=>act(async()=>{await api('/api/benchmark',{method:'DELETE'});await refreshStatus();});
 function renderBenchmarkState(bench, ready) {
-  const select=$('#benchmarkModel'), current=select.value, ids=ready.map(m=>m.id);
-  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids))select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
-  if(ids.includes(current))select.value=current;
+  const kind=$('#benchmarkKind').value, select=$('#benchmarkModel'), current=select.value;
+  const ids=kind==='modes'?modelData.filter(m=>m.downloaded).map(m=>m.id):ready.map(m=>m.id);
+  const signature=JSON.stringify([kind,ids]);
+  if(signature!==benchModelsSignature){
+    benchModelsSignature=signature;
+    select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
+    if(ids.includes(current))select.value=current;
+    updateBenchmarkForm(); if(kind==='modes'){comparisonFor='';loadComparisonModes();}
+  }
   const running=Boolean(bench?.running);
   $('#runBenchmark').disabled=running||!ids.length; $('#cancelBenchmark').hidden=!running;
-  $('#benchmarkProgress').textContent=!bench?(ids.length?'':'Load a model to benchmark it.'):running?`${shortName(bench.model)} · ${bench.phase} ${bench.done}/${bench.total}`:bench.phase==='error'?`Failed: ${bench.error}`:bench.phase==='cancelled'?'Cancelled':'';
+  $('#benchmarkProgress').textContent=!bench?(ids.length?'':kind==='modes'?'Download a model to compare its modes.':'Load a model to benchmark it.'):running?`${shortName(bench.model)} · ${bench.label} · ${bench.phase} ${bench.done}/${bench.total}`:bench.phase==='error'?`Failed: ${bench.error}`:bench.phase==='cancelled'?'Cancelled':'';
   if(benchRunning&&!running)loadStats();
   benchRunning=running;
 }
+function benchmarkRow(x) {
+  const kind=x.kind||'benchmark', head=`<td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(kind)}</span></td><td title="${esc(x.set)}">${esc(x.set==='bundled'?'bundled':shortName(x.set))}${x.items!=null?` (${x.items})`:''}</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td>`;
+  if(kind==='determinism'){const d=x.determinism||{};return `<tr>${head}<td colspan="7"><span class="badge ${d.identical===d.requests?'fit-fits':'fit-tight'}">identical ${esc(d.identical)}/${esc(d.requests)}</span> max |Δp| ${esc(d.max_abs_diff)} · decision flips ${esc(d.decision_flips)} · concurrency ${esc(d.concurrency)}</td></tr>`;}
+  if(kind==='modes'){
+    const f=(v,d=1)=>v==null||Number.isNaN(Number(v))?'—':Number(v).toFixed(d);
+    const rows=(x.modes||[]).map(m=>m.error?`<tr><td>${esc(m.mode)}</td><td colspan="8"><span class="reason wide">${esc(m.error)}</span></td></tr>`:`<tr><td>${esc(m.mode)}</td><td>${f(m.lat1_ms)}</td><td>${f(m.lat2_ms)}</td><td>${f(m.lat2_p95_ms)}</td><td>${f(m.dec_s)}</td><td>${m.agree==null?`ref`:f(m.agree,3)}</td><td>${m.acc==null?'—':pct(m.acc)}</td><td>${f(m.load_s)}</td><td>${f(m.mem_gb,2)}</td></tr>`).join('');
+    return `<tr>${head}<td colspan="7"><details><summary>${(x.modes||[]).map(m=>esc(m.mode)).join(' vs ')}</summary><table class="mini-table"><thead><tr><th>Mode</th><th>lat1 ms</th><th>lat2 ms</th><th>p95 ms</th><th>dec/s</th><th>agree</th><th>acc</th><th>load s</th><th>mem GB</th></tr></thead><tbody>${rows}</tbody></table></details></td></tr>`;
+  }
+  return `<tr>${head}<td>${num(x.p50_ms,0)} ms</td><td>${num(x.p95_ms,0)} ms</td><td>${num(x.decisions_per_s)}</td><td>${num(x.questions_per_s)}</td><td>${num(x.input_tokens_per_s,0)}</td><td title="${esc(Object.entries(x.accuracy?.by_file||{}).map(([f,v])=>`${f}: ${pct(v)}`).join(', '))}">${pct(x.accuracy?.overall)}</td><td>${esc(x.errors??'—')}</td></tr>`;
+}
 function renderBenchmarkResults() {
   const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
-  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(x=>`<tr><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td title="${esc(x.set)}">${esc(x.set==='bundled'?'bundled':shortName(x.set))} (${x.items})</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td><td>${num(x.p50_ms,0)} ms</td><td>${num(x.p95_ms,0)} ms</td><td>${num(x.decisions_per_s)}</td><td>${num(x.questions_per_s)}</td><td>${num(x.input_tokens_per_s,0)}</td><td title="${esc(Object.entries(x.accuracy?.by_file||{}).map(([f,v])=>`${f}: ${pct(v)}`).join(', '))}">${pct(x.accuracy?.overall)}</td><td>${x.errors}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
+  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Kind</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
 }
 // Calibration: basal-calibrate on the user's labelled requests against a temporary uncalibrated child of the model
 $('#calibrationBlock').innerHTML=`<div class="section-head"><h3>Calibration</h3></div><div class="controls"><select id="calibrationModel" aria-label="Model to calibrate"></select><input id="calibrationInput" type="text" placeholder="/path/to/labelled.jsonl" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">Calibrate</button><button type="button" id="cancelCalibration" hidden>Cancel</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">Logs</a></div><p class="muted">Fits temperatures and certified thresholds on your labelled requests (format: <code>docs/CALIBRATION.md#input</code>; the simple <code>basal-run</code> items with <code>gold</code> work too) against a temporary uncalibrated copy of the model, which needs its memory once more while it runs. Task questions need the engine in process: use <code>basal-calibrate</code> for them. The selected file applies from the model's next start.</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>Calibration report</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">Close</button></div></dialog>`;
@@ -1091,6 +1172,7 @@ const OPTION_SECTIONS=[
   ['Caching',['state_cache_gb','prefix_cache']],
   ['Scheduling',['scheduler','long_lane','long_tokens','long_share','long_slice_ms']],
   ['Context',['context_overflow','truncate_head','max_len']],
+  ['Experimental',['think','think_tokens','think_python','think_url','early_exit']],
 ];
 const OPTION_FIELDS={
   quant:{label:'Quantisation',kind:'select',values:[[null,'as the mode'],['fp8','fp8'],['nvfp4','nvfp4'],['q8','q8 (mlx)']],modes:[...GRAPH_MODES,'mlx','mlx-q8']},
@@ -1121,6 +1203,11 @@ const OPTION_FIELDS={
   context_overflow:{label:'Prompt over the context',kind:'select',values:[['truncate','truncate the state'],['refuse','refuse (422)']]},
   truncate_head:{label:'Kept from the beginning',kind:'percent'},
   max_len:{label:'Max length (vLLM / SGLang)',kind:'num',attrs:'min="512" max="131072" step="512"',placeholder:'API server setting'},
+  think:{label:'Thinking (reason before low-margin decisions)',kind:'bool'},
+  think_tokens:{label:'Reasoning tokens',kind:'num',attrs:'min="1" step="32"',think:true},
+  think_python:{label:'Python with vLLM',kind:'text',placeholder:'basal-ui’s Python',think:true},
+  think_url:{label:'Running think server URL',kind:'text',placeholder:'start one',think:true},
+  early_exit:{label:'Early exit (default policy)',kind:'select',values:['off','0.999','0.995','0.99','0.98']},
 };
 const optionsButton=(id,media=false,restart=false)=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-restart="${restart}" title="${restart?'Restart with other load options':'Load with options'}">⚙${restart?'':' Options'}</button>`;
 document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>Load options</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> Remember for this model</label><button type="button" id="optionsReset">Reset to defaults</button><button type="button" id="optionsCancel">Cancel</button><button type="button" id="optionsApply" class="primary">Load</button></div></dialog>`);
@@ -1139,15 +1226,26 @@ function optionInput(key, value) {
 function renderOptionsForm(values) {
   const d=optionsState.data, defaultMode=d.modes.find(m=>m.default)?.mode, mode=values.mode||defaultMode;
   const modes=`<div class="option-modes">${d.modes.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available&&!optionsState.media?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media the model is served with --mode eager.</p>':''}`;
-  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div></fieldset>`).join('');
+  const experimental='<p class="muted option-note" id="optExperimentalNote"></p>';
+  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:''}</fieldset>`).join('');
   $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});
   $('#optionsForm').onchange=()=>updateOptionVisibility();
   updateOptionVisibility();
 }
 function selectedOptionMode() { return optionsState.media?'eager':$('#optionsForm input[name=optMode]:checked')?.value||optionsState.data.modes.find(m=>m.default)?.mode; }
 function updateOptionVisibility() {
-  const mode=selectedOptionMode();
+  const mode=selectedOptionMode(), think=optionsState.data.think||{};
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
+  // thinking: basal-2.0 4.5B with vLLM (here, in another environment, or a running server); early exit: fast-exit
+  const thinkBox=$('#opt-think'), exitBox=$('#opt-early_exit');
+  thinkBox.disabled=!think.model; if(!think.model)setChecked(thinkBox,false);
+  Object.entries(OPTION_FIELDS).filter(([,f])=>f.think).forEach(([k])=>{$(`[data-opt="${k}"]`).hidden=!thinkBox.checked;});
+  exitBox.disabled=mode!=='fast-exit'; if(exitBox.disabled)exitBox.value='off';
+  const notes=[];
+  if(!think.model)notes.push(think.reason);
+  else if(!think.vllm)notes.push('vLLM is not installed in basal-ui’s environment: give the Python of one that has it, or the URL of a running think server.');
+  if(mode!=='fast-exit')notes.push('Early exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on a CUDA GPU).');
+  $('#optExperimentalNote').textContent=notes.join(' ');
 }
 function collectOptions() {
   const d=optionsState.data, out={}, defaultMode=d.modes.find(m=>m.default)?.mode, mode=selectedOptionMode();
@@ -1155,7 +1253,7 @@ function collectOptions() {
   for(const [key,f] of Object.entries(OPTION_FIELDS)) {
     if(f.kind==='band'){const lo=$(`#opt-${key}-lo`)?.value, hi=$(`#opt-${key}-hi`)?.value;out[key]=!lo||!hi?d.defaults[key]:[Number(lo),Number(hi)];continue;}
     const el=$(`#opt-${key}`);
-    if(!el||el.closest('[hidden]'))continue;  // a field of another mode keeps its default
+    if(!el||el.closest('[hidden]')||el.disabled)continue;  // a field of another mode, or unavailable, keeps its default
     if(f.kind==='bool')out[key]=el.checked;
     else if(f.kind==='percent')out[key]=Number(el.value)===Math.round(d.defaults[key]*100)?d.defaults[key]:Number(el.value)/100;
     else if(f.kind==='num')out[key]=el.value===''?d.defaults[key]:Number(el.value);
@@ -1286,7 +1384,94 @@ $('#downloadLogs').onclick=()=>{
   const a=document.createElement('a'), url=URL.createObjectURL(new Blob([$('#logOutput').textContent],{type:'text/plain'}));
   a.href=url; a.download=`${shortName(logSource)}-${new Date().toISOString().slice(0,10)}.log`; a.click(); URL.revokeObjectURL(url);
 };
-const PAGES={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.']};
+// Batch: basal-run over a JSONL file against a loaded model (basal/ui/batch.py)
+function answerBest(a) {
+  if(!a||typeof a!=='object')return null;
+  for(const key of ['choice','action','tool','label','score'])if(a[key]!=null)return String(typeof a[key]==='number'?Number(a[key]).toFixed(2):a[key]);
+  for(const key of ['selected','labels','tools'])if(Array.isArray(a[key]))return a[key].join(', ')||'none';
+  if(typeof a.noul==='number')return a.noul>=0.5?'true':'false';
+  return a.type||null;
+}
+let batchRowsLoaded=0, batchRunning=false, batchResult=null;
+$('#batchInput').value=localStorage.getItem('basal-ui.batchInput')||'';
+$('#batchInput').oninput=()=>localStorage.setItem('basal-ui.batchInput',$('#batchInput').value);
+function renderBatchState(job, ready) {
+  const select=$('#batchModel'), current=select.value, ids=ready.map(m=>m.id);
+  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids))select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('')||'<option value="">Load a model first</option>';
+  if(ids.includes(current))select.value=current; else if(ids.includes(selectedModel))select.value=selectedModel;
+  const levels=modelEntry(select.value)?.early_exit||[], ee=$('#batchEarlyExit');
+  if(JSON.stringify([...ee.options].map(o=>o.value))!==JSON.stringify(['',...levels]))ee.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?`early exit ${esc(l)}`:'no early exit'}</option>`).join('');
+  ee.hidden=!levels.length;
+  const running=Boolean(job?.running);
+  $('#runBatch').disabled=running||!ids.length; $('#cancelBatch').hidden=!running;
+  $('#batchProgress').innerHTML=!job?'':running?`<div class="progress-wrap"><div class="progress"><span style="width:${job.total?job.done/job.total*100:0}%"></span></div><small>${job.done} / ${job.total}</small></div>`:job.phase==='error'?`<div class="error-box">${esc(job.error)}</div>`:job.phase==='cancelled'?'<p class="muted">Cancelled.</p>':'';
+  if(!running&&job?.phase==='done'&&(batchRunning||!batchResult))showBatchResult(job.result);
+  batchRunning=running;
+}
+function showBatchResult(r) {
+  batchResult=r;
+  $('#batchSummary').innerHTML=`<div class="chips"><span class="chip">${esc(r.items)} items</span><span class="chip">${esc(r.errors)} errors</span><span class="chip">${esc(r.seconds)} s</span><span class="chip">${esc(r.items_per_s)} items/s</span><span class="chip">server p50 ${esc(r.server_latency_p50_ms??'—')} ms</span>${r.accuracy!=null?`<span class="chip">accuracy ${pct(r.accuracy)}</span>`:''}</div><p class="muted mono">${esc(r.output)}</p>`;
+  $('#downloadBatch').hidden=$('#copyBatchPath').hidden=false;
+  batchRowsLoaded=0; $('#batchRows').innerHTML=''; loadBatchRows();
+}
+async function loadBatchRows() {
+  const d=await api(`/api/batch/rows?offset=${batchRowsLoaded}&limit=100`);
+  const rows=d.rows.map(x=>`<tr><td>${esc(x.id)}</td><td>${x.option!=null?`<span class="chip">${esc(x.prediction)}: ${esc(x.option)} (${pct(x.confidence)})</span>`:Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(answerBest(a)??'—')}${a?.confidence!=null?` (${pct(a.confidence)})`:''}</span>`).join(' ')}${x.correct===true?' <span class="badge fit-fits">correct</span>':x.correct===false?' <span class="badge fit-too_large">wrong</span>':''}</td><td>${num(x.latency_ms,1)} ms</td><td>${x.error?`<span class="reason">${esc(textOf(x.error))}</span>`:''}</td></tr>`).join('');
+  if(!batchRowsLoaded)$('#batchRows').innerHTML=`<table><thead><tr><th>Id</th><th>Answer</th><th>Latency</th><th>Error</th></tr></thead><tbody></tbody></table>`;
+  $('#batchRows tbody').insertAdjacentHTML('beforeend',rows);
+  batchRowsLoaded+=d.rows.length; $('#batchMore').hidden=batchRowsLoaded>=d.total;
+}
+$('#batchMore').onclick=()=>act(loadBatchRows);
+$('#runBatch').onclick=()=>act(async()=>{
+  const body={id:$('#batchModel').value,input:$('#batchInput').value.trim(),concurrency:Number($('#batchConcurrency').value)||16};
+  if($('#batchOutput').value.trim())body.output=$('#batchOutput').value.trim();
+  if(!$('#batchEarlyExit').hidden&&$('#batchEarlyExit').value)body.early_exit=$('#batchEarlyExit').value;
+  await api('/api/batch',{method:'POST',body:JSON.stringify(body)});
+  $('#batchSummary').innerHTML=''; $('#batchRows').innerHTML=''; $('#batchMore').hidden=$('#downloadBatch').hidden=$('#copyBatchPath').hidden=true;
+  toast('Batch started'); await refreshStatus();
+});
+$('#cancelBatch').onclick=()=>act(async()=>{await api('/api/batch',{method:'DELETE'});await refreshStatus();});
+$('#downloadBatch').onclick=()=>{const a=document.createElement('a');a.href='/api/batch/download';a.click();};
+$('#copyBatchPath').onclick=()=>copyText(batchResult?.output||'','Output path copied');
+// Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal/ui/inspect.py)
+const inspectableModel=m=>m.port==='bf16'&&!m.experimental;
+let inspectSignature='', inspectReady=false;
+function renderInspectModels() {
+  const select=$('#inspectModel'), current=select.value||localStorage.getItem('basal-ui.inspectModel')||'', rows=modelData.filter(m=>m.downloaded);
+  const signature=JSON.stringify(rows.map(m=>m.id));
+  if(signature===inspectSignature)return;
+  inspectSignature=signature;
+  select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}"${inspectableModel(m)?'':' disabled'}>${esc(m.id)}${inspectableModel(m)?'':' — basal-viz reads bf16 weights'}</option>`).join('')||'<option value="">Download a bf16 model first</option>';
+  const ok=rows.filter(inspectableModel).map(m=>m.id);
+  select.value=ok.includes(current)?current:ok[0]||'';
+  loadInspectCalibrations();
+}
+async function loadInspectCalibrations() {
+  const id=$('#inspectModel').value, sel=$('#inspectCalibration');
+  sel.innerHTML='<option value="">shipped calibration</option>';
+  if(!id)return;
+  try{const d=await api(`/api/calibrations?id=${encodeURIComponent(id)}`);sel.insertAdjacentHTML('beforeend',d.files.map(f=>`<option value="${esc(f.file)}"${f.file===d.selected?' selected':''}>${esc(new Date(f.when*1000).toLocaleString())} · ${esc(f.fitted_on?.decisions??'?')} decisions</option>`).join(''));}catch{}
+}
+$('#inspectModel').onchange=()=>{localStorage.setItem('basal-ui.inspectModel',$('#inspectModel').value);loadInspectCalibrations();};
+$('#startInspect').onclick=()=>act(async()=>{await api('/api/inspect',{method:'POST',body:JSON.stringify({id:$('#inspectModel').value,calibration:$('#inspectCalibration').value||null})});toast('Inspector loading');await refreshStatus();});
+$('#stopInspect').onclick=()=>act(async()=>{await api('/api/inspect',{method:'DELETE'});await refreshStatus();});
+function renderInspectState(state, job) {
+  const loading=Boolean(job?.running), ready=state?.state==='ready', frame=$('#vizFrame');
+  $('#inspectState').textContent=loading?`loading ${shortName(job.model)}…`:ready?`ready: ${state.model}`:job?.phase==='error'?`Failed: ${job.error}`:'idle';
+  $('#stopInspect').hidden=!(ready||loading); $('#startInspect').disabled=loading||!$('#inspectModel').value;
+  if(ready&&!inspectReady){frame.dataset.loaded='';frame.onload=()=>{frame.dataset.loaded='1';};frame.src='/viz/';}
+  if(!ready&&inspectReady)frame.src='about:blank';
+  frame.hidden=!ready; inspectReady=ready;
+}
+function inspectDecision(request) {
+  if(statusCache?.inspect?.state!=='ready'){toast(`Start the inspector for ${request.model||'a model'} first`,'error');showView('inspect',true);return;}
+  const body={...request};
+  for(const key of ['model','facts','think','think_text','early_exit'])delete body[key];
+  showView('inspect',true);
+  const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:body},location.origin);
+  if(frame.dataset.loaded==='1')send(); else frame.addEventListener('load',send,{once:true});
+}
+const PAGES={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
 function showView(hash, updateHash=false) {
   const raw=String(hash||'').replace(/^#/,''), slash=raw.indexOf('/');
   const view=slash<0?raw:raw.slice(0,slash), arg=slash<0?'':raw.slice(slash+1), name=PAGES[view]?view:'overview';

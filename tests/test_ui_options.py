@@ -71,6 +71,22 @@ def test_available_modes_follow_the_hardware_and_the_variant():
     assert [m["mode"] for m in options.available_modes(BF16, CUDA, catalog.assess(BF16, CUDA)) if m["default"]] == ["fast"]
 
 
+def test_thinking_needs_basal_2_0_4_5b_with_vllm_and_early_exit_needs_fast_exit():
+    big = Variant("big", "Remek/basal-2.0-4.5B", "basal-2.0", "4.5B", "bf16", "bf16", None, 100, False)
+    assert options.args({"think": True, "think_tokens": 512, "early_exit": "0.99", "mode": "fast-exit"}) == [
+        "--think", "auto", "--think-tokens", "512", "--early-exit", "0.99"]
+    merged = options.validate({"think": True})
+    assert options.think_unavailable(BF16, CUDA) == options.THINK_REASON  # the mini has no thinking model
+    assert options.think_unavailable(big, CUDA) is None
+    assert "Python of an environment with vLLM" in options.think_unavailable(big, CPU)
+    assert options.think_unavailable(big, CPU, {"think_url": "http://gpu:8100"}) is None
+    with pytest.raises(ValueError, match="basal-2.0 4.5B"):
+        options.check_combination(BF16, CUDA, merged, "fast")
+    with pytest.raises(ValueError, match="early_exit needs --mode fast-exit"):
+        options.check_combination(big, CUDA, options.validate({"early_exit": "0.99"}), "fast")
+    options.check_combination(big, CUDA, options.validate({"early_exit": "0.99", "mode": "fast-exit"}), "fast")
+
+
 def test_load_options_reach_the_command_are_remembered_and_reused_by_restart(tmp_path, monkeypatch):
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
                   hardware_fn=lambda: CPU, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))

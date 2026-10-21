@@ -159,6 +159,31 @@ def available_modes(v, hw, assessment) -> list[dict]:
         "tpu": None if "tpu" in hw.engines else "needs a TPU VM with basal[tpu]",
         "ollama": None, "llamacpp": None,  # external services: their URL fields are required then
     }
-    reasons["mlx-q8"] = reasons["mlx"]
+    reasons["mlx-q8"] = reasons["mlx"] or (None if v.port in ("bf16", "MLX") else
+                                           f"{v.port} weights are quantised already (mlx-q8 quantises at load)")
     return [{"mode": m, "available": reasons[m] is None, "reason": reasons[m], "default": m == assessment.mode}
             for m in MODE_ORDER]
+
+
+THINK_REASON = "thinking is available for basal-2.0 4.5B with basal[vllm] (docs/THINKING.md)"
+
+
+def think_unavailable(v, hw, options=None) -> str | None:
+    """Why `think` cannot be turned on for the variant here (None: it can). The reasoning model runs on vLLM: in
+    basal-ui's environment, or another one named by think_python, or an already running server at think_url."""
+    if v.family != "basal-2.0" or v.tier != "4.5B":
+        return THINK_REASON
+    options = options or {}
+    if "vllm" not in hw.engines and not (options.get("think_python") or options.get("think_url")):
+        return THINK_REASON + "; or give the Python of an environment with vLLM, or a running think server's URL"
+    return None
+
+
+def check_combination(v, hw, options, default_mode):
+    """ValueError for the experimental options this variant or machine cannot use (merged options)."""
+    if options["think"]:
+        reason = think_unavailable(v, hw, options)
+        if reason:
+            raise ValueError(reason)
+    if options["early_exit"] != "off" and (options["mode"] or default_mode) != "fast-exit":
+        raise ValueError("early_exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on CUDA)")

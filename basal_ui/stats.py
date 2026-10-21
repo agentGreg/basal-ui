@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 SAMPLES = 1000  # latencies kept per model for the percentiles
-BENCHMARKS = 5  # results kept per model
+BENCHMARKS = 20  # results kept per model (benchmarks, load tests, determinism checks, mode comparisons)
 FLUSH_S = 5
 
 
