@@ -147,13 +147,21 @@ class Stats:
         self._update_file(change)
 
     def snapshot(self) -> dict:
+        from . import settings
+
+        def read():
+            data = _read(self.path)
+            with self.lock:
+                self.data = data
+                merged = json.loads(json.dumps(data))
+                for model_id, entry in self.delta.items():
+                    _merge(merged["models"].setdefault(model_id, _empty()), entry)
+            return merged
+
+        merged = settings._locked(read)()
         def avg(total, n):
             return total / n if n else None
 
-        with self.lock:
-            merged = json.loads(json.dumps(self.data))
-            for model_id, entry in self.delta.items():
-                _merge(merged["models"].setdefault(model_id, _empty()), entry)
         models = {}
         for model_id, e in merged["models"].items():
             models[model_id] = {
@@ -168,18 +176,30 @@ class Stats:
         return {"models": models, "benchmarks": merged["benchmarks"]}
 
     def reset(self, model_id: str | None = None) -> None:
-        with self.lock:
-            if model_id is None:
-                self.delta.clear()
-            else:
-                self.delta.pop(model_id, None)
+        from . import settings
 
-        def change(data):
-            if model_id is None:
-                data["models"].clear()
-            else:
-                data["models"].pop(model_id, None)
-        self._update_file(change)
+        def go():
+            with self.lock:
+                previous = self.delta if model_id is None else {
+                    model_id: self.delta.pop(model_id)} if model_id in self.delta else {}
+                if model_id is None:
+                    self.delta = {}
+                try:
+                    data = _read(self.path)
+                    if model_id is None:
+                        data["models"].clear()
+                    else:
+                        data["models"].pop(model_id, None)
+                    settings._write_private(self.path, json.dumps(data))
+                except BaseException:
+                    for key, entry in previous.items():
+                        _merge(self.delta.setdefault(key, _empty()), entry)
+                    raise
+                self.data = data
+
+        with self.write_lock:
+            settings._locked(go)()
+
 
     def flush(self) -> None:
         with self.lock:

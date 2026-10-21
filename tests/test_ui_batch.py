@@ -64,6 +64,25 @@ def test_batch_answers_every_line_and_serves_the_rows_and_the_file(client, tmp_p
     assert client.get("/api/stats").json()["models"] == {}  # not counted in the statistics
 
 
+def test_batch_refuses_output_that_resolves_to_input(client, tmp_path):
+    source = tmp_path / "same.jsonl"
+    source.write_text('{"state":"s","question":"q","options":["a","b"]}\n')
+    response = client.post("/api/batch", json={"id": "mini", "input": str(source), "output": str(source)})
+    assert response.status_code == 400 and "must not be the input file" in response.json()["detail"]
+
+
+def test_full_requests_keep_all_fields_and_overlay_only_early_exit():
+    request = {"id": "request-1", "state": "s", "questions": {}, "facts": "auto", "lang": "pl",
+               "think": "force", "think_text": True, "max_options": 12, "early_exit": "0.995"}
+    assert run.to_request(request) == request
+    assert run.to_request(request, "0.99") == {**request, "early_exit": "0.99"}
+    simple = {"id": "simple", "state": "s", "question": "q", "options": ["a", "b"]}
+    assert run.to_request(simple) == {
+        "state": "s", "questions": {"q": {"type": "choice", "instructions": "q",
+                                             "criteria": {"0": "a", "1": "b"}, "option_keys": "hide"}}}
+    assert run.to_request(simple, "") == run.to_request(simple)
+
+
 @pytest.mark.parametrize("body, status, message", [
     ({"id": "mini", "input": "/nonexistent/x.jsonl"}, 400, "cannot read"),
     ({"id": "mini", "input": "BAD"}, 400, "line 1"),

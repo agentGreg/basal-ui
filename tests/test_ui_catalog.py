@@ -1,7 +1,18 @@
 import math
 from pathlib import Path
 
-from basal.ui.catalog import Variant, _label, _media_mode, _variants, assess, delete, download_kwargs, parse_repo, serve_args, suggest
+from basal.ui.catalog import (
+    Variant,
+    _label,
+    _media_mode,
+    _variants,
+    assess,
+    delete,
+    download_kwargs,
+    parse_repo,
+    serve_args,
+    suggest,
+)
 from basal.ui.hardware import Hardware
 
 
@@ -152,6 +163,17 @@ def test_serving_mode_per_family_and_port():
     assert not older_fp8.runnable and "basal[vllm]" in older_fp8.reason
     assert assess(variant("Remek/basal-1.5-4.5B-FP8", "FP8"), hw(engines=frozenset({"cuda", "vllm"}))).mode == "vllm"
     assert "--device" not in serve_args(variant("Remek/basal-omni-1.0-max", "bf16"), Path("/m"), "eager")
+
+
+def test_eager_cpu_device_flag_is_only_set_for_cpu_platform():
+    v = variant("Remek/basal-2.0-mini")
+    assert "--device" not in serve_args(v, Path("/m"), "eager")
+    assert serve_args(v, Path("/m"), "eager", platform="cpu")[-2:] == ["--device", "cpu"]
+
+
+def test_tpu_is_default_for_bf16_text_models_when_available():
+    tpu = hw("cpu", "TPU VM", None, frozenset({"tpu"}))
+    assert assess(variant("Remek/basal-2.0-mini"), tpu).mode == "tpu"
 
 
 def test_cpu_with_llama_cpp_prefers_gguf_q8():

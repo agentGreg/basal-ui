@@ -22,6 +22,9 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
     from basal.auth import protect, request_ids
     from basal.compat import openai_error
 
+    from .app import host_middleware
+
+    allowed_hosts = ["*"] if host in ("0.0.0.0", "::") else {host, "127.0.0.1", "localhost", "::1"}
     client: dict = {}
 
     def error(path, status, message, code):
@@ -109,7 +112,7 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
         *[Route(p, forward, methods=["POST"]) for p in SYSTEMONE + DECISIONS],
         Route("/v1/models", models), Route("/health", health), Route("/v1/stats", stats_route), *mcp_routes,
     ], lifespan=lifespan)
-    return request_ids(protect(app, keys, cors_origins))
+    return request_ids(protect(host_middleware(app, allowed_hosts), keys, cors_origins))
 
 
 class Gateway:

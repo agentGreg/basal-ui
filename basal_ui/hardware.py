@@ -1,12 +1,12 @@
 """Local hardware detection for the UI."""
-from dataclasses import asdict, dataclass, replace
-from functools import lru_cache
 import importlib.util
 import os
 import platform as host_platform
 import re
 import subprocess
 import sys
+from dataclasses import asdict, dataclass, replace
+from functools import lru_cache
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ def _available_bytes() -> int | None:
             with open("/proc/meminfo") as meminfo:
                 available = re.search(r"^MemAvailable:\s+(\d+) kB$", meminfo.read(), re.MULTILINE)
             return int(available.group(1)) * 1024
-    except Exception:
+    except Exception:  # noqa: BLE001 — hardware probing is best-effort
         return None
     return None
 
@@ -98,7 +98,7 @@ def _static() -> Hardware:
             info = mx.device_info()
             name = info.get("device_name", "Apple Silicon")
             budget = int(info.get("max_recommended_working_set_size", 0))
-        except Exception:
+        except Exception:  # noqa: BLE001 — MLX device details may be unavailable
             name, budget = "Apple Silicon", 0
         if importlib.util.find_spec("mlx") and importlib.util.find_spec("mlx_lm"):
             engines.add("mlx")
@@ -119,5 +119,24 @@ def detect() -> Hardware:
     try:
         import torch
         return replace(static, available_bytes=int(torch.cuda.mem_get_info(0)[0]))
-    except Exception:
+    except Exception:  # noqa: BLE001 — memory probing may fail on a disappearing device
         return static
+
+
+def free_engine_memory() -> None:
+    """Release cached allocations held by the supported model engines."""
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+    except ImportError:
+        pass
+    try:
+        import mlx.core as mx
+        mx.clear_cache()
+    except ImportError:
+        pass

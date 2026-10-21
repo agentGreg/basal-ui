@@ -48,7 +48,7 @@ def fleet(tmp_path, monkeypatch):
 
 
 def test_model_is_required_and_must_be_loaded_in_both_error_envelopes(fleet):
-    with TestClient(build_app(fleet, fleet.stats)) as client:
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
         missing = client.post("/v1/systemone", json={"state": "x", "questions": {}})
         assert missing.status_code == 400
         assert missing.json() == {"error": "model is required; loaded models: a/one, b/two", "code": "MODEL_REQUIRED"}
@@ -61,8 +61,15 @@ def test_model_is_required_and_must_be_loaded_in_both_error_envelopes(fleet):
     assert fleet.calls == []
 
 
+def test_gateway_rejects_untrusted_host_on_forwarding_routes(fleet):
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        response = client.post("/v1/systemone", json={"model": "a/one"},
+                               headers={"Host": "evil.example"})
+    assert response.status_code in (400, 403)
+
+
 def test_forwarding_counts_and_records_api_decisions(fleet):
-    with TestClient(build_app(fleet, fleet.stats)) as client:
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
         ok = client.post("/v1/systemone", json={"model": "b/two", "state": "s", "questions": {}},
                          headers={"x-request-id": "client-1"})
         assert ok.status_code == 200 and ok.json()["model"] == "b/two"
@@ -83,7 +90,7 @@ def test_forwarding_counts_and_records_api_decisions(fleet):
 
 def test_models_list_in_basal_and_openai_shapes(fleet):
     fleet.runners["b/two"].state = "starting"
-    with TestClient(build_app(fleet, fleet.stats)) as client:
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
         listing = client.get("/v1/models").json()
         assert listing == {"object": "list", "models": [{"name": "a/one", "media": []}],
                            "data": [{"id": "a/one", "object": "model", "created": 1700000000, "owned_by": "basal"}]}
@@ -97,7 +104,7 @@ def test_keys_guard_every_route_and_stats_need_the_admin_key(fleet, tmp_path):
         {"name": "basal-ui", "sha256": hashlib.sha256(b"admin-secret").hexdigest(), "admin": True}]}))
     fleet.stats.record("a/one", {"answers": {}}, 1.0)
     app = build_app(fleet, fleet.stats, ApiKeys(keys_file), cors_origins=["https://app.example"])
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/v1/systemone", json={"model": "a/one"}).status_code == 401
         assert client.get("/health").status_code == 200
         user = {"Authorization": "Bearer user-secret"}

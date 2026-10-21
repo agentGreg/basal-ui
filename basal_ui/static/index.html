@@ -36,6 +36,7 @@
 .options-dialog{width:min(980px,calc(100vw - 32px));max-height:92vh}.option-section{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}.option-section legend{font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 4px}.option-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-bottom:8px}.option-mode{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;border:1px solid var(--line);border-radius:5px;padding:6px 8px}.option-mode small{flex-basis:100%;font-size:11px;color:var(--muted);line-height:1.3}.option-mode.unavailable{opacity:.55}.option-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px;align-items:end}.opt-field>label{display:block;font-size:12px;font-weight:650;margin-bottom:4px}.opt-field input[type=number],.opt-field input[type=text],.opt-field select{width:100%}.opt-field .controls input{width:80px}button.options-model{margin-left:6px}.dialog-actions label{margin-right:auto;font-size:13px}
 #vizFrame{display:block;width:100%;height:calc(100vh - 220px);min-height:600px;border:1px solid var(--line);border-radius:6px;margin-top:10px;background:var(--white)}
 .think-block{font-size:13px;margin:6px 0;padding:8px 10px;border-left:3px solid var(--omni);background:var(--omni-light);border-radius:4px}.option-note{font-size:12px;margin-top:8px}
+.inspect-notice{font-size:13px;border-radius:5px;padding:9px 12px;margin-top:10px}.inspect-notice ul{margin:4px 0 0;padding-left:18px}.inspect-notice.differs{background:var(--amber-light);border:1px solid #f2a476}.inspect-notice.same{background:var(--green-light);border:1px solid #d4e0d2}
 </style>
 </head>
 <body><div class="app-shell">
@@ -57,8 +58,8 @@
 <section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div><div id="calibrationBlock"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
 <section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
 <section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label title="Append the dates, amounts and other facts basal extracts from the state (facts: auto)"><input id="factsToggle" type="checkbox"> Facts</label><select id="langSelect" aria-label="Language" title="Prompt language (lang)"><option value="auto">Language: auto</option><option value="pl">Polish (pl)</option><option value="en">English (en)</option></select><select id="thinkSelect" aria-label="Thinking" title="think: reason before low-margin decisions (a model loaded with Thinking)" hidden><option value="">Think: auto</option><option value="off">Think: off</option><option value="force">Think: force</option></select><label id="thinkTextLabel" title="think_text: return the reasoning" hidden><input id="thinkTextToggle" type="checkbox"> Show reasoning</label><select id="earlyExitSelect" aria-label="Early exit" title="early_exit: the agreement level of the exit heads (--mode fast-exit)" hidden></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
-<section class="view" id="batch" data-page="batch"><section class="card"><div class="controls"><select id="batchModel" aria-label="Model"></select><input id="batchInput" type="text" placeholder="/path/to/requests.jsonl" size="34" aria-label="Input JSONL"><input id="batchOutput" type="text" placeholder="output: <input>.answers.jsonl" size="34" aria-label="Output JSONL"><label>Concurrency <input id="batchConcurrency" type="number" min="1" max="256" value="16"></label><select id="batchEarlyExit" aria-label="Early exit" hidden></select><button id="runBatch" class="primary" type="button">Run</button><button id="cancelBatch" type="button" hidden>Cancel</button></div><p class="muted">One simple item (<code>{"state", "question", "options", "gold"?}</code>) or one <code>/v1/systemone</code> request per line; one answer per line in the same order (format: <code>docs/SERVING.md#inference-on-a-jsonl-file</code>). Batch requests go straight to the model: they are not counted in the statistics or the history.</p><div id="batchProgress"></div><div id="batchSummary"></div><div class="controls"><button id="downloadBatch" type="button" hidden>Download answers</button><button id="copyBatchPath" type="button" hidden>Copy output path</button></div><div id="batchRows" class="table-wrap"></div><button id="batchMore" type="button" hidden>Load more</button></section></section>
-<section class="view" id="inspect" data-page="inspect"><section class="card"><div class="controls"><select id="inspectModel" aria-label="Model to inspect"></select><select id="inspectCalibration" aria-label="Calibration"><option value="">shipped calibration</option></select><button id="startInspect" class="primary" type="button">Start</button><button id="stopInspect" type="button" hidden>Stop</button><span id="inspectState" class="muted"></span><a class="dashboard-link" href="#logs/job%3Ainspect">Logs</a></div><p class="muted">basal-viz loads the bf16 PyTorch weights of basal-1.0, basal-1.5 or basal-2.0 into basal-ui’s process (counted in the memory budget) and shows the prompt of every option order, its tokens, the decision after every layer and the calibration. <strong>Inspect this decision</strong> in the Playground sends the request here.</p><iframe id="vizFrame" title="basal-viz" hidden></iframe></section></section>
+<section class="view" id="batch" data-page="batch"><section class="card"><div class="controls"><select id="batchModel" aria-label="Model"></select><input id="batchInput" type="text" placeholder="/path/to/requests.jsonl" size="34" aria-label="Input JSONL"><input id="batchOutput" type="text" placeholder="output: <stem>.answers.jsonl next to the input" size="34" aria-label="Output JSONL"><label>Concurrency <input id="batchConcurrency" type="number" min="1" max="256" value="16"></label><select id="batchEarlyExit" aria-label="Early exit" hidden></select><button id="runBatch" class="primary" type="button">Run</button><button id="cancelBatch" type="button" hidden>Cancel</button></div><p class="muted">One simple item (<code>{"state", "question", "options", "gold"?}</code>) or one <code>/v1/systemone</code> request per line; one answer per line in the same order (format: <code>docs/SERVING.md#inference-on-a-jsonl-file</code>). Batch requests go straight to the model: they are not counted in the statistics or the history.</p><div id="batchProgress"></div><div id="batchSummary"></div><div class="controls"><button id="downloadBatch" type="button" hidden>Download answers</button><button id="copyBatchPath" type="button" hidden>Copy output path</button></div><div id="batchRows" class="table-wrap"></div><button id="batchMore" type="button" hidden>Load more</button></section></section>
+<section class="view" id="inspect" data-page="inspect"><section class="card"><div class="controls"><select id="inspectModel" aria-label="Model to inspect"></select><select id="inspectCalibration" aria-label="Calibration"><option value="">shipped calibration</option></select><select id="inspectOrders" aria-label="Option orders" title="option orders per question (basal-serve --orders)"><option value="">the model’s option orders</option><option value="1">1 option order</option><option value="2">2 option orders</option></select><button id="startInspect" class="primary" type="button">Start</button><button id="stopInspect" type="button" hidden>Stop</button><span id="inspectState" class="muted"></span><a class="dashboard-link" href="#logs/job%3Ainspect">Logs</a></div><p class="muted">basal-viz loads the bf16 PyTorch weights of basal-1.0, basal-1.5 or basal-2.0 into basal-ui’s process (counted in the memory budget) and shows the prompt of every option order, its tokens, the decision after every layer and the calibration. <strong>Inspect this decision</strong> in the Playground sends the request here and lists what differs from the served decision.</p><div id="inspectNotice" hidden></div><iframe id="vizFrame" title="basal-viz" hidden></iframe></section></section>
 <section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the models when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
 <section class="view" data-page="api"><section class="card"><h3>Memory</h3><div class="serve-fields"><div class="field"><label for="memoryBudget">Budget (GiB; empty uses the hardware budget)</label><input id="memoryBudget" type="number" min="1" step="0.1"></div><div class="field"><label for="memoryReserve">Keep free (GiB)</label><input id="memoryReserve" type="number" min="0" step="0.1" value="2"></div></div><button id="saveMemory" type="button">Save memory settings</button><div id="memoryError" class="error-box" role="alert" hidden></div></section></section>
 <section class="view" id="history" data-page="history"><section class="card"><div class="controls"><select id="historyModel"><option value="">All models</option></select><div id="historySource" class="tabs"><button data-source="">All</button><button data-source="playground">Playground</button><button data-source="api">API</button><button data-source="mcp">MCP</button></div><input type="search" id="historySearch" placeholder="Search state…"><button id="clearHistory" class="destructive">Clear history</button></div><div id="historyTable" class="table-wrap"></div><button id="historyMore" hidden>Load more</button></section></section>
@@ -319,7 +320,7 @@ const TASK_TYPES=['classify','verify','compress','extract'], TOOL_EXTRAS=['answe
 const SET_KEYS=['objective','threshold','min','max','fallback','fallback_threshold','exclusive'];
 const OWNED={choice:['criteria','levels','option_keys'],noul:['criteria','option_keys'],score:['criteria','levels','option_keys'],
   multi:['criteria','option_keys',...SET_KEYS],act:['criteria','base','costs','defer_action','option_keys'],
-  tool:['tools','extra','rank','multi','description_chars'],classify:['labels','criteria','multi_label','none','threshold','min','max','objective'],
+  tool:['tools','extra','rank','multi','description_chars',...SET_KEYS],classify:['labels','criteria','multi_label','none','threshold','min','max','objective'],
   verify:['claims','binary'],compress:['unit','threshold','keep_ratio','min_keep'],extract:['schema']};
 const KEYED=/^([^\s:]{1,40}):\s*(\S.*)$/;  // "key: description"; a plain option text may contain colons too
 const textOf=v=>typeof v==='string'?v:JSON.stringify(v);
@@ -357,9 +358,12 @@ const qText=(f,v,ph='')=>`<input type="text" data-f="${f}" value="${esc(v??'')}"
 const qArea=(f,v,ph='',cls='')=>`<textarea data-f="${f}"${cls?` class="${cls}"`:''} placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
 const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${label}</label>`;
 const qSelect=(f,options,v)=>`<select data-f="${f}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(label)}</option>`).join('')}</select>`;
-function setFields(q, threshold=true) {
+// the set options of multi, multi-label classify and multi tool; constraints: fallback and exclusive keys (multi and
+// tool only: classify takes objective, threshold, min and max)
+function setFields(q, constraints=true) {
   const objective=q.objective||'threshold';
-  return `<div class="qf-row set-fields">${qField('Objective',qSelect('objective',[['threshold','threshold'],['exact','exact'],['iou','iou'],['f1','f1']],objective))}${threshold?qField('Threshold',qNum('threshold',q.threshold??'','min="0" max="1" step="0.01" placeholder="0.5"'),'','set-threshold'):''}${qField('Min',qNum('min',q.min,'min="0" step="1"'))}${qField('Max',qNum('max',q.max,'min="1" step="1"'))}${qField('Fallback key',qText('fallback',q.fallback,'none'))}${qField('Fallback threshold',qNum('fallback_threshold',q.fallback_threshold,'min="0" max="1" step="0.01"'))}${qField('Exclusive keys',qText('exclusive',(q.exclusive||[]).join(', '),'comma-separated'))}</div>`;
+  const extra=constraints?`${qField('Fallback key',qText('fallback',q.fallback,'none'))}${qField('Fallback threshold',qNum('fallback_threshold',q.fallback_threshold,'min="0" max="1" step="0.01"'))}${qField('Exclusive keys',qText('exclusive',(q.exclusive||[]).join(', '),'comma-separated'))}`:'';
+  return `<div class="qf-row set-fields">${qField('Objective',qSelect('objective',[['threshold','threshold'],['exact','exact'],['iou','iou'],['f1','f1']],objective))}${qField('Threshold',qNum('threshold',q.threshold??'','min="0" max="1" step="0.01" placeholder="0.5"'),'','set-threshold')}${qField('Min',qNum('min',q.min,'min="0" step="1"'))}${qField('Max',qNum('max',q.max,'min="1" step="1"'))}${extra}</div>`;
 }
 function costRowsOf(costs) {
   return costs&&typeof costs==='object'&&!(Object.keys(costs).every(k=>k==='wrong'||k==='defer')&&typeof costs.wrong!=='object')
@@ -384,9 +388,10 @@ function renderTypeFields(card, type, q) {
     const extra=q.extra??(q.multi?[]:TOOL_EXTRAS);
     html=qField('Tools (JSON array)',qArea('tools',q.tools?JSON.stringify(q.tools,null,2):'','[{"name": "get_weather", "description": "…", "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}}}]','json'),'OpenAI function, OpenAI Responses, MCP tools/list or Anthropic definitions.')
       +`<div class="qf"><label>Other options</label><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${x}</label>`).join('')}</div></div>`
-      +`<div class="qf-row">${qField('Rank',qNum('rank',q.rank,'min="1" step="1" placeholder="off"'),'also the k most probable options')}${qField('Description chars',qNum('description_chars',q.description_chars,'min="0" step="1" placeholder="300"'),'0 = no cap')}</div>`+qSwitch('multi',q.multi,'Several tools (multi)');
+      +`<div class="qf-row">${qField('Rank',qNum('rank',q.rank,'min="1" step="1" placeholder="off"'),'also the k most probable options')}${qField('Description chars',qNum('description_chars',q.description_chars,'min="0" step="1" placeholder="300"'),'0 = no cap')}</div>`+qSwitch('multi',q.multi,'Several tools (multi)')
+      +`<div class="multi-tool-only">${setFields(q)}<small class="muted">The other options (answer directly, ask the user, none) are always exclusive.</small></div>`;
   }
-  else if(type==='classify')html=qField('Labels',qArea('labels',keyedText(q.labels??q.criteria),'key: description, or one label per line'))+qSwitch('multi_label',q.multi_label,'Several labels (multi-label)')+' '+qSwitch('none',q.none,'Add a "none" label','single-only')+`<div class="multi-only">${setFields(q)}</div>`;
+  else if(type==='classify')html=qField('Labels',qArea('labels',labelsText(q.labels??q.criteria),'key: description, or one label per line'))+qSwitch('multi_label',q.multi_label,'Several labels (multi-label)')+' '+qSwitch('none',q.none,'Add a "none" label','single-only')+`<div class="multi-only">${setFields(q,false)}</div>`;
   else if(type==='verify')html=qField('Claims',qArea('claims',keyedText(q.claims),'key: claim text, or one claim per line'))+qSwitch('binary',q.binary,'Binary (supported / not supported)');
   else if(type==='compress')html=`<div class="qf-row">${qField('Unit',qSelect('unit',[['sentence','sentence'],['line','line'],['paragraph','paragraph']],q.unit||'sentence'))}${qField('Threshold',qNum('threshold',q.threshold,'min="0" max="1" step="0.05" placeholder="0.5"'))}${qField('Keep ratio',qNum('keep_ratio',q.keep_ratio,'min="0" max="1" step="0.05" placeholder="off"'),'share of the characters kept (overrides threshold)')}${qField('Min keep',qNum('min_keep',q.min_keep,'min="0" step="1" placeholder="1"'))}</div>`;
   else if(type==='extract')html=qField('Schema (JSON)',qArea('schema',q.schema?JSON.stringify(q.schema,null,2):'','{"type": "object", "properties": {"total": {"type": "number"}}}','json'),'string, number, integer, boolean, enum and arrays of enums; nested objects as dotted paths.');
@@ -430,32 +435,73 @@ function updateCardVisibility(card) {
   const custom=$('[data-f="max_error_custom"]',card); if(custom)custom.hidden=$('[data-f="max_error"]',card).value!=='custom';
   const objective=$('[data-f="objective"]',card); show('.set-threshold',!objective||objective.value==='threshold');
   show('.multi-only',on('multi_label')); show('.single-only',type==='classify'&&!on('multi_label'));
+  show('.multi-tool-only',multiTool);
   if(type==='act'){
     show('.cost-simple',card._costMode==='simple'); show('.cost-matrix',card._costMode==='matrix');
     card.querySelectorAll('[data-cost-mode]').forEach(b=>b.classList.toggle('active',b.dataset.costMode===card._costMode));
   }
 }
+// every value the user can change on a card (the cost matrix too): equal to the rendered one = nothing was edited
+function cardSnapshot(card) {
+  return JSON.stringify([...card.querySelectorAll('input,select,textarea')].filter(x=>!x.matches('.q-name'))
+    .map(x=>x.type==='checkbox'||x.type==='radio'?x.checked:x.value).concat([card._costMode??null]));
+}
+// the request a card was made from, to give it back exactly where the user did not edit it: the builder's own text
+// forms (lines, defaults left out) cannot hold every request (a list of {name, rubric} labels, option_keys given as
+// the default, non-string descriptions)
+function rememberOriginal(card, type, q) {
+  const value=f=>$(`[data-f="${f}"]`,card)?.value;
+  card._orig={type,q:structuredClone(q),snapshot:cardSnapshot(card),
+    lines:{criteria:value('criteria'),labels:value('labels'),claims:value('claims'),yesno:$('[data-f="yesno"]',card)?.checked,
+           instructions:$('.q-instructions-input',card).value}};
+}
+const labelObjects=v=>Array.isArray(v)&&v.length>0&&v.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&'name' in x);
+function labelsText(v) {  // classify labels: {key: rubric}, [keys] or [{"name", "rubric" | "description"}]
+  if(!labelObjects(v))return keyedText(v);
+  return v.map(x=>{const d=x.rubric??x.description;return d==null?String(x.name):`${x.name}: ${textOf(d)}`;}).join('\n');
+}
+function parseLabels(text, original) {
+  if(!labelObjects(original))return parseKeyedList(text);
+  const key=original.some(x=>'rubric' in x)||!original.some(x=>'description' in x)?'rubric':'description';
+  return splitLines(text).map(line=>{const m=line.match(KEYED);return m?{name:m[1],[key]:m[2]}:{name:line};});
+}
 function parseQuestionCard(card, type=$('.q-type',card).value) {
   const name=$('.q-name',card).value.trim() || 'question';
+  const orig=card._orig&&card._orig.type===type?card._orig:null, box=$('.q-error',card);
+  if(orig&&cardSnapshot(card)===orig.snapshot){  // nothing edited: the request as it came
+    card._error=null; if(box){box.textContent='';box.hidden=true;}
+    return [name,structuredClone(orig.q)];
+  }
   const el=f=>$(`[data-f="${f}"]`,card), str=f=>(el(f)?.value??'').trim(), num=f=>str(f)===''?undefined:Number(str(f)), on=f=>Boolean(el(f)?.checked);
   const q={type}, errors=[], set=(k,v)=>{if(v!==undefined&&v!==''&&!(Array.isArray(v)&&!v.length))q[k]=v;};
   const json=(f,check,message)=>{const text=str(f);if(!text){errors.push(message);return undefined;}try{const v=JSON.parse(text);if(check(v))return v;}catch{}errors.push(message);return undefined;};
-  const instructions=parseStructuredText($('.q-instructions-input',card).value);
-  if(instructions!==''||!['tool',...TASK_TYPES].includes(type))q.instructions=instructions;
-  const setOptions=(threshold=true)=>{
+  // a field whose text the user did not edit keeps the original's keys and values (none of them when it had none)
+  const unedited=f=>orig!=null&&el(f)!=null&&el(f).value===orig.lines[f]&&(f!=='criteria'||type!=='act'||on('yesno')===orig.lines.yesno);
+  const keep=(...keys)=>{keys.forEach(k=>{if(k in orig.q)q[k]=structuredClone(orig.q[k]);});};
+  if(orig&&$('.q-instructions-input',card).value===orig.lines.instructions)keep('instructions');
+  else{
+    const instructions=parseStructuredText($('.q-instructions-input',card).value);
+    if(instructions!==''||!['tool',...TASK_TYPES].includes(type))q.instructions=instructions;
+  }
+  const setOptions=(constraints=true)=>{
     const objective=str('objective');
-    if(objective&&objective!=='threshold')q.objective=objective; else if(threshold)set('threshold',num('threshold'));
-    set('min',num('min')); set('max',num('max')); set('fallback',str('fallback')); set('fallback_threshold',num('fallback_threshold'));
+    if(objective&&objective!=='threshold')q.objective=objective; else set('threshold',num('threshold'));
+    set('min',num('min')); set('max',num('max'));
+    if(!constraints)return;
+    set('fallback',str('fallback')); set('fallback_threshold',num('fallback_threshold'));
     set('exclusive',str('exclusive').split(',').map(x=>x.trim()).filter(Boolean));
   };
-  if(['choice','noul','score'].includes(type))Object.assign(q,parseOptions(str('criteria'),type));
-  else if(type==='multi'){set('criteria',parseKeyedList(str('criteria'))); setOptions();}
+  if(['choice','noul','score'].includes(type)){if(unedited('criteria'))keep('criteria','levels','option_keys');else Object.assign(q,parseOptions(str('criteria'),type));}
+  else if(type==='multi'){if(unedited('criteria'))keep('criteria','option_keys');else set('criteria',parseKeyedList(str('criteria'))); setOptions();}
   else if(type==='act'){
-    if(on('yesno')){const c=parseOptions(str('criteria'),'noul').criteria;if(c)q.criteria=c;else q.base='noul';}
+    if(unedited('criteria'))keep('criteria','base','option_keys');
+    else if(on('yesno')){const c=parseOptions(str('criteria'),'noul').criteria;if(c)q.criteria=c;else q.base='noul';}
     else Object.assign(q,parseOptions(str('criteria'),'choice'));
     if(card._costMode==='matrix'){
       const rows=readCostRows(card).filter(r=>r.action.trim());
-      q.costs=Object.fromEntries(rows.map(r=>[r.action.trim(),Object.fromEntries(Object.entries(r.costs).map(([o,v])=>[o,v===''?0:Number(v)]))]));
+      const missing=rows.some(r=>Object.values(r.costs).some(v=>v===''));
+      if(missing)errors.push('every cost cell needs a number');
+      q.costs=Object.fromEntries(rows.map(r=>[r.action.trim(),Object.fromEntries(Object.entries(r.costs).filter(([,v])=>v!=='').map(([o,v])=>[o,Number(v)]))]));
       set('defer_action',str('defer_action'));
     } else {
       q.costs={wrong:num('cost_wrong')??0}; if(num('cost_defer')!==undefined)q.costs.defer=num('cost_defer');
@@ -464,14 +510,14 @@ function parseQuestionCard(card, type=$('.q-type',card).value) {
   else if(type==='tool'){
     set('tools',json('tools',v=>Array.isArray(v)&&v.length>0,'tools must be a JSON array of tool definitions'));
     const multi=on('multi'), extra=TOOL_EXTRAS.filter(x=>$(`[data-extra="${x}"]`,card)?.checked);
-    if(multi){q.multi=true; if(extra.length)q.extra=extra;} else if(extra.length!==TOOL_EXTRAS.length)q.extra=extra;
+    if(multi){q.multi=true; if(extra.length)q.extra=extra; setOptions();} else if(extra.length!==TOOL_EXTRAS.length)q.extra=extra;
     set('rank',num('rank')); if(num('description_chars')!==undefined&&num('description_chars')!==300)q.description_chars=num('description_chars');
   }
   else if(type==='classify'){
-    set('labels',parseKeyedList(str('labels')));
-    if(on('multi_label')){q.multi_label=true;setOptions();} else if(on('none'))q.none=true;
+    if(unedited('labels'))keep('labels','criteria','option_keys'); else set('labels',parseLabels(str('labels'),orig?.q.labels));
+    if(on('multi_label')){q.multi_label=true;setOptions(false);} else if(on('none'))q.none=true;
   }
-  else if(type==='verify'){set('claims',parseKeyedList(str('claims'))); if(on('binary'))q.binary=true;}
+  else if(type==='verify'){if(unedited('claims'))keep('claims');else set('claims',parseKeyedList(str('claims'))); if(on('binary'))q.binary=true;}
   else if(type==='compress'){
     if(str('unit')&&str('unit')!=='sentence')q.unit=str('unit');
     if(num('threshold')!==undefined&&num('threshold')!==0.5)q.threshold=num('threshold');
@@ -482,7 +528,7 @@ function parseQuestionCard(card, type=$('.q-type',card).value) {
   if(EVIDENCE_TYPES.includes(type)&&!multiTool&&on('evidence'))q.evidence=true;
   if(MAX_ERROR_TYPES.includes(type)&&!multiTool){const me=str('max_error');if(me==='custom')set('max_error',num('max_error_custom'));else if(me)q.max_error=Number(me);}
   card._error=errors.join('\n')||null;
-  const box=$('.q-error',card); if(box){box.textContent=card._error||'';box.hidden=!card._error;}
+  if(box){box.textContent=card._error||'';box.hidden=!card._error;}
   return [name,{...card._extra,...q}];
 }
 function extraOf(q, type) {
@@ -516,7 +562,8 @@ function setPlaygroundExperimental(model) {
 }
 function buildRequest() {
   const questions={}; for(const card of document.querySelectorAll('.question')) { const [name,q]=parseQuestionCard(card); questions[name]=q; }
-  return {state:parseStructuredText($('#stateInput').value),questions,...requestOptionFields(),...mediaRequestFields()};
+  const stateInput=$('#stateInput'), state=stateInput._requestState;
+  return {state:state!==undefined&&stateInput.value===state.text?state.value:parseStructuredText(stateInput.value),questions,...requestOptionFields(),...mediaRequestFields()};
 }
 function syncRequest(force=false, keys=['media','detail']) {
   const textarea = $('#requestJson');
@@ -540,7 +587,7 @@ function addQuestion(name='question', q={type:'choice',instructions:'',criteria:
   card._extra=extraOf(q,type); card._type=type;
   card.innerHTML=`<div class="q-head"><div><label>Name</label><input class="q-name" type="text" value="${esc(name)}"></div><div><label>Type</label><select class="q-type">${QUESTION_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label>Instructions</label><textarea class="q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
   $('.q-type',card).value=type;
-  renderTypeFields(card,type,q);
+  renderTypeFields(card,type,q); rememberOriginal(card,type,q);
   card.addEventListener('input',e=>{
     if(e.target.matches('[data-f="criteria"]')&&$('.q-type',card).value==='act')renderCostMatrix(card);
     syncRequest();
@@ -566,7 +613,9 @@ function addQuestion(name='question', q={type:'choice',instructions:'',criteria:
   $('#questions').append(card); syncRequest();
 }
 function setRequest(req) {
-  $('#stateInput').value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
+  const stateInput=$('#stateInput');
+  stateInput.value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
+  stateInput._requestState={text:stateInput.value,value:structuredClone(req.state??'')};
   setChecked($('#factsToggle'),req.facts==='auto'); $('#langSelect').value=['pl','en'].includes(req.lang)?req.lang:'auto';
   $('#thinkSelect').value=['off','force'].includes(req.think)?req.think:''; setChecked($('#thinkTextToggle'),req.think_text===true);
   if([...$('#earlyExitSelect').options].some(o=>o.value===req.early_exit))$('#earlyExitSelect').value=req.early_exit; else $('#earlyExitSelect').value='';
@@ -593,8 +642,21 @@ function decisionBase(answer,q) {
   const keys=q.criteria&&!Array.isArray(q.criteria)?Object.keys(q.criteria):[];
   return keys.length&&keys.every(k=>k==='true'||k==='false')?'noul':'choice';
 }
+// why the model's certified thresholds do not hold for this answer (null: they do). The thresholds are certified on
+// text decisions with the served option orders; a media answer ("text"), one fitted on other option orders or an act
+// question shape the calibration was not validated for ("unvalidated") and uncalibrated probabilities get no claim.
+function certificateGap(answer, entry) {
+  if(entry?.calibration_warning)return `calibration warning: ${entry.calibration_warning}`;
+  if(answer.calibration==='text')return 'the thresholds are certified on text decisions, not on media';
+  if(answer.calibration==='unvalidated')return answer.type==='act'?'the calibration is not validated for this question shape':'the calibration was fitted on other option orders';
+  if(answer.calibration!=null&&answer.calibration!=='validated')return `calibration: ${answer.calibration}`;
+  if(uncalibrated(entry))return 'the probabilities are not calibrated';
+  return null;
+}
 function automationBadge(answer,q,entry) {
   const type=decisionBase(answer,q);
+  const gap=certificateGap(answer,entry);
+  if(answer.deferred===true||typeof answer.max_error==='string'||gap)return `<span class="badge fit-tight" title="${esc(gap||'this answer was deferred or its requested max_error is uncertified')}">Not certified for this answer — review</span>`;
   if(!entry||!['choice','noul','score'].includes(type)||answer.confidence==null)return '';
   const cert=entry.certified||{}, t1=cert['0.01']?.[type], t5=cert['0.05']?.[type];
   if(t1==null&&t5==null)return '<span class="muted">No certificate for this type</span>';
@@ -766,8 +828,18 @@ function rerenderFilters(){if(catalogData) originalRenderModels(catalogData);}
 $('#olderToggle').addEventListener('change',rerenderFilters);
 $('#notRunnableToggle').addEventListener('change',rerenderFilters);
 $('#addQuestion').addEventListener('click',()=>addQuestion());
-$('#stateInput').addEventListener('input',syncRequest);
-$('#editJsonToggle').addEventListener('change',()=>{if($('#editJsonToggle').checked) syncRequest(true);else syncRequest();$('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;});
+$('#stateInput').addEventListener('input',()=>{$('#stateInput')._requestState=undefined;syncRequest();});
+$('#editJsonToggle').addEventListener('change',()=>{
+  if($('#editJsonToggle').checked){syncRequest(true);}
+  else{
+    let request;
+    try{request=JSON.parse($('#requestJson').value);}
+    catch(e){showMediaError(`Invalid request JSON: ${e.message}`);$('#editJsonToggle').checked=true;return;}
+    if(!request||typeof request!=='object'||Array.isArray(request)){showMediaError('request JSON must be an object');$('#editJsonToggle').checked=true;return;}
+    showMediaError();setRequest(request);
+  }
+  $('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;
+});
 $('#mediaInput').addEventListener('change',event=>selectMedia(Array.from(event.target.files||[])));
 $('#mediaDetail').addEventListener('change',()=>syncRequest());
 $('#factsToggle').addEventListener('change',()=>syncRequest(false,REQUEST_OPTION_KEYS));
@@ -1102,8 +1174,9 @@ function renderBenchmarkResults() {
   const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
   $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Kind</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
 }
-// Calibration: basal-calibrate on the user's labelled requests against a temporary uncalibrated child of the model
-$('#calibrationBlock').innerHTML=`<div class="section-head"><h3>Calibration</h3></div><div class="controls"><select id="calibrationModel" aria-label="Model to calibrate"></select><input id="calibrationInput" type="text" placeholder="/path/to/labelled.jsonl" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">Calibrate</button><button type="button" id="cancelCalibration" hidden>Cancel</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">Logs</a></div><p class="muted">Fits temperatures and certified thresholds on your labelled requests (format: <code>docs/CALIBRATION.md#input</code>; the simple <code>basal-run</code> items with <code>gold</code> work too) against a temporary uncalibrated copy of the model, which needs its memory once more while it runs. Task questions need the engine in process: use <code>basal-calibrate</code> for them. The selected file applies from the model's next start.</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>Calibration report</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">Close</button></div></dialog>`;
+// Calibration: basal-calibrate on the user's labelled requests (a temporary uncalibrated child of the model; with task
+// questions the engine in basal-ui's process), or a file fitted elsewhere imported
+$('#calibrationBlock').innerHTML=`<div class="section-head"><h3>Calibration</h3></div><div class="controls"><select id="calibrationModel" aria-label="Model to calibrate"></select><input id="calibrationInput" type="text" placeholder="/path/to/labelled.jsonl" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">Calibrate</button><button type="button" id="cancelCalibration" hidden>Cancel</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">Logs</a></div><div class="controls"><input id="calibrationImportPath" type="text" placeholder="/path/to/CALIBRATION.custom.json fitted elsewhere" size="40" aria-label="Calibration file to import"><button type="button" id="importCalibration">Import</button></div><p class="muted">Fits temperatures and certified thresholds on your labelled requests (format: <code>docs/CALIBRATION.md#input</code>; the simple <code>basal-run</code> items with <code>gold</code> work too). Decision questions run against a temporary uncalibrated copy of the model, which needs its memory once more while it runs; task questions (classify / verify / extract with gold) are certified on the answers as served, so the engine runs in basal-ui's process instead (cancelling then takes effect when basal-calibrate finishes). Import adds a file fitted elsewhere (basal-calibrate on another machine); one fitted on another model is listed with basal-serve's warning. The selected file applies from the model's next start.</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>Calibration report</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">Close</button></div></dialog>`;
 $('#calibrationInput').value=localStorage.getItem('basal-ui.calibrationInput')||'';
 $('#calibrationInput').oninput=()=>localStorage.setItem('basal-ui.calibrationInput',$('#calibrationInput').value);
 document.querySelectorAll('#calibrationBlock input[type=checkbox]').forEach(i=>{i.setAttribute('role','switch');setChecked(i,i.checked);});
@@ -1127,6 +1200,17 @@ $('#runCalibration').onclick=()=>act(async()=>{
   toast('Calibration started'); await refreshStatus();
 });
 $('#cancelCalibration').onclick=()=>act(async()=>{await api('/api/calibrate',{method:'DELETE'});await refreshStatus();});
+$('#importCalibration').onclick=()=>act(async()=>{
+  const id=$('#calibrationModel').value, d=await api('/api/calibrations/import',{method:'POST',body:JSON.stringify({id,path:$('#calibrationImportPath').value.trim()})});
+  renderCalibrationFiles(id,d); $('#calibrationImportPath').value='';
+  const f=d.files.find(x=>x.file===d.file); toast(f?.warning?`Imported — ${f.warning}`:'Calibration imported');
+});
+// the certified thresholds {target: {type: threshold}} with the task ones {task: {target: threshold}}
+function allThresholds(f) {
+  const out=JSON.parse(JSON.stringify(f?.thresholds||{}));
+  for(const [task,byTarget] of Object.entries(f?.task_thresholds||{}))for(const [k,v] of Object.entries(byTarget||{}))(out[k]??={})[task]=v;
+  return out;
+}
 function renderCalibrationState(job) {
   const running=Boolean(job?.running);
   $('#cancelCalibration').hidden=!running; $('#runCalibration').disabled=running||!$('#calibrationModel').value;
@@ -1150,7 +1234,7 @@ function renderCalibrationFiles(id, d) {
     const fitted=f?.fitted_on&&typeof f.fitted_on==='object'?f.fitted_on:null, gates=f?.gates||{};
     const automated=Object.entries(gates.automated_at||{}).map(([k,v])=>`${(Number(k)*100).toFixed(0)}%: ${pct(v)} at ${pct(gates.automated_error?.[k])} error`).join(' · ');
     const checked=(d.selected||'')===value;
-    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(f?.thresholds)}</td><td>${esc(automated||'—')}</td><td>${value?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
+    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?' <span class="chip">imported</span>':''}${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
   };
   const shipped=d.shipped?row(d.shipped,'',`shipped · ${shortName(d.shipped.file)}`):'';
   $('#calibrationFiles').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
@@ -1166,18 +1250,34 @@ function renderCalibrationFiles(id, d) {
 // Load options: the engine mode and basal-serve's runtime settings of one load (basal/ui/options.py)
 const GRAPH_MODES=['fast','fast-nocompile','fast-exit','fp8','nvfp4'];
 const OPTION_SECTIONS=[
-  ['Engine',['ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','gemma_attn','vllm_preset','gpu_memory','device']],
+  ['Engine',['ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads']],
   ['Determinism & orders',['deterministic','orders','auto_tau','auto_band']],
   ['Batching',['max_batch','wait_ms','batch_window_ms','soam']],
   ['Caching',['state_cache_gb','prefix_cache']],
   ['Scheduling',['scheduler','long_lane','long_tokens','long_share','long_slice_ms']],
   ['Context',['context_overflow','truncate_head','max_len']],
-  ['Experimental',['think','think_tokens','think_python','think_url','early_exit']],
+  ['Kernels (CUDA graph engine)',['gemma_attn','merge','lean','tree','batches','readout_layer','template_prefix','fp8_accum']],
+  ['Calibration',['strict_calibration']],
+  ['Experimental',['think','think_tokens','think_python','think_url','think_calibration','think_model','think_adapter','think_memory','think_max_len','think_log','early_exit']],
 ];
 const OPTION_FIELDS={
   quant:{label:'Quantisation',kind:'select',values:[[null,'as the mode'],['fp8','fp8'],['nvfp4','nvfp4'],['q8','q8 (mlx)']],modes:[...GRAPH_MODES,'mlx','mlx-q8']},
   attn:{label:'Attention kernel',kind:'select',values:['auto','fa2','fa3','fa4','cudnn'],modes:GRAPH_MODES},
-  gemma_attn:{label:'Gemma 4 attention',kind:'select',values:['auto','math','flex','fa3','fa3+math'],modes:['eager']},
+  gemma_attn:{label:'Gemma 4 attention (graph engine)',kind:'select',values:['auto','math','flex','fa3','fa3+math'],modes:GRAPH_MODES},
+  dtype:{label:'dtype',kind:'select',values:['bfloat16','float16','float32'],modes:[...GRAPH_MODES,'eager','mps','vllm']},
+  vllm_fast_prefill:{label:'vLLM KV-sharing fast prefill (Gemma 4)',kind:'select',values:['auto','off'],modes:['vllm']},
+  eager_attn:{label:'Gemma 4 eager attention',kind:'text',placeholder:'math, auto or sliding=K,full=K',modes:['eager']},
+  eager_forward:{label:'Gemma 4 eager forward',kind:'select',values:[[null,'basal (default)'],['basal','basal'],['hf','hf (transformers)']],modes:['eager']},
+  ple_offload:{label:'Per-layer embeddings in host memory (Gemma 4 E2B / E4B)',kind:'bool',modes:['eager']},
+  exit_heads:{label:'Exit heads directory',kind:'text',placeholder:'<model>/exit_heads',modes:['fast-exit']},
+  merge:{label:'Merged projections',kind:'select',values:['auto','on','off'],modes:GRAPH_MODES},
+  lean:{label:'Lean layer function',kind:'select',values:['off','auto','on','pass2'],modes:GRAPH_MODES},
+  tree:{label:'Pass-2 trie mask',kind:'select',values:['dense','auto','flex'],modes:GRAPH_MODES},
+  batches:{label:'Batch rows',kind:'select',values:['auto','compact','default','fine'],modes:GRAPH_MODES},
+  readout_layer:{label:'Readout-only last layer',kind:'select',values:['off','auto','on'],modes:GRAPH_MODES},
+  template_prefix:{label:'Template prefix computed once',kind:'select',values:['auto','on','off'],modes:GRAPH_MODES},
+  fp8_accum:{label:'FP8 accumulation',kind:'select',values:['fast','full'],modes:GRAPH_MODES},
+  strict_calibration:{label:'Refuse a calibration fitted on another model (--strict-calibration)',kind:'bool'},
   vllm_preset:{label:'vLLM preset',kind:'select',values:['default','deterministic'],modes:['vllm']},
   gpu_memory:{label:'GPU memory share',kind:'num',attrs:'min="0.05" max="1" step="0.05"',modes:['vllm','sglang']},
   device:{label:'Device',kind:'select',values:[[null,'auto'],'cuda','mps','cpu'],modes:['eager']},
@@ -1207,6 +1307,12 @@ const OPTION_FIELDS={
   think_tokens:{label:'Reasoning tokens',kind:'num',attrs:'min="1" step="32"',think:true},
   think_python:{label:'Python with vLLM',kind:'text',placeholder:'basal-ui’s Python',think:true},
   think_url:{label:'Running think server URL',kind:'text',placeholder:'start one',think:true},
+  think_calibration:{label:'Readout-2 calibration',kind:'text',placeholder:'<model>/CALIBRATION.think.json or off',think:true},
+  think_model:{label:'Think weights',kind:'text',placeholder:'<model>/think/',think:true},
+  think_adapter:{label:'LoRA adapter',kind:'text',placeholder:'<model>/think/adapter',think:true},
+  think_memory:{label:'vLLM GPU memory fraction',kind:'num',attrs:'min="0.05" max="1" step="0.05"',think:true},
+  think_max_len:{label:'vLLM context',kind:'num',attrs:'min="512" step="512"',think:true},
+  think_log:{label:'vLLM log file',kind:'text',placeholder:'basal-think-vllm.log',think:true},
   early_exit:{label:'Early exit (default policy)',kind:'select',values:['off','0.999','0.995','0.99','0.98']},
 };
 const optionsButton=(id,media=false,restart=false)=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-restart="${restart}" title="${restart?'Restart with other load options':'Load with options'}">⚙${restart?'':' Options'}</button>`;
@@ -1224,15 +1330,17 @@ function optionInput(key, value) {
   return `<label for="${id}">${esc(f.label)}</label>${input}`;
 }
 function renderOptionsForm(values) {
-  const d=optionsState.data, defaultMode=d.modes.find(m=>m.default)?.mode, mode=values.mode||defaultMode;
-  const modes=`<div class="option-modes">${d.modes.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available&&!optionsState.media?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media the model is served with --mode eager.</p>':''}`;
+  const d=optionsState.data, list=optionsState.media?d.media_modes:d.modes, defaultMode=list.find(m=>m.default)?.mode;
+  const mode=list.some(m=>m.mode===values.mode)?values.mode:defaultMode;
+  const modes=`<div class="option-modes">${list.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].</p>':''}`;
   const experimental='<p class="muted option-note" id="optExperimentalNote"></p>';
   $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:''}</fieldset>`).join('');
   $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});
   $('#optionsForm').onchange=()=>updateOptionVisibility();
   updateOptionVisibility();
 }
-function selectedOptionMode() { return optionsState.media?'eager':$('#optionsForm input[name=optMode]:checked')?.value||optionsState.data.modes.find(m=>m.default)?.mode; }
+const optionModes=()=>optionsState.media?optionsState.data.media_modes:optionsState.data.modes;
+function selectedOptionMode() { return $('#optionsForm input[name=optMode]:checked')?.value||optionModes().find(m=>m.default)?.mode; }
 function updateOptionVisibility() {
   const mode=selectedOptionMode(), think=optionsState.data.think||{};
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
@@ -1248,8 +1356,8 @@ function updateOptionVisibility() {
   $('#optExperimentalNote').textContent=notes.join(' ');
 }
 function collectOptions() {
-  const d=optionsState.data, out={}, defaultMode=d.modes.find(m=>m.default)?.mode, mode=selectedOptionMode();
-  out.mode=optionsState.media||mode===defaultMode?null:mode;
+  const d=optionsState.data, out={}, defaultMode=optionModes().find(m=>m.default)?.mode, mode=selectedOptionMode();
+  out.mode=mode===defaultMode?null:mode;
   for(const [key,f] of Object.entries(OPTION_FIELDS)) {
     if(f.kind==='band'){const lo=$(`#opt-${key}-lo`)?.value, hi=$(`#opt-${key}-hi`)?.value;out[key]=!lo||!hi?d.defaults[key]:[Number(lo),Number(hi)];continue;}
     const el=$(`#opt-${key}`);
@@ -1453,22 +1561,49 @@ async function loadInspectCalibrations() {
   try{const d=await api(`/api/calibrations?id=${encodeURIComponent(id)}`);sel.insertAdjacentHTML('beforeend',d.files.map(f=>`<option value="${esc(f.file)}"${f.file===d.selected?' selected':''}>${esc(new Date(f.when*1000).toLocaleString())} · ${esc(f.fitted_on?.decisions??'?')} decisions</option>`).join(''));}catch{}
 }
 $('#inspectModel').onchange=()=>{localStorage.setItem('basal-ui.inspectModel',$('#inspectModel').value);loadInspectCalibrations();};
-$('#startInspect').onclick=()=>act(async()=>{await api('/api/inspect',{method:'POST',body:JSON.stringify({id:$('#inspectModel').value,calibration:$('#inspectCalibration').value||null})});toast('Inspector loading');await refreshStatus();});
+$('#startInspect').onclick=()=>act(async()=>{const orders=$('#inspectOrders').value;await api('/api/inspect',{method:'POST',body:JSON.stringify({id:$('#inspectModel').value,calibration:$('#inspectCalibration').value||null,orders:orders?Number(orders):null})});toast('Inspector loading');await refreshStatus();});
 $('#stopInspect').onclick=()=>act(async()=>{await api('/api/inspect',{method:'DELETE'});await refreshStatus();});
 function renderInspectState(state, job) {
   const loading=Boolean(job?.running), ready=state?.state==='ready', frame=$('#vizFrame');
-  $('#inspectState').textContent=loading?`loading ${shortName(job.model)}…`:ready?`ready: ${state.model}`:job?.phase==='error'?`Failed: ${job.error}`:'idle';
+  $('#inspectState').textContent=loading?`loading ${shortName(job.model)}…`:ready?`ready: ${state.model} · ${state.mode} on ${state.device} · ${state.orders} option order${state.orders===1?'':'s'}`:job?.phase==='error'?`Failed: ${job.error}`:'idle';
   $('#stopInspect').hidden=!(ready||loading); $('#startInspect').disabled=loading||!$('#inspectModel').value;
   if(ready&&!inspectReady){frame.dataset.loaded='';frame.onload=()=>{frame.dataset.loaded='1';};frame.src='/viz/';}
-  if(!ready&&inspectReady)frame.src='about:blank';
+  if(!ready&&inspectReady){frame.src='about:blank';$('#inspectNotice').hidden=true;}
   frame.hidden=!ready; inspectReady=ready;
+}
+// What the inspector would explain of a Playground decision: the request it can explain and how that differs from
+// the served one, or why it cannot (another model, media, nothing but task questions).
+function inspectHandoff(request) {
+  const st=statusCache?.inspect||{}, served=(statusCache?.models||[]).find(m=>m.id===request.model);
+  const variant=id=>modelData.find(m=>m.id===id), sv=variant(request.model), iv=variant(st.model);
+  if(request.media)return {blocked:'basal-viz explains text decisions; this request carries media'};
+  if(st.model!==request.model&&!(sv&&iv&&sv.family===iv.family&&sv.tier===iv.tier))
+    return {blocked:`the inspector runs ${st.model}, this decision came from ${request.model}: start the inspector with the bf16 weights of ${sv?`${sv.family} ${sv.tier}`:request.model}`};
+  const body=structuredClone(request), notes=[];
+  for(const key of ['model','think','think_text','early_exit'])delete body[key];
+  const tasks=Object.entries(body.questions||{}).filter(([,q])=>TASK_TYPES.includes(q?.type)).map(([n])=>n);
+  tasks.forEach(n=>delete body.questions[n]);
+  if(!Object.keys(body.questions||{}).length)return {blocked:'basal-viz explains decision questions; this request has only task questions'};
+  if(tasks.length)notes.push(`${tasks.join(', ')}: task questions are left out (basal-viz explains the decision questions)`);
+  if(st.model!==request.model)notes.push(`weights: served ${sv.label} (${request.model}), explained bf16 (${st.model})`);
+  if(served?.mode&&served.mode!==st.mode)notes.push(`engine: served ${served.mode}, explained ${st.mode} on ${st.device}`);
+  const orders=served?.entry?.orders;
+  if(orders!=null&&String(orders)!==String(st.orders))notes.push(`option orders: served ${orders}, explained ${st.orders}${['1','2'].includes(String(orders))?` (start the inspector with ${orders} option order${String(orders)==='1'?'':'s'} to match)`:''}`);
+  if(served?.entry&&JSON.stringify(served.entry.temperature_per_prim||{})!==JSON.stringify(st.temperatures||{}))
+    notes.push('calibration: the served temperatures differ from the inspector’s (choose the calibration the model is served with)');
+  if(served?.options?.think&&request.think!=='off')notes.push('thinking: explained without the reasoning (the first readout)');
+  if(request.early_exit&&request.early_exit!=='off')notes.push(`early exit ${request.early_exit}: explained at the final layer`);
+  return {body,notes};
 }
 function inspectDecision(request) {
   if(statusCache?.inspect?.state!=='ready'){toast(`Start the inspector for ${request.model||'a model'} first`,'error');showView('inspect',true);return;}
-  const body={...request};
-  for(const key of ['model','facts','think','think_text','early_exit'])delete body[key];
+  const handoff=inspectHandoff(request), notice=$('#inspectNotice');
+  if(handoff.blocked){toast(handoff.blocked,'error');return;}
+  notice.className=handoff.notes.length?'inspect-notice differs':'inspect-notice same';
+  notice.innerHTML=handoff.notes.length?`<strong>This explanation differs from the served decision of ${esc(request.model)}:</strong><ul>${handoff.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`:`Same model, engine, option orders and calibration as the served decision of ${esc(request.model)}.`;
+  notice.hidden=false;
   showView('inspect',true);
-  const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:body},location.origin);
+  const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:handoff.body},location.origin);
   if(frame.dataset.loaded==='1')send(); else frame.addEventListener('load',send,{once:true});
 }
 const PAGES={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};

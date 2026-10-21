@@ -54,15 +54,6 @@ def test_every_view_renders(page, text_model):
     sync_api.expect(page.locator("#footerState")).to_contain_text("ready")
 
 
-def normalised(questions):
-    """The builder leaves out the values that are the engine's defaults (compress unit "sentence")."""
-    out = json.loads(json.dumps(questions))
-    for q in out.values():
-        if q.get("type") == "compress" and q.get("unit") == "sentence":
-            del q["unit"]
-    return out
-
-
 @pytest.mark.parametrize("request_", advanced_requests(), ids=lambda r: r["id"])
 def test_the_playground_builds_sends_and_renders_each_question_type(page, text_model, request_):
     view(page, "playground")
@@ -71,7 +62,7 @@ def test_the_playground_builds_sends_and_renders_each_question_type(page, text_m
     page.select_option("#examples", str(index))
     built = page.evaluate("() => buildRequest()")
     assert built["state"] == request_["state"]
-    assert built["questions"] == normalised(request_["questions"])  # the builder round-trips the request
+    assert built["questions"] == request_["questions"]  # exactly the request: the builder never rewrites it
     page.click("#sendButton")
     page.wait_for_selector("#results article.answer")
     sync_api.expect(page.locator("#decideError")).to_be_hidden()
@@ -83,6 +74,86 @@ def test_the_playground_builds_sends_and_renders_each_question_type(page, text_m
         sync_api.expect(page.locator("#results .source-view mark").first).to_be_visible()
     if q_type == "verify":
         sync_api.expect(articles.first.locator("tbody tr")).to_have_count(3)
+
+
+RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
+          "questions": {"category": {"type": "classify", "option_keys": "show",
+                                     "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}]},
+                        "dept": {"type": "choice", "instructions": "Który dział?", "criteria": ["it", "sales"]}}}
+
+
+def test_the_builder_keeps_what_it_cannot_write_in_its_own_form(page):
+    view(page, "playground")
+    page.evaluate("r => setRequest(r)", RUBRIC)
+    assert page.evaluate("() => buildRequest().questions") == RUBRIC["questions"]
+    cards = page.locator(".question")
+    cards.nth(0).locator(".q-instructions-input").fill("Jaka to kategoria?")  # an edit elsewhere on the card
+    cards.nth(1).locator(".q-instructions-input").fill("Do którego działu?")
+    built = page.evaluate("() => buildRequest().questions")
+    assert built["category"]["labels"] == RUBRIC["questions"]["category"]["labels"]  # still {name, rubric} objects
+    assert built["category"]["option_keys"] == "show" and built["category"]["instructions"] == "Jaka to kategoria?"
+    assert built["dept"]["criteria"] == ["it", "sales"] and "option_keys" not in built["dept"]
+    cards.nth(0).locator('[data-f="labels"]').fill("bug: błąd aplikacji\nbilling: płatności\nother")
+    assert page.evaluate("() => buildRequest().questions.category.labels") == [
+        {"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing", "rubric": "płatności"}, {"name": "other"}]
+
+
+def test_no_automation_claim_where_the_certificate_does_not_hold(page, text_model):
+    """A media answer (calibration fitted on text) or one with unvalidated calibration is never "Automatable"."""
+    view(page, "playground")
+    probe = """([model, calibration]) => {
+      const m = statusCache.models.find(x => x.id === model);
+      const saved = m.entry; m.entry = {...saved, certified: {"0.01": {choice: 0.5}, "0.05": {choice: 0.4}},
+                                        temperature_per_prim: {choice: 1.2}};
+      renderResults({answers: {q: {type: 'choice', choice: 'a', probabilities: {a: 0.99, b: 0.01}, confidence: 0.99,
+                                   ...(calibration ? {calibration} : {})}}},
+                    {model, state: 's', questions: {q: {type: 'choice', criteria: {a: 'A', b: 'B'}}}});
+      m.entry = saved;
+      return document.querySelector('#results .chips.safety').textContent;
+    }"""
+    for calibration in ("text", "unvalidated"):
+        strip = page.evaluate(probe, [text_model["id"], calibration])
+        assert "Automatable" not in strip and "Not certified for this answer" in strip
+    probe = """([model, answer, warning]) => {
+      const m=statusCache.models.find(x=>x.id===model), saved=m.entry;
+      m.entry={...saved,certified:{"0.01":{choice:0.5},"0.05":{choice:0.4}},temperature_per_prim:{choice:1.2},
+               ...(warning?{calibration_warning:warning}:{})};
+      renderResults({answers:{q:{type:'choice',choice:'a',probabilities:{a:0.99,b:0.01},confidence:0.99,...answer}}},
+        {model,state:'s',questions:{q:{type:'choice',criteria:{a:'A',b:'B'}}}});
+      m.entry=saved; return document.querySelector('#results .chips.safety').textContent;
+    }"""
+    for answer, warning in (({"deferred": True}, None), ({"max_error": "0.01"}, None), ({}, "missing calibration")):
+        strip = page.evaluate(probe, [text_model["id"], answer, warning])
+        assert "Automatable" not in strip and "review" in strip
+
+
+def test_string_state_is_preserved_until_the_state_field_is_edited(page):
+    view(page, "playground")
+    literal = '{"not": "json"}'
+    page.evaluate("state => setRequest({state, questions: {}})", literal)
+    assert page.evaluate("() => buildRequest().state") == literal
+    page.evaluate("() => setRequest({state: {structured: true}, questions: {}})")
+    assert page.evaluate("() => buildRequest().state") == {"structured": True}
+    page.evaluate("state => setRequest({state, questions: {}})", literal)
+    page.fill("#stateInput", '{"edited": true}')
+    assert page.evaluate("() => buildRequest().state") == {"edited": True}
+
+
+def test_edit_json_rebuilds_the_builder_and_keeps_invalid_json_open(page):
+    view(page, "playground")
+    page.check("#editJsonToggle")
+    page.fill("#requestJson", "{ invalid")
+    page.click("#editJsonToggle")  # stays checked: the toggle refuses to leave invalid JSON
+    sync_api.expect(page.locator("#editJsonToggle")).to_be_checked()
+    sync_api.expect(page.locator("#editJsonArea")).to_be_visible()
+    sync_api.expect(page.locator("#mediaError")).to_contain_text("Invalid request JSON")
+    request = {"state": "builder from edited JSON", "questions": {"priority": {
+        "type": "choice", "criteria": ["low", "high"]}}, "facts": "auto", "lang": "pl"}
+    page.fill("#requestJson", json.dumps(request))
+    page.uncheck("#editJsonToggle")
+    sync_api.expect(page.locator("#builder")).to_be_visible()
+    assert page.evaluate("() => buildRequest()")["questions"] == request["questions"]
+    assert page.evaluate("() => buildRequest().state") == request["state"]
 
 
 def test_the_builder_switches_types_and_edits_a_cost_matrix(page):
@@ -100,6 +171,12 @@ def test_the_builder_switches_types_and_edits_a_cost_matrix(page):
         cell.fill("2")
     costs = page.evaluate("() => buildRequest().questions.question.costs")
     assert costs["human"] == {"late": 2, "lost": 2} and costs["defer"] == {"late": 1, "lost": 1}
+    cell = row.locator(".cost-cell").first
+    cell.fill("")
+    assert page.evaluate("() => document.querySelector('.question')._error") == "every cost cell needs a number"
+    costs = page.evaluate("() => buildRequest().questions.question.costs")
+    assert "late" not in costs["human"]
+    sync_api.expect(card.locator(".q-error")).to_contain_text("every cost cell needs a number")
     card.locator(".q-type").select_option("tool")
     card.locator('[data-f="tools"]').fill("not json")
     page.click("#sendButton")
@@ -127,6 +204,12 @@ def test_the_load_options_dialog_lists_the_modes(page, text_model):
     assert dialog.locator('input[name="optMode"]').count() == 16
     assert dialog.locator('input[name="optMode"][disabled]').count() >= 1
     sync_api.expect(dialog.locator("#optExperimentalNote")).not_to_be_empty()
+    for key, modes in (("gemma_attn", "fast"), ("eager_attn", "eager"), ("merge", "fast"), ("ple_offload", "eager")):
+        field = dialog.locator(f'[data-opt="{key}"]')  # each switch shows for the backend that reads it
+        assert modes in field.get_attribute("data-modes").split() and ("eager" in field.get_attribute(
+            "data-modes").split()) == (modes == "eager")
+        if text_model["mode"] not in field.get_attribute("data-modes").split():
+            sync_api.expect(field).to_be_hidden()
     page.click("#optionsCancel")
     sync_api.expect(dialog).to_be_hidden()
 
@@ -163,12 +246,89 @@ def test_inspect_view_embeds_basal_viz_and_explains_a_playground_decision(page, 
     frame = page.frame_locator("#vizFrame")
     sync_api.expect(frame.locator("#modelchip")).to_contain_text(bf16_model["id"])
     view(page, "playground")
-    page.evaluate("r => setRequest(r)", CHOICE)
+    request = {**CHOICE, "state": "Umowa podpisana 3 marca 2025.", "facts": "auto", "lang": "pl"}
+    page.evaluate("r => setRequest(r)", request)
     page.click("#sendButton")
     page.click("#inspectDecision")
     sync_api.expect(page.locator("#pageTitle")).to_have_text("Inspect")
     sync_api.expect(frame.locator("#out .result").first).to_be_visible()
     sync_api.expect(frame.locator("#out")).to_contain_text("Do którego działu")
+    sync_api.expect(frame.locator("#out .result").first).to_contain_text("Polish prompt")
+    sync_api.expect(frame.locator("#out .result .prompt")).to_contain_text("Fakty pomocnicze")
+    notice = page.locator("#inspectNotice")
+    sync_api.expect(notice).to_be_visible()
+    if page.input_value("#playgroundModel") != bf16_model["id"]:  # the served decision came from other weights
+        sync_api.expect(notice).to_contain_text("weights: served")
     page.click("#stopInspect")
     sync_api.expect(frame_el).to_be_hidden()
     assert ui.get("/api/inspect")["state"] == "idle"
+
+
+def test_the_inspect_handoff_names_every_difference_and_refuses_what_it_cannot_explain(page, text_model):
+    """inspectHandoff on a served model whose engine, option orders and temperatures differ from the inspector's."""
+    probe = """([model, request]) => {
+      const saved = statusCache, served = statusCache.models.find(x => x.id === model);
+      statusCache = {...saved, inspect: {model, state: 'ready', mode: 'eager', device: 'mps', orders: 1,
+                                         temperatures: {choice: 9}},
+                     models: [{...served, mode: 'mlx', options: {think: true},
+                               entry: {...served.entry, orders: 2, temperature_per_prim: {choice: 1.2}}}]};
+      try { return inspectHandoff({model, ...request}); } finally { statusCache = saved; }
+    }"""
+    mixed = {"state": "s", "think": "auto", "early_exit": "0.99", "facts": "auto", "questions": {
+        "dept": {"type": "choice", "criteria": {"a": "A", "b": "B"}},
+        "intent": {"type": "classify", "labels": {"x": "X", "y": "Y"}}}}
+    handoff = page.evaluate(probe, [text_model["id"], mixed])
+    assert list(handoff["body"]["questions"]) == ["dept"] and handoff["body"]["facts"] == "auto"
+    assert not {"model", "think", "early_exit"} & set(handoff["body"])
+    notes = " | ".join(handoff["notes"])
+    for part in ("intent: task questions are left out", "engine: served mlx, explained eager on mps",
+                 "option orders: served 2, explained 1", "calibration: the served temperatures differ",
+                 "thinking: explained without the reasoning", "early exit 0.99"):
+        assert part in notes, notes
+    assert "media" in page.evaluate(probe, [text_model["id"], {**mixed, "media": [{"type": "image"}]}])["blocked"]
+    only_tasks = {"state": "s", "questions": {"intent": mixed["questions"]["intent"]}}
+    assert "only task questions" in page.evaluate(probe, [text_model["id"], only_tasks])["blocked"]
+    other = page.evaluate("""([model, request]) => {
+      const saved = statusCache; statusCache = {...saved, inspect: {model: 'Remek/basal-1.0-max', state: 'ready'}};
+      try { return inspectHandoff({model, ...request}); } finally { statusCache = saved; }
+    }""", [text_model["id"], mixed])
+    assert "the inspector runs Remek/basal-1.0-max" in other["blocked"]
+
+
+def test_the_tool_builder_sets_the_selection_of_several_tools(page):
+    view(page, "playground")
+    tools = [{"name": "refund", "description": "zwrot"}, {"name": "track", "description": "śledzenie"}]
+    request = {"state": "Chcę zwrotu i numeru przesyłki.", "questions": {"next": {
+        "type": "tool", "tools": tools, "multi": True, "objective": "f1", "min": 1, "max": 2,
+        "exclusive": ["refund"], "fallback": "track", "fallback_threshold": 0.3}}}
+    page.evaluate("r => setRequest(r)", request)
+    assert page.evaluate("() => buildRequest().questions") == request["questions"]
+    card = page.locator(".question").first
+    sync_api.expect(card.locator(".multi-tool-only")).to_be_visible()
+    card.locator('[data-f="max"]').fill("1")
+    card.locator('[data-f="objective"]').select_option("threshold")
+    card.locator('[data-f="threshold"]').fill("0.6")
+    built = page.evaluate("() => buildRequest().questions.next")
+    assert built["max"] == 1 and built["threshold"] == 0.6 and "objective" not in built
+    assert built["exclusive"] == ["refund"] and built["fallback"] == "track"
+    card.locator('[data-f="multi"]').uncheck()
+    sync_api.expect(card.locator(".multi-tool-only")).to_be_hidden()
+    built = page.evaluate("() => buildRequest().questions.next")
+    assert not {"multi", "min", "max", "exclusive", "fallback", "threshold"} & set(built)
+
+
+def test_the_calibration_view_imports_a_file_fitted_elsewhere(page, ui, text_model, tmp_path):
+    shipped = ui.get("/api/calibrations", params={"id": text_model["id"]})["shipped"]["file"]
+    view(page, "models")  # the Calibration block (Loaded tab)
+    page.select_option("#calibrationModel", text_model["id"])
+    page.fill("#calibrationImportPath", shipped)
+    sync_api.expect(page.locator("#calibrationFiles table")).to_be_visible()
+    before = page.locator("#calibrationFiles .chip", has_text="imported").count()
+    page.click("#importCalibration")
+    sync_api.expect(page.locator("#calibrationImportPath")).to_have_value("")  # done: the field is cleared
+    sync_api.expect(page.locator("#calibrationFiles .chip", has_text="imported")).to_have_count(before + 1)
+    row = page.locator("#calibrationFiles tbody tr", has=page.locator(".chip", has_text="imported")).first
+    sync_api.expect(row.locator("td").nth(3)).to_contain_text("5%")  # the shipped file's certified thresholds
+    page.fill("#calibrationImportPath", str(tmp_path / "none.json"))
+    page.click("#importCalibration")
+    sync_api.expect(page.locator(".toast.error").last).to_contain_text("cannot read")

@@ -159,7 +159,7 @@ def test_hardware_endpoint_reads_available_memory_each_request(tmp_path):
 
 def test_security_and_invalid_models_directory_type(tmp_path):
     app, _ = app_for(tmp_path, [MINI])
-    with TestClient(app, base_url="http://127.0.0.1") as client:
+    with TestClient(app, base_url="http://127.0.0.1:7860") as client:
         assert client.get("/api/status", headers={"host": "evil.example"}).status_code == 400
         rejected = client.post("/api/unload", headers={"origin": "http://evil.example"})
         assert rejected.status_code == 403
@@ -205,7 +205,8 @@ def test_download_runs_without_a_model_and_reports_progress_then_errors(tmp_path
         status = client.post("/api/download", json={"id": "mini"})
         assert status.status_code == 202
         assert status.json()["models"] == []
-        assert status.json()["downloads"][MINI.repo] == {"done_bytes": 40, "total_bytes": 100, "error": None}
+        wait_for(lambda: client.get("/api/status").json()["downloads"][MINI.repo]["done_bytes"] == 40)
+        assert client.get("/api/status").json()["downloads"][MINI.repo] == {"done_bytes": 40, "total_bytes": 100, "error": None}
         release.set()
         wait_for(lambda: client.get("/api/status").json()["downloads"] == {})
         on_disk[MINI.repo] = tmp_path
@@ -435,7 +436,7 @@ def test_auto_load_waiting_on_catalog_is_cancelled_during_shutdown(tmp_path, mon
     monkeypatch.setattr("basal.ui.app.threading.Event", event_factory)
     app = create_app(catalog_fn=blocked_catalog, hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats,
                      history=fleet.history)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     client.__enter__()
     assert catalog_entered.wait(timeout=2)
     shutdown_thread = threading.Thread(target=lambda: client.__exit__(None, None, None))
@@ -552,6 +553,72 @@ def test_memory_of_an_unloading_model_stays_committed_until_its_child_is_gone(tm
     wait_for(lambda: fleet.status()["memory"]["committed_bytes"] == 0)
 
 
+def test_temporary_runner_memory_stays_committed_until_unload_finishes(tmp_path, monkeypatch):
+    monkeypatch.setattr(Runner, "_start", lambda *args: None)
+    fleet = make_fleet(tmp_path, Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset()))
+    assessment = SimpleNamespace(
+        variant=Variant("temp", "repo/temp", "basal-2.0", "mini", "bf16", "bf16", None, 100, False),
+        mode="eager", est_memory_bytes=10 * 1024**3)
+    fleet.start_temporary("job", assessment, fleet.logs["basal-ui"])
+    started, release = threading.Event(), threading.Event()
+
+    def slow_unload(self):
+        started.set()
+        release.wait()
+
+    monkeypatch.setattr(Runner, "unload", slow_unload)
+    stopping = threading.Thread(target=fleet.stop_temporary, args=("job",), daemon=True)
+    stopping.start()
+    assert started.wait(2)
+    assert fleet.status()["memory"]["committed_bytes"] == 10 * 1024**3
+    other = SimpleNamespace(
+        variant=Variant("other", "repo/other", "basal-2.0", "mini", "bf16", "bf16", None, 100, False),
+        mode="eager", est_memory_bytes=10 * 1024**3)
+    with pytest.raises(RuntimeError, match="over memory budget"):
+        fleet.load(other)
+    release.set()
+    stopping.join(timeout=2)
+    assert not stopping.is_alive() and fleet.status()["memory"]["committed_bytes"] == 0
+
+
+def test_restart_reserves_memory_until_the_replacement_load_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(Runner, "_start", lambda *args: None)
+    fleet = make_fleet(tmp_path, Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset()))
+
+    def assessment(model_id):
+        variant = Variant(model_id, f"repo/{model_id}", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
+        return SimpleNamespace(variant=variant, mode="eager", est_memory_bytes=10 * 1024**3)
+
+    fleet.load(assessment("a"))
+    fleet.runners["a"].state = "ready"
+    entered, release = threading.Event(), threading.Event()
+    original_load = fleet.load
+
+    def delayed_load(value, media=False, options=None, _reservation=None):
+        if _reservation is not None:
+            entered.set()
+            release.wait()
+        return original_load(value, media=media, options=options, _reservation=_reservation)
+
+    monkeypatch.setattr(fleet, "load", delayed_load)
+    errors = []
+
+    def restart():
+        try:
+            fleet.restart(assessment("a"))
+        except (RuntimeError, KeyError) as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=restart, daemon=True)
+    thread.start()
+    assert entered.wait(2)
+    with pytest.raises(RuntimeError, match="over memory budget"):
+        fleet.load(assessment("b"))
+    release.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive() and not errors and "restart:a" not in fleet.reserved
+
+
 def test_memory_routes_validate_and_report_the_hardware_budget(tmp_path):
     app, _ = app_for(tmp_path, [], hw=Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset(), 5))
     with TestClient(app, base_url="http://127.0.0.1") as client:
@@ -599,3 +666,40 @@ def test_logs_route_lists_sources_and_reads_incrementally(tmp_path, instant_star
         assert [line["text"] for line in client.get("/api/logs", params={"source": "mini"}).json()["lines"]] == [
             "a child line"]
         assert client.get("/api/logs", params={"source": "nope"}).status_code == 404
+
+
+def test_mutation_origin_requires_matching_scheme_host_and_port(tmp_path):
+    app, _ = app_for(tmp_path, [])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        accepted = client.post("/api/download", json={"id": "missing"}, headers={"Origin": "http://localhost"})
+        assert accepted.status_code == 400
+        assert client.post("/api/download", json={"id": "missing"},
+                           headers={"Origin": "http://localhost:12345"}).status_code == 403
+        assert client.post("/api/download", json={"id": "missing"},
+                           headers={"Origin": "https://localhost"}).status_code == 403
+
+
+def test_shutdown_waits_for_gateway_drain_before_shared_state_teardown(tmp_path, monkeypatch):
+    order = []
+
+    class GatewayStub:
+        attempts = 0
+
+        def start(self):
+            return None
+
+        def stop(self):
+            self.attempts += 1
+            order.append("gateway")
+            return self.attempts > 1
+
+    fleet = make_fleet(tmp_path)
+    gateway = GatewayStub()
+    fleet.shutdown = lambda: order.append("fleet")
+    fleet.stats.close = lambda: order.append("stats")
+    monkeypatch.setattr(settings, "remove_keys_file", lambda: order.append("keys"))
+    app = create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet,
+                     stats=fleet.stats, history=fleet.history, gateway=gateway)
+    with TestClient(app, base_url="http://127.0.0.1"):
+        pass
+    assert order == ["gateway", "gateway", "fleet", "stats", "keys"]

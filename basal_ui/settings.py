@@ -47,6 +47,12 @@ def _locked(fn):
                 if os.name == "posix":
                     import fcntl
                     fcntl.flock(fd, fcntl.LOCK_EX)
+                elif os.name == "nt":
+                    import msvcrt
+                    if os.fstat(fd).st_size == 0:
+                        os.write(fd, b"\0")
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
                 _LOCK_STATE.depth = 1
                 try:
                     return fn(*args, **kwargs)
@@ -54,6 +60,9 @@ def _locked(fn):
                     _LOCK_STATE.depth = 0
                     if os.name == "posix":
                         fcntl.flock(fd, fcntl.LOCK_UN)
+                    elif os.name == "nt":
+                        os.lseek(fd, 0, os.SEEK_SET)
+                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
             finally:
                 os.close(fd)
     return wrapper
@@ -127,11 +136,11 @@ def update_serve(patch: dict) -> dict:
     allowed = set(DEFAULT_SERVE)
     unknown = set(patch) - allowed
     if unknown:
-        raise ValueError(f"unknown serve setting: {sorted(unknown)[0]}")
+        raise ValueError(f"unknown serve setting: {min(unknown)}")
     value = {**serve_settings(), **patch}
     for name in ("enabled", "require_key", "mcp"):
         if not isinstance(value[name], bool):
-            raise ValueError(f"{name} must be a boolean")
+            raise ValueError(f"{name} must be a boolean")  # noqa: TRY004 — setting validation uses ValueError
     if value["host"] not in ("127.0.0.1", "0.0.0.0"):
         raise ValueError("host must be 127.0.0.1 or 0.0.0.0")
     if type(value["port"]) is not int or not 1024 <= value["port"] <= 65535:
@@ -144,7 +153,7 @@ def update_serve(patch: dict) -> dict:
         raise ValueError("cors_origins must contain * or origins like https://example.com")
     log_path = value["log_decisions"]
     if not isinstance(log_path, str):
-        raise ValueError("log_decisions must be a path or empty")
+        raise ValueError("log_decisions must be a path or empty")  # noqa: TRY004 — setting validation uses ValueError
     if log_path:
         path = Path(log_path).expanduser().resolve()
         if path.is_dir():
@@ -166,7 +175,7 @@ def update_serve(patch: dict) -> dict:
 @_locked
 def set_auto_load(enabled: bool) -> bool:
     if not isinstance(enabled, bool):
-        raise ValueError("auto_load must be a boolean")
+        raise ValueError("auto_load must be a boolean")  # noqa: TRY004 — setting validation uses ValueError
     data = load()
     data["auto_load"] = enabled
     save(data)
@@ -234,7 +243,7 @@ def update_memory(patch: dict) -> dict:
     """budget_bytes: null (the hardware budget) or at least 1 GiB; reserve_bytes: kept free, >= 0."""
     unknown = set(patch) - {"budget_bytes", "reserve_bytes"}
     if unknown:
-        raise ValueError(f"unknown memory setting: {sorted(unknown)[0]}")
+        raise ValueError(f"unknown memory setting: {min(unknown)}")
     value = {**memory_settings(), **patch}
     if value["budget_bytes"] is not None and (type(value["budget_bytes"]) is not int
                                               or value["budget_bytes"] < 1024**3):
@@ -333,7 +342,6 @@ def _keys_path(pid: int | None = None) -> Path:
 def _internal_keys_path() -> Path:
     settings_path = _settings_path()
     return settings_path.with_name(f"{settings_path.stem}.internal-{os.getpid()}.json")
-    return settings_path.with_name(f"{settings_path.stem}.keys-{os.getpid() if pid is None else pid}.json")
 
 
 def _user_records(data: dict) -> list[dict]:

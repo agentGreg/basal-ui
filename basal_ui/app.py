@@ -9,12 +9,10 @@ or unloaded model never takes the UI down.
 """
 import argparse
 import asyncio
-from contextlib import asynccontextmanager
 import dataclasses
 import hashlib
 import json
 import os
-from pathlib import Path
 import secrets
 import shlex
 import signal
@@ -23,6 +21,8 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
@@ -193,14 +193,16 @@ class Runner:
         temporary: a private child for a job (basal-calibrate): no API key (it is reached on loopback without one),
         no calibration selected in basal-ui, not remembered for auto-load; extra_args go to basal-serve last."""
         options = load_options.non_default(load_options.validate(options, assessment.mode))
-        if options.get("mode") and not media:
+        if media:  # --media on: eager, or vLLM where chosen (prepare checks it can run)
+            assessment = dataclasses.replace(assessment, mode="vllm" if options.get("mode") == "vllm" else "eager")
+        elif options.get("mode"):
             assessment = dataclasses.replace(assessment, mode=options["mode"])
         with self.lock:
             if self.state in ("downloading", "starting"):
                 raise RuntimeError("the model is already loading; unload it first")
             old, _ = self.detach()
             self.state, self.model, self.model_repo = "downloading", assessment.variant.id, assessment.variant.repo
-            self.mode = "eager" if media else assessment.mode
+            self.mode = assessment.mode
             self.media_requested, self.media = media, []
             self.est_memory_bytes = assessment.est_memory_bytes
             self.extra_args, self.temporary, self.options = tuple(extra_args), temporary, options
@@ -237,7 +239,8 @@ class Runner:
     def _build_command(self, v, path, assessment, media, port, serve):
         """The child is private: loopback, a free port, the internal key (basal-ui's admin key) required."""
         command = [sys.executable, "-m", "basal.server",
-                   *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None),
+                   *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None,
+                                       platform=self.platform_fn()),
                    "--name", v.id, "--host", "127.0.0.1", "--port", str(port)]
         if not self.temporary:
             command += ["--api-keys", str(self.settings_mod.internal_keys_file(hashlib.sha256(
@@ -452,8 +455,12 @@ class Fleet:
     def stop_temporary(self, kind):
         with self.lock:
             runner = self.temporary.pop(kind, None)
+            if runner is not None:
+                self.retiring[runner] = runner.est_memory_bytes
         if runner is not None:
             runner.unload()
+            with self.lock:
+                self.retiring.pop(runner, None)
 
     def reserve(self, kind, needed):
         """Count `needed` bytes for a job that loads a model into basal-ui's own process (RuntimeError over the
@@ -468,14 +475,20 @@ class Fleet:
         with self.lock:
             self.reserved.pop(kind, None)
 
-    def load(self, assessment, media=False, options=None):
+    def load(self, assessment, media=False, options=None, _reservation=None):
         model_id = assessment.variant.id
         with self.lock:
             existing = self.runners.get(model_id)
             state = existing.status()["state"] if existing is not None else "idle"
             if state not in ("idle", "error"):
                 raise RuntimeError(f"model {model_id} is already {'loaded' if state == 'ready' else 'loading'}")
-            self.check_budget(assessment.est_memory_bytes)
+            if _reservation is None:
+                self.check_budget(assessment.est_memory_bytes)
+            else:
+                reserved = self.reserved.get(_reservation)
+                if reserved is None:
+                    raise RuntimeError("restart memory reservation was lost")
+                self.reserved.pop(_reservation)
             self.logs.pop(model_id, None)
             self.logs[model_id] = log = LogBuffer()  # most recent last; a reload starts a fresh log
             runner = self._runner(log)
@@ -516,19 +529,32 @@ class Fleet:
                 self.retiring.pop(runner, None)
             self.event("info", f"unloaded: {i}")
         if model_id is None:  # every model: the private children of jobs too (their job then fails)
-            for kind in list(self.temporary):
+            with self.lock:
+                temporary = list(self.temporary)
+            for kind in temporary:
                 self.stop_temporary(kind)
         return self.status()
 
     def restart(self, assessment, media=False, options=None):
         """Unload and load again; options None keeps the running child's load options."""
+        model_id = assessment.variant.id
         with self.lock:
-            current = self.runners.get(assessment.variant.id)
-        if options is None:
-            options = current.options if current is not None else {}
-        self.event("info", f"restart: {assessment.variant.id}")
-        self.unload(assessment.variant.id, forget=False)
-        return self.load(assessment, media=media, options=options)
+            current = self.runners.get(model_id)
+            if current is None:
+                raise KeyError(model_id)
+            if options is None:
+                options = current.options
+            proc, est = current.detach()
+            self.runners.pop(model_id)
+            self.retiring[current] = est
+            # The existing remembered model remains available for auto-load after the restart.
+        self.event("info", f"restart: {model_id}")
+        Runner._terminate(proc)
+        reservation = f"restart:{model_id}"
+        with self.lock:
+            self.retiring.pop(current, None)
+            self.reserved[reservation] = assessment.est_memory_bytes or 0
+        return self.load(assessment, media=media, options=options, _reservation=reservation)
 
     def download(self, variant) -> bool:
         """Start a runner-less download into the models directory; False when the model is on disk already.
@@ -680,6 +706,12 @@ def _byte_counter():
     return Counter
 
 
+def host_middleware(app, allowed_hosts):
+    """Apply basal-ui's Host-header allowlist to an ASGI app."""
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
+    return app
+
+
 def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fleet=None,
                settings_mod=settings, allowed_hosts=("127.0.0.1", "localhost", "::1"), gateway=None, stats=None,
                history=None) -> FastAPI:
@@ -705,16 +737,22 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         assessment = catalog.assess(variant, current)
         merged = load_options.validate(options, assessment.mode)
         if media:
-            if assessment.media_mode is None:
-                raise ValueError(assessment.media_reason)
+            modes = {m["mode"]: m for m in load_options.available_media_modes(assessment, current)}
+            chosen = modes.get(merged["mode"] or "eager")
+            if chosen is None:
+                raise ValueError("--media on needs --mode eager or vllm (the media paths of basal-omni)")
+            if not chosen["available"]:
+                raise ValueError(chosen["reason"])
+            assessment = dataclasses.replace(assessment, mode=merged["mode"] or "eager")
         elif merged["mode"]:
             mode = next(m for m in load_options.available_modes(variant, current, assessment)
                         if m["mode"] == merged["mode"])
             if not mode["available"]:
                 raise ValueError(f"--mode {merged['mode']}: {mode['reason']}")
+            assessment = dataclasses.replace(assessment, mode=merged["mode"])
         elif not assessment.runnable:
             raise ValueError(assessment.reason)
-        load_options.check_combination(variant, current, merged, assessment.mode)
+        load_options.check_combination(variant, current, merged, "eager" if media else assessment.mode)
         return assessment, load_options.non_default(merged)
 
     auto_load_stop = threading.Event()
@@ -755,29 +793,37 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         with auto_load_lock:
             auto_load_stop.set()
         if auto_load_thread is not None:
-            auto_load_thread.join(timeout=5)
-        gateway.stop()
+            while auto_load_thread.is_alive():
+                auto_load_thread.join(timeout=5)
+        while not gateway.stop():
+            fleet.event("error", "API server shutdown is still draining; waiting before tearing down shared state")
+            await asyncio.sleep(1)
         inspector.stop()
-        fleet.release("inspect")
         fleet.shutdown()
         stats.close()
         settings_mod.remove_keys_file()
 
-    app = FastAPI(title="basal-ui", lifespan=lifespan)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
+    app = host_middleware(FastAPI(title="basal-ui", lifespan=lifespan), allowed_hosts)
     if STATIC.is_dir():
         app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/viz", viz_app(inspector.explainer, viz_examples))  # basal-viz for the Inspect view
+
 
     @app.middleware("http")
     async def refuse_cross_origin(request: Request, call_next):
         origin = request.headers.get("origin")
         if request.method in ("POST", "PUT", "PATCH", "DELETE") and origin and "*" not in allowed_hosts:
             try:
-                origin_host = urlsplit(origin).hostname
+                parsed = urlsplit(origin)
+                origin_host = parsed.hostname
+                origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+                request_port = request.url.port or (443 if request.url.scheme == "https" else 80)
             except ValueError:
-                origin_host = None
-            if origin_host is None or origin_host.lower() not in {host.lower() for host in allowed_hosts}:
+                parsed, origin_host = None, None
+                origin_port = request_port = None
+            if (origin_host is None or origin_host.lower() not in {host.lower() for host in allowed_hosts}
+                    or parsed.scheme != request.url.scheme or parsed.path or parsed.query or parsed.fragment
+                    or parsed.username is not None or parsed.password is not None or origin_port != request_port):
                 return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
         return await call_next(request)
 
@@ -948,6 +994,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         family_ok = variant.family == "basal-2.0" and variant.tier == "4.5B"
         return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
                 "saved": bool(saved), "defaults": load_options.DEFAULTS,
+                "media_modes": load_options.available_media_modes(assessment, current),
                 "think": {"model": family_ok, "vllm": "vllm" in current.engines,
                           "reason": None if family_ok else load_options.THINK_REASON}}
 
@@ -984,7 +1031,12 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if not isinstance(media, bool):
             raise HTTPException(400, "media must be a boolean")
         try:
-            options = body["options"] if "options" in body else settings_mod.load_options(variant.id)  # remembered
+            if "options" in body:
+                options = body["options"]
+            else:  # remembered; their engine mode applies with media only when it is a media mode
+                options = settings_mod.load_options(variant.id)
+                if media and options.get("mode") not in (None, "eager", "vllm"):
+                    options = {k: v for k, v in options.items() if k != "mode"}
             assessment, options = prepare(variant, media, options)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -1145,6 +1197,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 f.read(1)
         except OSError as exc:
             raise HTTPException(400, f"cannot read {source}: {exc.strerror or exc}") from exc
+        try:  # every problem of the file before any model is loaded (basal-calibrate's own checks)
+            _, units = calibration.labelled(source)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        in_process = bool(units)  # task thresholds are certified on the answers the engine serves in process
         targets = body.get("targets") or list(calibration.TARGETS)
         try:
             if not isinstance(targets, list) or not targets or not all(0 < float(t) < 1 for t in targets):
@@ -1156,13 +1213,25 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         out = settings_mod.calibrations_dir(variant.id) / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
+        label = f"{variant.id} on {source.name}" + (" (engine in process: task questions)" if in_process else "")
         try:
-            with fleet.lock:
-                fleet.check_budget(assessment.est_memory_bytes)
-            return fleet.jobs.start("calibrate", variant.id, f"{variant.id} on {source.name}",
-                                    calibration.run_calibration, fleet, assessment, local_dir, source, out,
-                                    [str(float(t)) for t in targets], options)
+            if in_process:
+                fleet.reserve("calibrate", assessment.est_memory_bytes)
+            else:
+                with fleet.lock:
+                    fleet.check_budget(assessment.est_memory_bytes)
         except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        engine_args = None
+        if in_process:  # the serving mode's flags and the load options basal-calibrate's engine takes
+            engine_args = calibration.engine_flags(catalog.serve_args(
+                variant, local_dir, assessment.mode, platform=hw().platform) + load_options.args(options))
+        try:
+            return fleet.jobs.start("calibrate", variant.id, label, calibration.run_calibration, fleet, assessment,
+                                    local_dir, source, out, [str(float(t)) for t in targets], options, engine_args)
+        except RuntimeError as exc:
+            if in_process:
+                fleet.release("calibrate")
             raise HTTPException(409, str(exc)) from exc
 
     @app.delete("/api/calibrate")
@@ -1186,7 +1255,25 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             except (OSError, ValueError) as exc:
                 shipped["error"] = str(exc)
         return {"selected": settings_mod.calibration_selection().get(variant.id),
-                "files": calibration.listing(variant.id, settings_mod), "shipped": shipped}
+                "files": calibration.listing(variant.id, settings_mod, local_dir), "shipped": shipped}
+
+    @app.post("/api/calibrations/import")
+    def import_calibration(body: dict = Body(...)):
+        """A calibration file fitted elsewhere (basal-calibrate on another machine, a colleague's file): copied into the
+        model's calibrations, then selectable; a file of another model is listed with basal-serve's warning."""
+        from . import calibration
+
+        variant = find_variant(body.get("id"))
+        downloaded(variant)  # the listing checks the file against the model's directory
+        source = body.get("path")
+        if not isinstance(source, str) or not source.strip():
+            raise HTTPException(400, "path must name a calibration file (JSON)")
+        try:
+            target = calibration.import_file(variant.id, settings_mod, source)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        fleet.event("info", f"calibration imported for {variant.id}: {source} -> {target}")
+        return {"file": str(target), **calibrations_response(variant)}
 
     @app.get("/api/calibrations")
     def get_calibrations(id: str):
@@ -1199,7 +1286,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         variant = find_variant(body.get("id"))
         path = body.get("file")
         if path is not None and path not in {f["file"] for f in calibration.listing(variant.id, settings_mod)}:
-            raise HTTPException(400, f"{path!r} is not a calibration basal-ui fitted for {variant.id}")
+            raise HTTPException(400, f"{path!r} is not one of the calibrations of {variant.id} in basal-ui")
         settings_mod.select_calibration(variant.id, path)
         fleet.event("info", f"calibration for {variant.id}: {path or 'shipped'} (applies at the next start)")
         return calibrations_response(variant)
@@ -1210,7 +1297,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
         variant = find_variant(id)
         if file not in {f["file"] for f in calibration.listing(variant.id, settings_mod)}:
-            raise HTTPException(404, f"{file!r} is not a calibration basal-ui fitted for {variant.id}")
+            raise HTTPException(404, f"{file!r} is not one of the calibrations of {variant.id} in basal-ui")
         try:
             return {"report": Path(file).with_suffix(".report.txt").read_text()}
         except OSError as exc:
@@ -1228,12 +1315,14 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         local_dir = downloaded(variant)
         cal = body.get("calibration")
         if cal is not None and cal not in {f["file"] for f in calibration.listing(variant.id, settings_mod)}:
-            raise HTTPException(400, f"{cal!r} is not a calibration basal-ui fitted for {variant.id}")
+            raise HTTPException(400, f"{cal!r} is not one of the calibrations of {variant.id} in basal-ui")
+        orders = body.get("orders")
+        if orders not in (None, 1, 2):
+            raise HTTPException(400, "orders must be 1, 2 or null (the model's own)")
         job = fleet.jobs.get("inspect")
         if job is not None and job.running:
             raise HTTPException(409, "the inspector is loading a model")
         inspector.stop()
-        fleet.release("inspect")
         current = hw()
         try:
             fleet.reserve("inspect", catalog.assess(variant, current).est_memory_bytes)
@@ -1242,7 +1331,8 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
         def start(job):
             try:
-                return inspector.start(job, variant, local_dir, current, cal)
+                return inspector.start(job, variant, local_dir, current, cal, orders,
+                                       on_exit=lambda: fleet.release("inspect"))
             except BaseException:
                 fleet.release("inspect")
                 raise
@@ -1257,7 +1347,6 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def stop_inspect():
         fleet.jobs.cancel("inspect")
         inspector.stop()
-        fleet.release("inspect")
         fleet.event("info", "inspector stopped")
         return inspector.state()
 
@@ -1289,6 +1378,8 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if not lines:
             raise HTTPException(400, f"{source} has no lines")
         out = Path(body["output"]).expanduser() if body.get("output") else batch.default_output(source)
+        if out.resolve() == source.resolve():
+            raise HTTPException(400, "output must not be the input file")
         if not out.parent.is_dir() or not os.access(out.parent, os.W_OK):
             raise HTTPException(400, f"cannot write to {out.parent}")
         concurrency = body.get("concurrency", 16)

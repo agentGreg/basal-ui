@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 from basal.ui.stats import Stats
@@ -81,3 +83,39 @@ def test_two_instances_on_one_file_add_up(tmp_path):
     assert "n" not in merged["models"] and merged["benchmarks"] == {"m": [{"p50_ms": 1.0}]}
     for s in (a, b):
         s.close()
+
+
+def test_record_during_reset_remains_in_delta_and_is_not_lost(stats, monkeypatch):
+    from basal.ui import settings
+
+    write = settings._write_private
+    started = threading.Event()
+    workers = []
+
+    def record_before_persist(path, text):
+        if not workers:
+            def record():
+                started.set()
+                stats.record("m", {"answers": {}}, 2.0)
+            worker = threading.Thread(target=record)
+            workers.append(worker)
+            worker.start()
+            assert started.wait(1)
+        write(path, text)
+
+    monkeypatch.setattr(settings, "_write_private", record_before_persist)
+    stats.reset()
+    workers[0].join(timeout=1)
+    assert not workers[0].is_alive()
+    assert stats.snapshot()["models"]["m"]["requests"] == 1
+    stats.flush()
+    assert stats.snapshot()["models"]["m"]["requests"] == 1
+
+
+def test_snapshot_reads_another_instances_flushed_counters(tmp_path):
+    a, b = Stats(tmp_path / "shared.json"), Stats(tmp_path / "shared.json")
+    b.record("m", {"answers": {}}, 1.0)
+    b.flush()
+    assert a.snapshot()["models"]["m"]["requests"] == 1
+    a.close()
+    b.close()

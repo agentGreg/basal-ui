@@ -10,6 +10,13 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from basal.ui import settings
 
 
+def test_interprocess_lock_context_runs_the_wrapped_function(tmp_path, monkeypatch):
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
+    called = []
+    locked = settings._locked(lambda: called.append("inside"))
+    locked()
+    assert called == ["inside"]
+
 def test_set_and_reset_models_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     target = tmp_path / "models"
@@ -211,12 +218,12 @@ def test_cross_process_revoke_is_not_undone_by_creates(tmp_path, monkeypatch):
     creator = subprocess.Popen([sys.executable, "-c", code, str(start)], env=env)
     revoker = subprocess.Popen(
         [sys.executable, "-c",
-         "from basal.ui import settings\n"
-         "import pathlib, sys, time\n"
-         "start = pathlib.Path(sys.argv[1])\n"
-         "while not start.exists(): time.sleep(.001)\n"
-         "settings.delete_key('revoke-me')", str(start)], env=env)
+         ("from basal.ui import settings\n"
+          "import pathlib, sys, time\n"
+          "start = pathlib.Path(sys.argv[1])\n"
+          "while not start.exists(): time.sleep(.001)\n"
+          "settings.delete_key('revoke-me')"), str(start)], env=env)
     start.touch()
     assert creator.wait(timeout=30) == 0
     assert revoker.wait(timeout=30) == 0
-    assert all(record["name"] != "revoke-me" for record in settings.keys())
+    assert all(record["name"] != "revoke-me" for record in settings.keys())  # noqa: SIM118 — keys() returns records
