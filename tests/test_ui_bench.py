@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from basal.ui import bench, settings
 from basal.ui.app import Fleet, Runner, create_app
+from basal.ui.jobs import Cancelled, Job, LogBuffer
 from basal.ui.hardware import Hardware
 from basal.ui.history import History
 from basal.ui.stats import Stats
@@ -38,9 +39,10 @@ class AnswersOptionOne:
 def test_run_benchmark_measures_latency_throughput_and_accuracy(tmp_path):
     fleet = AnswersOptionOne()
     paths = [str(write_set(tmp_path / "two.jsonl", [0, 1]))]
+    job = Job("benchmark", "m", "two", LogBuffer())
     phases = []
-    result = asyncio.run(bench.run_benchmark(fleet, "m", paths, "two", n_seq=4, n_conc=10, concurrency=3,
-                                             progress=lambda phase, done, total: phases.append(phase)))
+    job.progress = lambda phase, done=0, total=0: phases.append(phase)
+    result = asyncio.run(bench.run_benchmark(fleet, "m", paths, "two", job, n_seq=4, n_conc=10, concurrency=3))
     assert result["accuracy"] == {"overall": 0.5, "by_file": {"two": 0.5}}
     assert (result["model"], result["set"], result["items"], result["errors"]) == ("m", "two", 2, 0)
     assert 0 < result["p50_ms"] <= result["p95_ms"] and result["mean_ms"] > 0
@@ -71,11 +73,11 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     release = threading.Event()
 
-    async def fake_run(fleet, model_id, paths, label, progress=None, cancel=None):
-        progress("sequential", 1, 30)
+    async def fake_run(fleet, model_id, paths, label, job):
+        job.progress("sequential", 1, 30)
         while not release.is_set():
-            if cancel.is_set():
-                raise bench.Cancelled()
+            if job.cancel.is_set():
+                raise Cancelled()
             await asyncio.sleep(0.01)
         return {"model": model_id, "set": label, "p50_ms": 1.0}
 
@@ -96,22 +98,26 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
         started = client.post("/api/benchmark", json={"id": "mini"})
         assert started.status_code == 202 and started.json()["running"] is True
         busy = client.post("/api/benchmark", json={"id": "mini"})
-        assert busy.status_code == 409 and busy.json()["detail"] == "a benchmark is already running"
+        assert busy.status_code == 409 and busy.json()["detail"] == "a benchmark job is already running"
+
+        def job():
+            return client.get("/api/status").json()["jobs"]["benchmark"]
         deadline = time.monotonic() + 3
-        while client.get("/api/status").json()["benchmark"]["phase"] != "sequential" and time.monotonic() < deadline:
+        while job()["phase"] != "sequential" and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert client.get("/api/status").json()["benchmark"]["phase"] == "sequential"
+        assert job()["phase"] == "sequential"
         release.set()
         deadline = time.monotonic() + 3
-        while client.get("/api/status").json()["benchmark"]["running"] and time.monotonic() < deadline:
+        while job()["running"] and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert client.get("/api/status").json()["benchmark"]["phase"] == "done"
+        assert job()["phase"] == "done" and job()["result"]["p50_ms"] == 1.0
         assert client.get("/api/benchmarks").json() == {"mini": [{"model": "mini", "set": "bundled", "p50_ms": 1.0}]}
+        assert {"id": "job:benchmark", "state": "done"} in client.get("/api/logs").json()["sources"]
 
         release.clear()
         client.post("/api/benchmark", json={"id": "mini"})
         assert client.delete("/api/benchmark").status_code == 200
         deadline = time.monotonic() + 3
-        while client.get("/api/status").json()["benchmark"]["running"] and time.monotonic() < deadline:
+        while job()["running"] and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert client.get("/api/status").json()["benchmark"]["phase"] == "cancelled"
+        assert job()["phase"] == "cancelled"

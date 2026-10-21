@@ -32,6 +32,8 @@
 .reason.wide{max-width:none}.chips.safety{margin:6px 0}.answer code,.reason code{font:11px var(--mono)}
 .q-fields{display:grid;gap:8px;margin-top:8px}.qf{min-width:0}.qf>label{display:block;font-size:12px;font-weight:650;margin-bottom:5px}.qf>small{display:block;font-size:11px;margin-top:3px}.qf textarea{min-height:72px}.qf textarea.json{font:12px/1.5 var(--mono);min-height:120px}.qf-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;align-items:end}.qf-row input,.qf input[type=text]{width:100%}.qf-switch{font-size:13px;margin-right:14px}.cost-mode{margin:0 0 8px}.cost-table input{width:100%;min-width:70px}.cost-table td,.cost-table th{padding:4px}.common-fields{grid-template-columns:repeat(auto-fill,minmax(200px,max-content))}.common-fields .controls input{width:110px}
 .prob:not(.winner) .bar span{background:#c9cabc}.mini-table{margin:8px 0}.mini-table td,.mini-table th{padding:6px 8px}.mini-table tr.chosen td{font-weight:700}.ranking{margin:6px 0;padding-left:20px;font-size:13px}.compressed{white-space:pre-wrap}.source-view{border-top:1px solid var(--line);padding-top:12px;margin-top:6px}.source{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#fbfaf6;border:1px solid var(--line);border-radius:5px;padding:12px;font:13px/1.65 var(--sans)}mark{border-radius:3px;padding:0 2px;color:inherit}mark.evidence{background:#f5d9cd}mark.kept{background:var(--green-light);box-shadow:inset 0 -2px 0 #b9cdb6}mark.dropped{background:transparent;color:var(--muted)}mark.field{background:var(--omni-light);box-shadow:inset 0 -2px 0 #cfc3e2}.chip.muted{color:var(--muted)}
+.report-dialog{width:min(960px,calc(100vw - 32px))}.report-dialog pre{max-height:65vh}#calibrationBlock,#benchmarks{margin-top:18px}
+.options-dialog{width:min(980px,calc(100vw - 32px));max-height:92vh}.option-section{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}.option-section legend{font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 4px}.option-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;margin-bottom:8px}.option-mode{display:flex!important;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;border:1px solid var(--line);border-radius:5px;padding:6px 8px}.option-mode small{flex-basis:100%;font-size:11px;color:var(--muted);line-height:1.3}.option-mode.unavailable{opacity:.55}.option-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px;align-items:end}.opt-field>label{display:block;font-size:12px;font-weight:650;margin-bottom:4px}.opt-field input[type=number],.opt-field input[type=text],.opt-field select{width:100%}.opt-field .controls input{width:80px}button.options-model{margin-left:6px}.dialog-actions label{margin-right:auto;font-size:13px}
 </style>
 </head>
 <body><div class="app-shell">
@@ -48,7 +50,7 @@
 <section class="view" id="overview" data-page="overview"><section id="hardware" class="card hardware" aria-label="Hardware"><div><div class="section-index">HARDWARE</div><div id="deviceName" class="hardware-name">Detecting hardware…</div><div id="engines" class="chips"></div></div><div class="hardware-grid"><div class="metric"><label>Platform</label><strong id="platform">—</strong></div><div class="metric"><label>Memory budget</label><strong id="hardwareBudget">—</strong></div><div class="metric"><label>Available now</label><strong id="availableMemory">—</strong></div><div class="metric"><label>System RAM</label><strong id="systemRam">—</strong></div></div></section>
 <div class="dashboard-grid"><section class="card"><div class="dashboard-heading"><h3>Suggested for this machine</h3><a class="dashboard-link" href="#models">All suggestions →</a></div><div id="overviewSuggested" class="overview-suggestion"><p class="muted">Loading suggestions…</p></div></section><div class="dashboard-stack"><section class="card"><div class="dashboard-heading"><h3>On disk</h3><a class="dashboard-link" href="#manager">Manage models →</a></div><div id="diskSummary" class="summary-value">Loading…</div><div id="diskSummaryMeta" class="summary-meta"></div></section><section class="card"><div class="dashboard-heading"><h3>API server</h3><a class="dashboard-link" href="#api">Configure →</a></div><div id="apiSummary" class="summary-value">Loading…</div><div id="apiSummaryMeta" class="summary-meta"></div></section></div></div>
 <section class="card" id="status" aria-live="polite"><div class="section-index">LOADED MODELS</div><div id="memoryBar"></div><div id="loadedModels"><div class="empty">No model loaded</div></div></section></section>
-<section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
+<section class="view" id="models" data-page="models"><section class="card"><div class="tabs" role="tablist"><button id="loadedTab" class="active" role="tab" aria-selected="true">Loaded</button><button id="suggestedTab" role="tab" aria-selected="false">Suggested</button><button id="allModelsTab" role="tab" aria-selected="false">All models</button></div><div id="loaded" role="tabpanel"><div id="statsTable"></div><div id="benchmarks"></div><div id="calibrationBlock"></div></div><div id="suggested" role="tabpanel" hidden><div class="empty">Loading suggestions…</div></div><div id="allModels" role="tabpanel" hidden><div class="controls" style="margin-bottom:12px"><label><input id="olderToggle" type="checkbox"> Older families</label><label><input id="notRunnableToggle" type="checkbox"> Show not runnable</label><label><input id="downloadedToggle" type="checkbox"> Downloaded only</label><button id="refreshModels">Refresh</button></div><div id="modelsTable" class="table-wrap"><div class="empty">Loading models…</div></div></div></section></section>
 <section class="view" id="manager" data-page="manager"><section class="card"><div class="field"><label for="modelsDir">Models directory</label><div class="directory-row"><div><input id="modelsDir" type="text" autocomplete="off"></div><button id="saveModelsDir" type="button">Save</button><button id="defaultModelsDir" type="button">Use default</button></div><div id="defaultModelsDirHint" class="directory-hint muted"></div><div id="modelsDirError" class="status-error manager-error" role="alert"></div></div><div class="disk-list"><div class="section-head"><h3>On disk</h3></div><div id="diskModels"><div class="empty">Loading models…</div></div><div id="diskTotal" class="disk-total"></div></div></section></section>
 <section class="view" id="playground" data-page="playground"><section class="card"><div class="playground-head"><select id="playgroundModel" aria-label="Model"></select><select id="examples"><option value="">Load an example…</option></select><label title="Append the dates, amounts and other facts basal extracts from the state (facts: auto)"><input id="factsToggle" type="checkbox"> Facts</label><select id="langSelect" aria-label="Language" title="Prompt language (lang)"><option value="auto">Language: auto</option><option value="pl">Polish (pl)</option><option value="en">English (en)</option></select><label><input id="editJsonToggle" type="checkbox"> Edit JSON</label></div><fieldset id="playgroundForm" disabled><div id="builder"><div class="field"><label for="stateInput">State</label><textarea id="stateInput" placeholder="Describe the state to evaluate"></textarea></div><div class="field"><div class="section-head"><h3>Questions</h3><button type="button" id="addQuestion">Add question</button></div><div id="questions" class="questions"></div></div></div><div class="field" id="mediaField" hidden><label for="mediaInput">Media</label><input id="mediaInput" type="file" multiple accept="image/*,audio/*"><div class="field" id="mediaOptions" hidden><label for="mediaDetail">Image detail</label><select id="mediaDetail"><option value="default">default</option><option value="high">high</option></select></div><div id="mediaItems" class="media-items"></div><div id="mediaError" class="error-box" role="alert" hidden></div></div><div class="editjson" id="editJsonArea" hidden><label for="requestJson">Request JSON (sent as-is)</label><textarea id="requestJson" spellcheck="false"></textarea></div><button id="sendButton" class="primary" type="button" style="margin-top:12px">Send decision</button><div id="decideError" class="error-box" hidden></div><div id="results" class="results"></div><details id="rawDetails" hidden><summary>Raw response JSON</summary><pre id="rawResponse"></pre></details></fieldset><div id="playgroundHint" class="muted" style="margin-top:10px">Load a model to enable the playground.</div></section></section>
 <section class="view" id="api" data-page="api"><section class="card" id="apiServer"><div id="serveStatus" class="serve-status"><span class="serve-status-text suggestion-meta">Only this app can reach the model</span><label><input id="serveEnabled" type="checkbox"> Serve the API</label></div><div class="field"><label>Exposure</label><div class="tabs" role="group" aria-label="API server exposure"><button type="button" id="serveLoopback">This computer</button><button type="button" id="serveLan">Local network</button></div><p id="serveWarning" class="error-box" hidden>Local-network access without a required API key is not recommended.</p></div><div class="serve-fields"><div class="field"><label for="servePort">Port</label><input id="servePort" type="number" min="1024" max="65535"></div><div class="field"><label for="serveMaxLen">Max context length</label><input id="serveMaxLen" type="number" min="512" max="131072"><small>tokens; read by the vLLM and SGLang modes</small></div><div class="field"><label for="serveLog">Decision log (JSONL path, empty = off)</label><input id="serveLog" type="text" placeholder="~/basal-decisions.jsonl"></div><div class="field"><label for="serveCors">CORS origins (one per line)</label><textarea id="serveCors" placeholder="https://app.example.com"></textarea></div></div><div class="serve-options"><label><input id="serveRequireKey" type="checkbox"> Require an API key</label><label><input id="serveMcp" type="checkbox"> MCP at /mcp</label><label><input id="autoLoad" type="checkbox"> Load the models when basal-ui starts</label><small id="mcpHint" class="muted"></small></div><div class="serve-actions"><button id="saveServe" class="primary" type="button">Save settings</button><button id="restartServe" type="button">Restart server</button><button id="copyServeUrl" class="ghost icon-button" data-tooltip="Copy endpoint" aria-label="Copy endpoint" type="button">Copy endpoint</button></div><div id="serveError" class="error-box" role="alert" hidden></div><h3>API keys</h3><div id="serveKeys"></div><div class="key-create"><input id="newKeyName" type="text" placeholder="Key name"><button id="createKey" type="button">Create key</button></div><div id="newKeySecret" class="secret-alert" hidden></div><div class="section-head"><h3>Connect</h3></div><div id="connectTabs" class="tabs connect-tabs" role="tablist" aria-label="Connection examples"><button type="button" data-connect="curl" class="active" role="tab" aria-selected="true">curl</button><button type="button" data-connect="python" role="tab" aria-selected="false">Python</button><button type="button" data-connect="typesafe" role="tab" aria-selected="false">TypeSafe SDK</button><button type="button" data-connect="openai" role="tab" aria-selected="false">OpenAI SDK</button><button type="button" data-connect="litellm" role="tab" aria-selected="false">LiteLLM</button><button type="button" data-connect="mcp" role="tab" aria-selected="false">MCP</button></div><div id="connectPanels"><div class="connect-panel" data-connect-panel="curl"><pre><code id="connectCurl"></code></pre></div><div class="connect-panel" data-connect-panel="python" hidden><pre><code id="connectPython"></code></pre></div><div class="connect-panel" data-connect-panel="typesafe" hidden><pre><code id="connectTypesafe"></code></pre></div><div class="connect-panel" data-connect-panel="openai" hidden><pre><code id="connectOpenai"></code></pre></div><div class="connect-panel" data-connect-panel="litellm" hidden><pre><code id="connectLitellm"></code></pre></div><div class="connect-panel" data-connect-panel="mcp" hidden><pre><code id="connectMcp"></code></pre><p id="mcpConnectHint" class="muted" hidden>Turn on MCP at /mcp and save settings to enable HTTP transport.</p></div></div><p id="runningServerNote" class="muted" hidden>Snippets describe the running server; saved settings apply after Restart.</p><button id="copyServeConnect" class="ghost icon-button" data-tooltip="Copy snippet" aria-label="Copy snippet" type="button">Copy snippet</button></section></section>
@@ -124,7 +126,7 @@ function familyOrder(family) {
 function tierOrder(tier) { return ({mini:0,'1.5B':1,'4.5B':2,max:3,ultra:4})[tier] ?? 9; }
 function renderModels(data) {
   modelData = data.models || [];
-  renderDiskModels();
+  renderDiskModels(); renderCalibrationModels();
   const suggestions = data.suggestions || [];
   renderSuggestions(suggestions);
   const overviewSuggestion=$('#overviewSuggested'), firstSuggestion=$('#suggested .suggestion-card');
@@ -149,7 +151,7 @@ function renderModels(data) {
       const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
       const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
       const downloadButton=downloadControl(m,downloadStatus);
-      const mediaButton = m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '';
+      const mediaButton = (m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '') + optionsButton(m.id);
       html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td>${loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadButton:m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>${mediaButton}`:'—'}</td></tr>`;
     }
   }
@@ -182,7 +184,7 @@ function renderSuggestions(suggestions) {
     const media = s.slot === 'multimodal';
     const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
     const download=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
-    const action=loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadControl(m,download):`<button class="suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button>`;
+    const action=loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadControl(m,download):`<div class="controls"><button class="suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button>${optionsButton(m.id,media)}</div>`;
     return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}${action}</article>`;
   }).join('')}</div>`;
   document.querySelectorAll('.suggestion-load').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id,b.dataset.media==='true')));
@@ -925,10 +927,11 @@ function renderStatus(s) {
   renderMemoryBar(s.memory||{},models);
   renderLoadedRows(models);
   renderPlaygroundModels(ready);
-  renderBenchmarkState(s.benchmark,ready);
+  renderBenchmarkState(s.jobs?.benchmark,ready); renderCalibrationState(s.jobs?.calibrate);
   if(serveData)renderServeStatus(s);
   loadStats();
-  clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,busy||repos.size||s.benchmark?.running?1000:5000);
+  const jobsRunning=Object.values(s.jobs||{}).some(j=>j.running);
+  clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,busy||repos.size||jobsRunning?1000:5000);
 }
 function renderMemoryBar(memory, models) {
   const budget=Number(memory.budget_bytes)||0, reserve=Number(memory.reserve_bytes)||0, limit=Math.max(1,budget-reserve);
@@ -943,8 +946,9 @@ function renderLoadedRows(models) {
     const progress=p?`<div class="progress-wrap"><div class="progress"><span style="width:${p.total_bytes?Math.min(100,p.done_bytes/p.total_bytes*100):0}%"></span></div><small>${gb(p.done_bytes)} / ${gb(p.total_bytes)}</small></div>`:'';
     const chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${uncalibrated(m.entry)?'<span class="badge fit-tight" title="temperature_per_prim is {}: the probabilities are the raw model outputs">uncalibrated</span>':''}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
     const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
-    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button><a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
-    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
+    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,true):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
+    const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="load option">${esc(v===true?k:v===false?`no ${k}`:`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}</div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
   }).join(''):'<div class="empty">No model loaded · <a href="#models">Load a model</a></div>';
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
@@ -1017,6 +1021,172 @@ function renderBenchmarkResults() {
   const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
   $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(x=>`<tr><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td title="${esc(x.set)}">${esc(x.set==='bundled'?'bundled':shortName(x.set))} (${x.items})</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td><td>${num(x.p50_ms,0)} ms</td><td>${num(x.p95_ms,0)} ms</td><td>${num(x.decisions_per_s)}</td><td>${num(x.questions_per_s)}</td><td>${num(x.input_tokens_per_s,0)}</td><td title="${esc(Object.entries(x.accuracy?.by_file||{}).map(([f,v])=>`${f}: ${pct(v)}`).join(', '))}">${pct(x.accuracy?.overall)}</td><td>${x.errors}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
 }
+// Calibration: basal-calibrate on the user's labelled requests against a temporary uncalibrated child of the model
+$('#calibrationBlock').innerHTML=`<div class="section-head"><h3>Calibration</h3></div><div class="controls"><select id="calibrationModel" aria-label="Model to calibrate"></select><input id="calibrationInput" type="text" placeholder="/path/to/labelled.jsonl" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">Calibrate</button><button type="button" id="cancelCalibration" hidden>Cancel</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">Logs</a></div><p class="muted">Fits temperatures and certified thresholds on your labelled requests (format: <code>docs/CALIBRATION.md#input</code>; the simple <code>basal-run</code> items with <code>gold</code> work too) against a temporary uncalibrated copy of the model, which needs its memory once more while it runs. Task questions need the engine in process: use <code>basal-calibrate</code> for them. The selected file applies from the model's next start.</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>Calibration report</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">Close</button></div></dialog>`;
+$('#calibrationInput').value=localStorage.getItem('basal-ui.calibrationInput')||'';
+$('#calibrationInput').oninput=()=>localStorage.setItem('basal-ui.calibrationInput',$('#calibrationInput').value);
+document.querySelectorAll('#calibrationBlock input[type=checkbox]').forEach(i=>{i.setAttribute('role','switch');setChecked(i,i.checked);});
+$('#reportClose').onclick=()=>$('#reportDialog').close();
+let calibrationRunning=false, calibrationSignature='';
+function renderCalibrationModels() {
+  const select=$('#calibrationModel'), current=select.value||localStorage.getItem('basal-ui.calibrationModel')||'', rows=modelData.filter(m=>m.downloaded);
+  const signature=JSON.stringify(rows.map(m=>m.id));
+  if(signature!==calibrationSignature){
+    calibrationSignature=signature;
+    select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="">Download a model first</option>';
+    if(rows.some(m=>m.id===current))select.value=current;
+    loadCalibrations();
+  }
+  $('#runCalibration').disabled=calibrationRunning||!rows.length;
+}
+$('#calibrationModel').onchange=()=>{localStorage.setItem('basal-ui.calibrationModel',$('#calibrationModel').value);loadCalibrations();};
+$('#runCalibration').onclick=()=>act(async()=>{
+  const targets=[['#calibrationT1','0.01'],['#calibrationT5','0.05']].filter(([s])=>$(s).checked).map(([,t])=>t);
+  await api('/api/calibrate',{method:'POST',body:JSON.stringify({id:$('#calibrationModel').value,input:$('#calibrationInput').value.trim(),targets})});
+  toast('Calibration started'); await refreshStatus();
+});
+$('#cancelCalibration').onclick=()=>act(async()=>{await api('/api/calibrate',{method:'DELETE'});await refreshStatus();});
+function renderCalibrationState(job) {
+  const running=Boolean(job?.running);
+  $('#cancelCalibration').hidden=!running; $('#runCalibration').disabled=running||!$('#calibrationModel').value;
+  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`Failed: ${job.error}`:job.phase==='cancelled'?'Cancelled':job.phase==='done'?`Done: ${shortName(job.result?.file||'')}`:'';
+  if(calibrationRunning&&!running)loadCalibrations();
+  calibrationRunning=running;
+}
+async function loadCalibrations() {
+  const id=$('#calibrationModel').value;
+  if(!id){$('#calibrationFiles').innerHTML='';return;}
+  try{renderCalibrationFiles(id,await api(`/api/calibrations?id=${encodeURIComponent(id)}`));}
+  catch(e){$('#calibrationFiles').innerHTML=`<div class="error-box">${esc(e.message)}</div>`;}
+}
+function thresholdCell(thresholds) {
+  const types=[...new Set(Object.values(thresholds||{}).flatMap(Object.keys))];
+  return types.map(t=>`<span class="chip">${esc(t)} ${['0.01','0.05'].map(k=>`${(Number(k)*100).toFixed(0)}%: ${thresholds?.[k]?.[t]==null?'—':Number(thresholds[k][t]).toFixed(3)}`).join(' · ')}</span>`).join(' ')||'<span class="muted">none certified</span>';
+}
+function renderCalibrationFiles(id, d) {
+  const loaded=(statusCache?.models||[]).find(m=>m.id===id);
+  const row=(f,value,label)=>{
+    const fitted=f?.fitted_on&&typeof f.fitted_on==='object'?f.fitted_on:null, gates=f?.gates||{};
+    const automated=Object.entries(gates.automated_at||{}).map(([k,v])=>`${(Number(k)*100).toFixed(0)}%: ${pct(v)} at ${pct(gates.automated_error?.[k])} error`).join(' · ');
+    const checked=(d.selected||'')===value;
+    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(f?.thresholds)}</td><td>${esc(automated||'—')}</td><td>${value?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
+  };
+  const shipped=d.shipped?row(d.shipped,'',`shipped · ${shortName(d.shipped.file)}`):'';
+  $('#calibrationFiles').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
+  $('#calibrationFiles').querySelectorAll('input[name=calibrationUse]').forEach(r=>r.onchange=()=>act(async()=>{
+    renderCalibrationFiles(id,await api('/api/calibrations/select',{method:'POST',body:JSON.stringify({id,file:r.value||null})}));
+    toast(loaded?'Calibration selected — restart the model to apply':'Calibration selected'); await refreshStatus();
+  }));
+  $('#calibrationFiles').querySelectorAll('[data-report]').forEach(b=>b.onclick=()=>act(async()=>{
+    const r=await api(`/api/calibrations/report?id=${encodeURIComponent(id)}&file=${encodeURIComponent(b.dataset.report)}`);
+    $('#reportText').textContent=r.report; $('#reportDialog').showModal();
+  }));
+}
+// Load options: the engine mode and basal-serve's runtime settings of one load (basal/ui/options.py)
+const GRAPH_MODES=['fast','fast-nocompile','fast-exit','fp8','nvfp4'];
+const OPTION_SECTIONS=[
+  ['Engine',['ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','gemma_attn','vllm_preset','gpu_memory','device']],
+  ['Determinism & orders',['deterministic','orders','auto_tau','auto_band']],
+  ['Batching',['max_batch','wait_ms','batch_window_ms','soam']],
+  ['Caching',['state_cache_gb','prefix_cache']],
+  ['Scheduling',['scheduler','long_lane','long_tokens','long_share','long_slice_ms']],
+  ['Context',['context_overflow','truncate_head','max_len']],
+];
+const OPTION_FIELDS={
+  quant:{label:'Quantisation',kind:'select',values:[[null,'as the mode'],['fp8','fp8'],['nvfp4','nvfp4'],['q8','q8 (mlx)']],modes:[...GRAPH_MODES,'mlx','mlx-q8']},
+  attn:{label:'Attention kernel',kind:'select',values:['auto','fa2','fa3','fa4','cudnn'],modes:GRAPH_MODES},
+  gemma_attn:{label:'Gemma 4 attention',kind:'select',values:['auto','math','flex','fa3','fa3+math'],modes:['eager']},
+  vllm_preset:{label:'vLLM preset',kind:'select',values:['default','deterministic'],modes:['vllm']},
+  gpu_memory:{label:'GPU memory share',kind:'num',attrs:'min="0.05" max="1" step="0.05"',modes:['vllm','sglang']},
+  device:{label:'Device',kind:'select',values:[[null,'auto'],'cuda','mps','cpu'],modes:['eager']},
+  ollama_url:{label:'Ollama URL',kind:'text',modes:['ollama']},
+  ollama_model:{label:'Ollama model',kind:'text',placeholder:'derived from the model',modes:['ollama']},
+  llamacpp_url:{label:'llama-server URL',kind:'text',modes:['llamacpp']},
+  http_parallel:{label:'Parallel HTTP requests',kind:'num',attrs:'min="1" step="1"',modes:['ollama','llamacpp']},
+  deterministic:{label:'Deterministic (decisions independent of batching)',kind:'bool'},
+  orders:{label:'Option orders',kind:'select',values:[[null,'model default'],'1','2','auto','2le4','2le8']},
+  auto_tau:{label:'auto: margin τ',kind:'num',attrs:'min="0" max="1" step="0.05"'},
+  auto_band:{label:'auto: band (low, high)',kind:'band'},
+  max_batch:{label:'Max batch',kind:'num',attrs:'min="1" step="1"'},
+  wait_ms:{label:'Wait (ms)',kind:'num',attrs:'min="0" step="0.5"'},
+  batch_window_ms:{label:'Batch window (ms)',kind:'num',attrs:'min="0" step="0.5"'},
+  soam:{label:'SOAM (shared option attention mask)',kind:'bool'},
+  state_cache_gb:{label:'State cache (GB)',kind:'num',attrs:'min="0" step="0.5"'},
+  prefix_cache:{label:'Prefix cache',kind:'bool'},
+  scheduler:{label:'Scheduler',kind:'select',values:['auto','on','off']},
+  long_lane:{label:'Long-request lane',kind:'bool'},
+  long_tokens:{label:'Long request from (tokens)',kind:'num',attrs:'min="1" step="1"'},
+  long_share:{label:'Long lane share',kind:'num',attrs:'min="0" max="1" step="0.05"'},
+  long_slice_ms:{label:'Long lane slice (ms)',kind:'num',attrs:'min="0" step="1"'},
+  context_overflow:{label:'Prompt over the context',kind:'select',values:[['truncate','truncate the state'],['refuse','refuse (422)']]},
+  truncate_head:{label:'Kept from the beginning',kind:'percent'},
+  max_len:{label:'Max length (vLLM / SGLang)',kind:'num',attrs:'min="512" max="131072" step="512"',placeholder:'API server setting'},
+};
+const optionsButton=(id,media=false,restart=false)=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-restart="${restart}" title="${restart?'Restart with other load options':'Load with options'}">⚙${restart?'':' Options'}</button>`;
+document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>Load options</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> Remember for this model</label><button type="button" id="optionsReset">Reset to defaults</button><button type="button" id="optionsCancel">Cancel</button><button type="button" id="optionsApply" class="primary">Load</button></div></dialog>`);
+let optionsState=null;
+const optionValue=v=>v===null||v===undefined?'':String(v);
+function optionInput(key, value) {
+  const f=OPTION_FIELDS[key], id=`opt-${key}`;
+  if(f.kind==='bool')return `<label><input type="checkbox" role="switch" id="${id}"${value?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(f.label)}</label>`;
+  const listed=(f.values||[]).map(v=>Array.isArray(v)?v:[v,v]);
+  const input=f.kind==='select'?`<select id="${id}">${listed.map(([v,l])=>`<option value="${esc(optionValue(v))}"${optionValue(v)===optionValue(value)?' selected':''}>${esc(l)}</option>`).join('')}${listed.some(([v])=>optionValue(v)===optionValue(value))?'':`<option value="${esc(optionValue(value))}" selected>${esc(value)}</option>`}</select>`
+    :f.kind==='band'?`<span class="controls"><input type="number" id="${id}-lo" min="0" max="1" step="0.05" value="${esc(value?.[0])}"><input type="number" id="${id}-hi" min="0" max="1" step="0.05" value="${esc(value?.[1])}"></span>`
+    :f.kind==='percent'?`<span class="controls"><input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round(Number(value)*100)}"><output id="${id}-out">${Math.round(Number(value)*100)}%</output></span>`
+    :`<input type="${f.kind==='num'?'number':'text'}" id="${id}" value="${esc(optionValue(value))}" placeholder="${esc(f.placeholder||'')}" ${f.attrs||''}>`;
+  return `<label for="${id}">${esc(f.label)}</label>${input}`;
+}
+function renderOptionsForm(values) {
+  const d=optionsState.data, defaultMode=d.modes.find(m=>m.default)?.mode, mode=values.mode||defaultMode;
+  const modes=`<div class="option-modes">${d.modes.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available&&!optionsState.media?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media the model is served with --mode eager.</p>':''}`;
+  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div></fieldset>`).join('');
+  $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});
+  $('#optionsForm').onchange=()=>updateOptionVisibility();
+  updateOptionVisibility();
+}
+function selectedOptionMode() { return optionsState.media?'eager':$('#optionsForm input[name=optMode]:checked')?.value||optionsState.data.modes.find(m=>m.default)?.mode; }
+function updateOptionVisibility() {
+  const mode=selectedOptionMode();
+  $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
+}
+function collectOptions() {
+  const d=optionsState.data, out={}, defaultMode=d.modes.find(m=>m.default)?.mode, mode=selectedOptionMode();
+  out.mode=optionsState.media||mode===defaultMode?null:mode;
+  for(const [key,f] of Object.entries(OPTION_FIELDS)) {
+    if(f.kind==='band'){const lo=$(`#opt-${key}-lo`)?.value, hi=$(`#opt-${key}-hi`)?.value;out[key]=!lo||!hi?d.defaults[key]:[Number(lo),Number(hi)];continue;}
+    const el=$(`#opt-${key}`);
+    if(!el||el.closest('[hidden]'))continue;  // a field of another mode keeps its default
+    if(f.kind==='bool')out[key]=el.checked;
+    else if(f.kind==='percent')out[key]=Number(el.value)===Math.round(d.defaults[key]*100)?d.defaults[key]:Number(el.value)/100;
+    else if(f.kind==='num')out[key]=el.value===''?d.defaults[key]:Number(el.value);
+    else if(f.kind==='select')out[key]=el.value===''?null:el.value;
+    else out[key]=el.value.trim()||d.defaults[key];
+  }
+  return Object.fromEntries(Object.entries(out).filter(([k,v])=>JSON.stringify(v)!==JSON.stringify(d.defaults[k])));
+}
+async function openLoadOptions(id, media=false, restart=false) {
+  const data=await api(`/api/models/options?id=${encodeURIComponent(id)}`);
+  const loaded=(statusCache?.models||[]).find(m=>m.id===id);
+  optionsState={id,media,restart,data};
+  $('#optionsModel').textContent=`${id}${media?' · with media':''}${restart?' · restarts the running model':''}`;
+  $('#optionsApply').textContent=restart?'Restart':'Load';
+  setChecked($('#optionsRemember'),data.saved);
+  renderOptionsForm(restart&&loaded?{...data.defaults,...loaded.options}:data.options);
+  $('#optionsError').hidden=true;
+  $('#loadOptions').showModal();
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.options-model');if(b)act(()=>openLoadOptions(b.dataset.id,b.dataset.media==='true',b.dataset.restart==='true'));});
+$('#optionsCancel').onclick=()=>$('#loadOptions').close();
+$('#optionsReset').onclick=()=>renderOptionsForm(optionsState.data.defaults);
+$('#optionsApply').onclick=async()=>{
+  const {id,media,restart,data}=optionsState, options=collectOptions(), remember=$('#optionsRemember').checked;
+  try{
+    if(remember||data.saved)await api('/api/models/options',{method:'PUT',body:JSON.stringify({id,options:remember?options:{}})});
+    if(restart)await api('/api/restart',{method:'POST',body:JSON.stringify({id,options})});
+    else{statusSequence++;clearSelectedMedia();await api('/api/load',{method:'POST',body:JSON.stringify({id,...(media?{media:true}:{}),options})});}
+    $('#loadOptions').close(); toast(restart?`Restarting ${shortName(id)}`:'Model load started'); await refreshStatus();
+  }catch(e){$('#optionsError').textContent=e.message;$('#optionsError').hidden=false;}
+};
 function syncHistoryModels(models) {
   const select=$('#historyModel'), current=select.value, ids=[...new Set([...models,...(current?[current]:[])])];
   if(JSON.stringify([...select.options].map(o=>o.value).slice(1))===JSON.stringify(ids))return;
@@ -1095,7 +1265,7 @@ async function loadLogs() {
   try{
     const d=await api(`/api/logs?source=${encodeURIComponent(source)}&after=${logAfter}`);
     if(source!==logSource)return;  // the user switched tabs meanwhile: that tab's own fetch renders
-    $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?' <span class="chip">gone</span>':''}</button>`).join('');
+    $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?' <span class="chip">gone</span>':x.id.startsWith('job:')&&x.state==='running'?' <span class="chip">running</span>':''}</button>`).join('');
     const atBottom=out.scrollTop+out.clientHeight>=out.scrollHeight-8;
     if(d.lines.length){
       out.append(document.createTextNode(d.lines.map(x=>source==='basal-ui'?`${clock(x.ts)} ${x.text}`:x.text).join('\n')+'\n'));

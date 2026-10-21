@@ -35,8 +35,9 @@ def instant_start(monkeypatch):
         with self.lock:
             if gen == self.gen:
                 self.state, self.media, self.ready_at = "ready", (["image", "audio"] if media else []), time.time()
-                self.serve_snapshot = {"log_decisions": "", "max_len": 4096}
-        settings.remember_loaded(assessment.variant.id, media)
+                self.serve_snapshot = {"log_decisions": "", "max_len": 4096, "calibration": None}
+        if not self.temporary:
+            settings.remember_loaded(assessment.variant.id, media)
     monkeypatch.setattr(Runner, "_start", start)
 
 
@@ -336,7 +337,7 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
 def test_runner_restart_required_tracks_only_child_settings():
     runner = Runner(settings_mod=settings)
     runner.state, runner.model = "ready", "Remek/basal-2.0-mini"
-    runner.serve_snapshot = {"log_decisions": "", "max_len": 4096}
+    runner.serve_snapshot = {"log_decisions": "", "max_len": 4096, "calibration": None}
     settings.update_serve({"enabled": True, "port": 8123, "require_key": True})  # the API server's business
     assert runner.status()["restart_required"] is False
     settings.update_serve({"max_len": 8192})

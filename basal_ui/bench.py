@@ -11,12 +11,10 @@ import httpx
 from basal.bench import DEFAULT_QUESTIONS
 from basal.loadtest import body
 
+from .jobs import Cancelled
+
 MIN_ITEMS = 10
 WARMUP = 5
-
-
-class Cancelled(Exception):
-    pass
 
 
 def load_items(paths) -> list[dict]:
@@ -72,21 +70,20 @@ def _correct(item, response_json):
         return None
 
 
-async def run_benchmark(fleet, model_id, paths, label, n_seq=30, n_conc=120, concurrency=8, progress=None,
-                        cancel=None) -> dict:
+async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120, concurrency=8) -> dict:
     """Warm-up, n_seq sequential requests (latency), n_conc at `concurrency` (throughput); every first answer to an
     item with `gold` is scored. Requests go through fleet.adecide with source "benchmark": not counted in the
-    statistics or the history."""
+    statistics or the history. Progress and cancellation through the job (basal/ui/jobs.py)."""
     items = load_items(paths)
     if not items:
         raise ValueError(f"{label}: no items")
     n = WARMUP + n_seq + n_conc
     order = [i % len(items) for i in range(n)]  # small sets are reused
     scored: dict[int, bool] = {}
-    progress = progress or (lambda phase, done, total: None)
+    progress = job.progress
 
     def check():
-        if cancel is not None and cancel.is_set():
+        if job.cancel.is_set():
             raise Cancelled()
 
     def score(index, response):
@@ -156,3 +153,11 @@ async def run_benchmark(fleet, model_id, paths, label, n_seq=30, n_conc=120, con
             "input_tokens_per_s": tokens / wall if wall else None, "errors": len(results) - ok,
             "accuracy": {"overall": sum(values) / len(values) if values else None,
                          "by_file": {stem: sum(v) / len(v) for stem, v in sorted(by_file.items())}}}
+
+
+def benchmark_job(job, fleet, model_id, paths, label):
+    """The benchmark job's target: run it, keep the result in the statistics file (last BENCHMARKS per model)."""
+    result = asyncio.run(run_benchmark(fleet, model_id, paths, label, job))
+    if fleet.stats is not None:
+        fleet.stats.add_benchmark(model_id, result)
+    return result

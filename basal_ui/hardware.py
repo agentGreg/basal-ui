@@ -54,20 +54,37 @@ def _ram() -> int | None:
         return None
 
 
+def _tpu() -> bool:
+    try:
+        from basal.tpu import tpu_available
+        return bool(tpu_available())
+    except Exception:  # noqa: BLE001 — a broken JAX counts as no TPU, as for basal-serve's default mode
+        return False
+
+
 @lru_cache(maxsize=1)
 def _static() -> Hardware:
     ram = _ram()
     engines: set[str] = set()
     if all(importlib.util.find_spec(name) is not None for name in ("PIL", "soundfile", "scipy", "torchvision")):
         engines.add("media")
+    if _tpu():
+        engines.add("tpu")
     try:
         import torch
         if torch.cuda.is_available():
             props = torch.cuda.get_device_properties(0)
             capability = torch.cuda.get_device_capability(0)
             engines.add("cuda")
+            if getattr(torch.version, "hip", None):  # ROCm PyTorch; Strix Halo = gfx1151 (Radeon 8060S)
+                engines.add("rocm")
+                arch = getattr(props, "gcnArchName", None)
+                if ("gfx1151" in arch) if arch else ("8060S" in props.name):
+                    engines.add("strix")
             if importlib.util.find_spec("vllm"):
                 engines.add("vllm")
+            if importlib.util.find_spec("sglang"):
+                engines.add("sglang")
             if importlib.util.find_spec("llama_cpp"):
                 engines.add("gguf")
             return Hardware("cuda", props.name, props.total_memory, ram, capability, frozenset(engines))
