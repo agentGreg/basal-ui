@@ -43,7 +43,7 @@ class StubExplainer:
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     monkeypatch.setattr(inspect, "Explainer", StubExplainer)
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: tmp_path)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
                   hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
     app = create_app(catalog_fn=lambda **_: ([BF16, MLX], "test"), hardware_fn=lambda: HW, fleet=fleet,

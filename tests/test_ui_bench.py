@@ -174,7 +174,7 @@ BF16 = Variant("bf16", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf1
 
 
 def test_mode_comparison_runs_each_mode_in_process_and_reserves_its_memory(tmp_path, monkeypatch):
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: tmp_path)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     monkeypatch.setattr(offline, "resolve", lambda path, metadata_only=False: tmp_path)
     monkeypatch.setattr(offline, "model_format", lambda md: 2)
     built, reserved = [], []

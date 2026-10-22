@@ -89,7 +89,8 @@ def listing(model_id, settings_mod, local_dir=None) -> list[dict]:
     files = []
     for path in sorted(settings_mod.calibrations_dir(model_id).glob("*.json"), key=lambda p: p.stat().st_mtime,
                        reverse=True):
-        entry = {"file": str(path), "when": path.stat().st_mtime}
+        rows = path.with_suffix(".rows.jsonl")
+        entry = {"file": str(path), "when": path.stat().st_mtime, "rows": str(rows) if rows.is_file() else None}
         try:
             entry.update(summary(path, local_dir))
         except (OSError, ValueError) as exc:
@@ -181,31 +182,49 @@ def _basal_calibrate(job, argv, writer):
                                writer.lines[-1] if writer.lines else f"basal-calibrate exited ({exc.code})") from None
     finally:
         writer.flush()
-        Path(argv[argv.index("--out") + 1]).with_suffix(".report.txt").write_text("\n".join(writer.lines) + "\n")
-
-
-def _free_engine_memory():
-    free_engine_memory()
 
 
 def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, targets=TARGETS, options=None,
-                    engine_args=None):
-    """The calibrate job -> the file, the report (basal-calibrate's output, also written to <file>.report.txt) and its
-    summary. Decision questions: a temporary basal-serve --no-calibration child, basal-calibrate --url on it, the child
-    stopped. engine_args (task questions in the input; engine_flags of the serving mode and load options):
-    basal-calibrate runs the engine in basal-ui's process; the caller reserved its memory (fleet.reserve("calibrate")),
-    released here."""
+                    engine_args=None, advanced=None):
+    """Run basal-calibrate, either against a private child or an in-process engine."""
     writer = _Lines(job.log)
+    advanced = advanced or {}
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    rows_path = Path(out_path).with_suffix(".rows.jsonl")
     common = ["--model", str(local_dir), "--out", str(out_path), "--targets", ",".join(targets)]
+    for key, flag in (("min_per_type", "--min-per-type"), ("min_blend", "--min-blend"),
+                      ("min_family", "--min-family"), ("min_per_set", "--min-per-set"),
+                      ("concurrency", "--concurrency")):
+        if key in advanced:
+            common += [flag, str(advanced[key])]
+    reference = advanced.get("reference")
+    if reference:
+        common += ["--reference", str(reference)]
+    compare = advanced.get("compare", "shipped")
+    if compare == "none":
+        common.append("--no-calibration")
+    elif isinstance(compare, str) and compare != "shipped":
+        common += ["--calibration", compare]
+    if advanced.get("strict"):
+        common.append("--strict")
+    if advanced.get("save_rows"):
+        common += ["--save-rows", str(rows_path)]
+    if advanced.get("from_rows"):
+        common.append("--from-rows")
+    if advanced.get("report_only"):
+        common.append("--report-only")
     in_process = engine_args is not None
-    if in_process:
+    argv = [str(input_path), *common, *(engine_args or ())]
+    if advanced.get("from_rows"):
+        _basal_calibrate(job, argv, writer)
+    elif in_process:
         try:
             job.progress("calibrating (engine in basal-ui's process)")
-            _basal_calibrate(job, [str(input_path), *common, *engine_args], writer)
+            _basal_calibrate(job, argv, writer)
         finally:
-            fleet.release("calibrate")
-            _free_engine_memory()
+            if advanced.get("reserve", True):
+                fleet.release("calibrate")
+            free_engine_memory()
     else:
         job.progress("starting model")
         runner = fleet.start_temporary("calibrate", assessment, job.log, options, extra_args=["--no-calibration"])
@@ -222,8 +241,10 @@ def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, tar
         finally:
             fleet.stop_temporary("calibrate")
     job.check()
+    report = "\n".join(writer.lines)
+    if advanced.get("report_only"):
+        return {"file": None, "report": report, "report_only": True}
     if not Path(out_path).exists():
         raise RuntimeError("basal-calibrate wrote no file")
-    report = "\n".join(writer.lines)
     Path(out_path).with_suffix(".report.txt").write_text(report + "\n")
     return {"file": str(out_path), "report": report, "engine_in_process": in_process, **summary(out_path)}

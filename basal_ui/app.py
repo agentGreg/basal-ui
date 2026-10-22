@@ -86,13 +86,13 @@ class Downloads:
         self.records: dict[str, dict] = {}
         self.event = event or (lambda level, message: None)
 
-    def start(self, variant, cache_dir) -> dict:
+    def start(self, variant, cache_dir, revision=None) -> dict:
         with self.lock:
             record = self.records.get(variant.repo)
             if record and record["thread"].is_alive():
                 return record
             record = {"bar": _byte_counter(), "total": variant.weights_bytes or 0, "path": None, "error": None,
-                      "ended": None}
+                      "ended": None, "revision": revision}
             record["thread"] = threading.Thread(target=self._run, args=(record, variant, cache_dir), daemon=True)
             self.records[variant.repo] = record
             record["thread"].start()
@@ -100,10 +100,9 @@ class Downloads:
         return record
 
     def _run(self, record, variant, cache_dir):
-        from huggingface_hub import snapshot_download
         try:
-            record["path"] = snapshot_download(variant.repo, cache_dir=cache_dir, tqdm_class=record["bar"],
-                                               **catalog.download_kwargs(variant))
+            record["path"] = catalog.download(variant, cache_dir, tqdm_class=record["bar"],
+                                              revision=record["revision"])
             self.event("info", f"download finished: {variant.repo}")
         except Exception as exc:  # reported in the UI and re-raised by a waiting load
             record["error"] = exc
@@ -248,8 +247,8 @@ class Runner:
                 setattr(self, k, v)
             return True
 
-    def _download(self, v, gen, cache_dir):
-        record = self.downloads.start(v, cache_dir)
+    def _download(self, v, gen, cache_dir, revision=None):
+        record = self.downloads.start(v, cache_dir, revision=revision)
         while record["thread"].is_alive():
             done = record["bar"].done
             if not self._update(gen, progress={"done_bytes": done, "total_bytes": max(v.weights_bytes or 0, done)}):
@@ -303,7 +302,8 @@ class Runner:
         v = assessment.variant
         serve = serve or self.settings_mod.serve_settings()
         try:
-            path = catalog.is_downloaded(v, cache_dir) or self._download(v, gen, cache_dir)
+            revision = self.options.get("revision")
+            path = catalog.is_downloaded(v, cache_dir, revision=revision) or self._download(v, gen, cache_dir, revision)
             if path is None:
                 return
             with socket.socket() as s:
@@ -972,7 +972,8 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         from huggingface_hub.constants import HF_HUB_CACHE
         models = Path(settings_mod.models_dir()).resolve()
         default = Path(HF_HUB_CACHE).resolve()
-        return {"models_dir": str(models), "default_models_dir": str(default), "is_default": models == default}
+        return {"models_dir": str(models), "default_models_dir": str(default), "is_default": models == default,
+                "check_updates": settings_mod.check_updates()}
 
     @app.get("/api/settings")
     def get_settings():
@@ -981,10 +982,16 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     @app.put("/api/settings")
     def put_settings(body: dict = Body(...)):
         models_dir = body.get("models_dir")
+        check_updates = body.get("check_updates")
+        if "check_updates" in body and not isinstance(check_updates, bool):
+            raise HTTPException(400, "check_updates must be a boolean")
         if models_dir is not None and not isinstance(models_dir, str):
             raise HTTPException(400, "models_dir must be a string or null")
         try:
-            fleet.while_idle(lambda: settings_mod.set_models_dir(models_dir))
+            if "models_dir" in body:
+                fleet.while_idle(lambda: settings_mod.set_models_dir(models_dir))
+            if "check_updates" in body:
+                settings_mod.set_check_updates(check_updates)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         except ValueError as exc:
@@ -999,15 +1006,117 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         assessed = [catalog.assess(v, current_hw) for v in variants]
         assessed.sort(key=lambda a: (FAMILY_ORDER.get(a.variant.family, 99),
                                      catalog.TIER_ORDER.get(a.variant.tier, 99), a.variant.port, a.variant.label))
-        fields = ("id", "repo", "family", "tier", "port", "label", "gguf_file", "weights_bytes", "experimental")
+        fields = ("id", "repo", "author", "community", "base_repo", "family", "tier", "port", "label", "gguf_file",
+                  "weights_bytes", "experimental")
         on_disk = {a.variant.id: catalog.downloaded_bytes(a.variant, cache_dir) for a in assessed}
+        saved = settings_mod.load().get("load_options")  # once, not load_options() per row
+        revisions = {k: v.get("revision") for k, v in saved.items() if isinstance(v, dict)} if isinstance(
+            saved, dict) else {}
         return {"source": source, "suggestions": catalog.suggest(assessed, current_hw),
                 "models_dir": str(Path(cache_dir).resolve()), "models": [
             {**{k: getattr(a.variant, k) for k in fields}, "runnable": a.runnable, "reason": a.reason,
              "mode": a.mode, "est_memory_bytes": a.est_memory_bytes, "fit": a.fit, "fit_now": a.fit_now,
              "media": list(a.variant.media), "media_mode": a.media_mode, "media_reason": a.media_reason,
-             "downloaded": on_disk[a.variant.id] is not None, "downloaded_bytes": on_disk[a.variant.id]}
+             "downloaded": on_disk[a.variant.id] is not None, "downloaded_bytes": on_disk[a.variant.id],
+             "revision": revisions.get(a.variant.id)}
             for a in assessed]}
+
+    @app.get("/api/presets")
+    def get_presets():
+        return {"load": settings_mod.presets().get("load", {}),
+                "request": settings_mod.presets().get("request", {})}
+
+    @app.put("/api/presets")
+    def put_preset(body: dict = Body(...)):
+        kind, name, value = body.get("kind"), body.get("name"), body.get("value")
+        try:
+            if kind == "load" and value is not None:
+                value = load_options.non_default(load_options.validate(value))
+            elif kind == "request" and value is not None:
+                if not isinstance(value, dict) or not isinstance(value.get("questions"), dict) or not value["questions"]:
+                    raise ValueError("request preset must contain a non-empty questions object")
+                value = {k: v for k, v in value.items() if k != "model"}
+            settings_mod.set_preset(kind, name, value)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return get_presets()
+
+    @app.get("/api/models/card")
+    def get_model_card(id: str):
+        variant = find_variant(id)
+        cache_dir = settings_mod.models_dir()
+        local_dir = catalog.is_downloaded(variant, cache_dir, revision=served_revision(variant))
+        assessment = catalog.assess(variant, hw())
+        loaded = next((m.get("entry") for m in fleet.status()["models"] if m["id"] == variant.id), None)
+        from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
+        try:
+            info = scan_cache_dir(cache_dir)
+            revisions = sorted({s.commit_hash for repo in info.repos if repo.repo_id == variant.repo
+                                for s in repo.revisions})
+        except (CacheNotFound, OSError, ValueError):
+            revisions = []
+        readme = None
+        if local_dir and (Path(local_dir) / "README.md").is_file():
+            readme = (Path(local_dir) / "README.md").read_text(errors="replace")[:20000]
+        else:
+            try:
+                response = httpx.get(f"https://huggingface.co/{variant.repo}/raw/{served_revision(variant) or 'main'}"
+                                     "/README.md", timeout=5)
+                if response.is_success:
+                    readme = response.text[:20000]
+            except httpx.HTTPError:
+                pass
+        basal_json = None
+        if local_dir:
+            try:
+                basal_json = json.loads((Path(local_dir) / "basal.json").read_text())
+            except (OSError, ValueError):
+                pass
+        shipped_calibration = None
+        if local_dir:
+            from . import calibration
+            try:
+                path = calibration.shipped_file(local_dir, served_mode(variant, assessment))
+                shipped_calibration = calibration.summary(path) if path.is_file() else None
+            except (OSError, ValueError, KeyError) as exc:
+                shipped_calibration = {"error": str(exc)}
+        return {"id": variant.id, "repo": variant.repo, "url": f"https://huggingface.co/{variant.repo}",
+                "author": variant.author, "community": variant.community, "base_repo": variant.base_repo,
+                "base_revision": variant.base_revision,
+                "family": variant.family, "tier": variant.tier, "port": variant.port, "label": variant.label,
+                "size_bytes": variant.weights_bytes, "media": list(variant.media), "downloaded": local_dir is not None,
+                "local_dir": str(local_dir) if local_dir else None, "revisions": revisions, "basal_json": basal_json,
+                "shipped_calibration": shipped_calibration, "readme": readme,
+                "assessment": {"mode": assessment.mode, "runnable": assessment.runnable,
+                               "reason": assessment.reason, "est_memory_bytes": assessment.est_memory_bytes,
+                               "fit": assessment.fit, "fit_now": assessment.fit_now},
+                "modes": load_options.available_modes(variant, hw(), assessment), "loaded": loaded}
+
+    @app.get("/api/updates")
+    def get_updates():
+        from . import updates
+        import basal
+        enabled = settings_mod.check_updates()
+        latest, error = updates.latest() if enabled else (None, None)
+        installed = basal.__version__
+        try:
+            newer = latest is not None and tuple(map(int, latest.split("."))) > tuple(map(int, installed.split(".")))
+        except ValueError:
+            newer = False
+        variants, source = catalog_fn(cache_dir=settings_mod.models_dir())
+        # only the hub catalog is the whole catalog: the cache fallback would seed (or report) a partial list
+        new_models = settings_mod.update_seen_ids(v.id for v in variants) if source == "hub" else []
+        return {"enabled": enabled, "installed": installed, "latest": latest,
+                "url": f"https://github.com/rkinas/basal/releases/tag/v{latest}" if latest else None,
+                "newer": newer, "error": error, "new_models": new_models, "catalog": source}
+
+    @app.post("/api/updates/seen")
+    def mark_updates_seen():
+        variants, source = catalog_fn(cache_dir=settings_mod.models_dir())
+        if source == "hub":
+            settings_mod.mark_models_seen(v.id for v in variants)
+        return get_updates()
 
     @app.get("/api/models/options")
     def get_model_options(id: str):
@@ -1209,8 +1318,16 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def cancel_benchmark():
         return fleet.jobs.cancel("benchmark")
 
+    def served_revision(variant):
+        """The revision the model is loaded at (load option), None for the default branch."""
+        return settings_mod.load_options(variant.id).get("revision")
+
+    def served_mode(variant, assessment):
+        """The mode the model is served in; eager names the default CALIBRATION.json."""
+        return settings_mod.load_options(variant.id).get("mode") or assessment.mode or "eager"
+
     def downloaded(variant):
-        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir())
+        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=served_revision(variant))
         if not local_dir:
             raise HTTPException(400, f"download {variant.id} first")
         return Path(local_dir)
@@ -1226,44 +1343,83 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             raise HTTPException(400, "input must be the path of a labelled JSONL file (docs/CALIBRATION.md)")
         source = Path(source).expanduser()
         try:
-            with open(source, "rb") as f:
+            with source.open("rb") as f:
                 f.read(1)
         except OSError as exc:
             raise HTTPException(400, f"cannot read {source}: {exc.strerror or exc}") from exc
-        try:  # every problem of the file before any model is loaded (basal-calibrate's own checks)
-            _, units = calibration.labelled(source)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        in_process = bool(units)  # task thresholds are certified on the answers the engine serves in process
+        advanced = body.get("advanced") or {}
+        if not isinstance(advanced, dict):
+            raise HTTPException(400, "advanced must be an object")
+        allowed = {"strict", "reference", "min_per_type", "min_blend", "min_family", "min_per_set", "concurrency",
+                   "compare", "save_rows", "report_only"}
+        if set(advanced) - allowed:
+            raise HTTPException(400, f"unknown advanced calibration option: {min(set(advanced) - allowed)}")
+        for key in ("strict", "save_rows", "report_only"):
+            if key in advanced and not isinstance(advanced[key], bool):
+                raise HTTPException(400, f"{key} must be a boolean")
+        for key, minimum in (("min_per_type", 1), ("min_blend", 0), ("min_family", 1), ("min_per_set", 1),
+                             ("concurrency", 1)):
+            if key in advanced and (type(advanced[key]) is not int or advanced[key] < minimum or
+                                    (key == "concurrency" and advanced[key] > 256)):
+                raise HTTPException(400, f"{key} must be an integer >= {minimum}")
+        reference = advanced.get("reference")
+        if reference is not None and not isinstance(reference, str):
+            raise HTTPException(400, "reference must be basal-1.5, a path, or null")
+        compare = advanced.get("compare", "shipped")
+        if not isinstance(compare, str) or compare not in ("shipped", "none") and not compare.strip():
+            raise HTTPException(400, "compare must be shipped, none, or a calibration path")
+        for key, value, names in (("reference", reference, ("basal-1.5",)), ("compare", compare, ("shipped", "none"))):
+            if value and value not in names:
+                path = Path(value).expanduser()
+                if not path.is_file():
+                    raise HTTPException(400, f"{key}: {value} is not a readable file")
+                advanced[key] = str(path)
+        from_rows = body.get("from_rows", False)
+        if not isinstance(from_rows, bool):
+            raise HTTPException(400, "from_rows must be a boolean")
+        advanced["from_rows"] = from_rows
+        units = []
+        if not from_rows:
+            try:
+                _, units = calibration.labelled(source)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        in_process = bool(units)
         targets = body.get("targets") or list(calibration.TARGETS)
         try:
             if not isinstance(targets, list) or not targets or not all(0 < float(t) < 1 for t in targets):
                 raise ValueError
         except (TypeError, ValueError):
             raise HTTPException(400, "targets must be a list of max_error values between 0 and 1") from None
-        try:  # the engine the model is served with: its remembered load options
-            assessment, options = prepare(variant, False, settings_mod.load_options(variant.id))
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
+        if from_rows:  # a refit of saved rows runs no engine: no load options, no memory check
+            assessment, options = catalog.assess(variant, hw()), {}
+        else:
+            try:
+                assessment, options = prepare(variant, False, settings_mod.load_options(variant.id))
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         out = settings_mod.calibrations_dir(variant.id) / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
         label = f"{variant.id} on {source.name}" + (" (engine in process: task questions)" if in_process else "")
+        reserve = in_process and not from_rows
         try:
-            if in_process:
+            if reserve:
                 fleet.reserve("calibrate", assessment.est_memory_bytes)
-            else:
+            elif not from_rows:
                 with fleet.lock:
                     fleet.check_budget(assessment.est_memory_bytes)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         engine_args = None
-        if in_process:  # the serving mode's flags and the load options basal-calibrate's engine takes
+        if in_process and not from_rows:
             engine_args = calibration.engine_flags(catalog.serve_args(
                 variant, local_dir, assessment.mode, platform=hw().platform) + load_options.args(options))
+        advanced["reserve"] = reserve
         try:
             return fleet.jobs.start("calibrate", variant.id, label, calibration.run_calibration, fleet, assessment,
-                                    local_dir, source, out, [str(float(t)) for t in targets], options, engine_args)
+                                    local_dir, source, out, [str(float(t)) for t in targets], options, engine_args,
+                                    advanced)
         except RuntimeError as exc:
-            if in_process:
+            if reserve:
                 fleet.release("calibrate")
             raise HTTPException(409, str(exc)) from exc
 
@@ -1276,11 +1432,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def calibrations_response(variant):
         from . import calibration
 
-        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir())
+        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=served_revision(variant))
         shipped = None
         if local_dir:
-            mode = (settings_mod.load_options(variant.id).get("mode") or catalog.assess(variant, hw()).mode
-                    or "eager")  # the mode the model is served with; eager names the default CALIBRATION.json
+            mode = served_mode(variant, catalog.assess(variant, hw()))
             path = calibration.shipped_file(local_dir, mode)
             shipped = {"file": str(path)}
             try:

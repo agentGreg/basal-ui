@@ -227,3 +227,25 @@ def test_cross_process_revoke_is_not_undone_by_creates(tmp_path, monkeypatch):
     assert creator.wait(timeout=30) == 0
     assert revoker.wait(timeout=30) == 0
     assert all(record["name"] != "revoke-me" for record in settings.keys())  # noqa: SIM118 — keys() returns records
+
+
+def test_presets_and_update_settings_round_trip(tmp_path, monkeypatch):
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
+    assert settings.presets() == {"load": {}, "request": {}}
+    settings.set_preset("load", "fast", {"mode": "eager"})
+    settings.set_preset("request", "demo", {"questions": {"q": {"type": "choice"}}})
+    assert settings.presets() == {"load": {"fast": {"mode": "eager"}},
+                                  "request": {"demo": {"questions": {"q": {"type": "choice"}}}}}
+    settings.set_preset("load", "fast", None)
+    assert settings.presets()["load"] == {}
+    assert settings.check_updates() is True
+    settings.set_check_updates(False)
+    assert settings.check_updates() is False
+
+
+def test_the_first_catalog_check_reports_no_new_models_then_only_new_ones(tmp_path, monkeypatch):
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
+    assert settings.update_seen_ids(["a", "b"]) == []  # a fresh install: everything is the starting catalog
+    assert settings.update_seen_ids(["a", "b", "c"]) == ["c"]
+    settings.mark_models_seen(["c"])
+    assert settings.update_seen_ids(["a", "b", "c"]) == []

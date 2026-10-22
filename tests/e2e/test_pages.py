@@ -332,3 +332,105 @@ def test_the_calibration_view_imports_a_file_fitted_elsewhere(page, ui, text_mod
     page.fill("#calibrationImportPath", str(tmp_path / "none.json"))
     page.click("#importCalibration")
     sync_api.expect(page.locator(".toast.error").last).to_contain_text("cannot read")
+
+
+def test_theme_toggle_persists_and_sets_the_document_theme(page):
+    page.click('[data-theme-choice="dark"]')
+    assert page.evaluate("() => [document.documentElement.dataset.theme, localStorage.getItem('basal-ui.theme')]") == [
+        "dark", "dark"]
+
+
+def test_control_enter_sends_a_playground_decision(page):
+    view(page, "playground")
+    page.evaluate("""() => {
+      api = async (path, options) => {
+        window.sentDecision = path === '/api/decide' && options.method === 'POST';
+        return {answers: {q: {type: 'choice', choice: 'yes'}}, usage: {}};
+      };
+      $('#editJsonToggle').checked = true;
+      $('#requestJson').value = JSON.stringify({state: 'state', questions: {q: {type: 'choice', criteria: ['yes']}}});
+    }""")
+    page.locator("body").click(position={"x": 5, "y": 5})
+    page.keyboard.press("Control+Enter")
+    page.wait_for_function("() => window.sentDecision === true")
+
+
+def test_question_mark_opens_shortcut_help(page):
+    page.locator("body").click(position={"x": 5, "y": 5})
+    page.keyboard.press("?")
+    sync_api.expect(page.locator("#shortcutsDialog")).to_be_visible()
+    sync_api.expect(page.locator("#shortcutsDialog")).to_contain_text("Ctrl/⌘ + Enter")
+
+
+def test_alt_digit_opens_the_nth_page_by_key_code(page):
+    page.locator("body").click(position={"x": 5, "y": 5})
+    page.keyboard.press("Alt+2")
+    sync_api.expect(page.locator("#pageTitle")).to_have_text("Models")
+    # macOS Option+3 types "£" / "#": the key changes with the layout, the code does not
+    page.evaluate("""() => document.body.dispatchEvent(new KeyboardEvent('keydown',
+      {key: '£', code: 'Digit3', altKey: true, bubbles: true}))""")
+    sync_api.expect(page.locator("#pageTitle")).to_have_text("Model manager")
+
+
+def test_model_card_dialog_renders_api_card_data(page):
+    page.evaluate("""() => {
+      api = async () => ({
+        id: 'community/model', repo: 'community/model', url: 'https://huggingface.co/community/model',
+        label: 'Model label', author: 'community', community: true, base_repo: 'base/model',
+        family: 'basal-2.0', tier: 'mini', port: 'MLX', size_bytes: 1000, media: [],
+        downloaded: true, revisions: ['abc'], local_dir: '/models/model', basal_json: {prompt_format: 'chat'},
+        shipped_calibration: {thresholds: {'0.01': {choice: 0.9}}},
+        assessment: {mode: 'mlx', runnable: true, fit: 'fits', fit_now: 'fits', est_memory_bytes: 2000},
+        loaded: null, readme: 'A model README.'
+      });
+      openModelCard('community/model');
+    }""")
+    sync_api.expect(page.locator("#modelCardDialog")).to_contain_text("Model label")
+    sync_api.expect(page.locator("#modelCardDialog")).to_contain_text("base/model")
+    sync_api.expect(page.locator("#modelCardDialog")).to_contain_text("A model README.")
+
+
+def test_usage_line_includes_branches_and_lane(page):
+    page.evaluate("""() => renderResults(
+      {answers: {q: {type: 'choice', choice: 'yes'}},
+       usage: {latency_ms: 1, branches: 3, second_order_branches: 2, lane: 'long'}},
+      {model: selectedModel, questions: {q: {type: 'choice'}}}
+    )""")
+    line = page.locator("#results .answer-meta").first
+    sync_api.expect(line).to_contain_text("branches: 3")
+    sync_api.expect(line).to_contain_text("second_order_branches: 2")
+    sync_api.expect(line).to_contain_text("lane: long")
+
+
+def test_load_preset_save_and_apply_round_trip(page, text_model):
+    view(page, "overview")
+    page.click(f'#loadedModels [data-id="{text_model["id"]}"].options-model')
+    dialog = page.locator("#loadOptions")
+    sync_api.expect(dialog).to_be_visible()
+    page.fill("#opt-revision", "test-revision")
+    page.click("#saveLoadPreset")
+    page.fill("#presetName", "e2e-load-preset")
+    page.click("#presetNameSave")
+    sync_api.expect(dialog).to_contain_text("e2e-load-preset")
+    page.select_option("#loadPresetSelect", "e2e-load-preset")
+    page.fill("#opt-revision", "")
+    page.click("#applyLoadPreset")
+    sync_api.expect(page.locator("#opt-revision")).to_have_value("test-revision")
+    page.click("#deleteLoadPreset")
+    sync_api.expect(dialog.locator("#loadPresetSelect")).not_to_contain_text("e2e-load-preset")
+    page.click("#optionsCancel")
+
+
+def test_revision_option_is_shown_as_a_loaded_model_chip(page, text_model):
+    page.evaluate("""id => {
+      const model = statusCache.models.find(x => x.id === id);
+      model.options ||= {};
+      model.options.revision = 'release-1';
+      renderLoadedRows(statusCache.models);
+    }""", text_model["id"])
+    sync_api.expect(page.locator("#loadedModels")).to_contain_text("revision release-1")
+    view(page, "models")
+    page.evaluate("""id => renderModels({suggestions: [], models: modelData.map(m => m.id === id
+      ? {...m, revision: 'release-1'} : m)})""", text_model["id"])
+    row = page.locator("#modelsTable tr", has=page.locator(f'[data-id="{text_model["id"]}"]'))
+    sync_api.expect(row.first).to_contain_text("revision release-1")

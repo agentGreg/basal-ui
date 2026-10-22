@@ -68,6 +68,67 @@ def _locked(fn):
     return wrapper
 
 
+def check_updates() -> bool:
+    return load().get("check_updates", True) is not False
+
+
+@_locked
+def set_check_updates(enabled: bool) -> bool:
+    if not isinstance(enabled, bool):
+        raise ValueError("check_updates must be a boolean")
+    data = load()
+    data["check_updates"] = enabled
+    save(data)
+    return enabled
+
+
+def presets() -> dict:
+    value = load().get("presets")
+    value = value if isinstance(value, dict) else {}
+    return {kind: value.get(kind) if isinstance(value.get(kind), dict) else {}
+            for kind in ("load", "request")}
+
+
+@_locked
+def set_preset(kind: str, name: str, value) -> None:
+    if kind not in ("load", "request"):
+        raise ValueError("kind must be load or request")
+    if not isinstance(name, str) or not 1 <= len(name) <= 64 or name[0] in ". ":
+        raise ValueError("name must be 1..64 characters and not start with dot or space")
+    data = load()
+    saved = data.get("presets") if isinstance(data.get("presets"), dict) else {}
+    entries = saved.get(kind) if isinstance(saved.get(kind), dict) else {}
+    if value is None:
+        entries.pop(name, None)
+    else:
+        entries[name] = value
+    saved[kind] = entries
+    data["presets"] = saved
+    save(data)
+
+
+@_locked
+def mark_models_seen(model_ids) -> None:
+    data = load()
+    seen = data.get("seen_models", [])
+    data["seen_models"] = sorted((set(seen) if isinstance(seen, list) else set()) | set(model_ids))
+    save(data)
+
+
+def seen_models() -> set[str]:
+    value = load().get("seen_models", [])
+    return set(x for x in value if isinstance(x, str)) if isinstance(value, list) else set()
+
+
+def update_seen_ids(model_ids) -> list[str]:
+    """The ids not seen before; the first check (no seen list yet) marks the whole catalog seen and reports none."""
+    model_ids = set(model_ids)
+    if not isinstance(load().get("seen_models"), list):
+        mark_models_seen(model_ids)
+        return []
+    return sorted(model_ids - seen_models())
+
+
 def _write_private(path: Path, text: str) -> None:
     """Replace path with text atomically; the file is created 0600, never briefly readable by others."""
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +29,7 @@ def config(tmp_path, monkeypatch):
     model = tmp_path / "model"
     model.mkdir()
     (model / "CALIBRATION.json").write_text(json.dumps({"temperature_per_prim": {"choice": 1.1}}))
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: model)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: model)
 
     def start(self, assessment, gen, media=False, cache_dir=None, serve=None):
         with self.lock:
@@ -152,7 +153,8 @@ def test_task_questions_calibrate_with_the_engine_in_process_and_reserve_its_mem
         out = argv[argv.index("--out") + 1]
         with open(out, "w") as f:
             json.dump({**FITTED, "task_thresholds": {"classify": {"0.05": 0.81}}}, f)
-
+        if "--save-rows" in argv:
+            open(argv[argv.index("--save-rows") + 1], "w").write("{}\n")
     monkeypatch.setattr(calibrate, "main", fake_main)
     fleet, app = make_app(tmp_path, APPLE)
     settings.set_load_options("mini", {"mode": "eager", "max_batch": 8, "deterministic": True,
@@ -160,10 +162,16 @@ def test_task_questions_calibrate_with_the_engine_in_process_and_reserve_its_mem
     labelled = tmp_path / "labelled.jsonl"
     labelled.write_text(json.dumps(TASK) + "\n")
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        assert client.post("/api/calibrate", json={"id": "mini", "input": str(labelled)}).status_code == 202
+        assert client.post("/api/calibrate", json={"id": "mini", "input": str(labelled), "advanced": {
+            "strict": True, "reference": "basal-1.5", "min_per_type": 12, "min_blend": 3, "min_family": 4,
+            "min_per_set": 5, "concurrency": 7, "compare": "none", "save_rows": True}}).status_code == 202
         job = wait_job(client)
         assert job["phase"] == "done", job["error"]
         argv = calls[0]
+        for flag, value in (("--reference", "basal-1.5"), ("--min-per-type", "12"), ("--min-blend", "3"),
+                            ("--min-family", "4"), ("--min-per-set", "5"), ("--concurrency", "7")):
+            assert argv[argv.index(flag) + 1] == value
+        assert "--strict" in argv and "--no-calibration" in argv
         assert "--url" not in argv and argv[argv.index("--mode") + 1] == "eager"
         assert argv[argv.index("--max-batch") + 1] == "8" and "--deterministic" in argv
         assert "--strict-calibration" not in argv  # basal-serve's own, not the engine's
@@ -172,6 +180,7 @@ def test_task_questions_calibrate_with_the_engine_in_process_and_reserve_its_mem
         assert job["result"]["engine_in_process"] is True
         listed = client.get("/api/calibrations", params={"id": "mini"}).json()["files"][0]
         assert listed["task_thresholds"] == {"classify": {"0.05": 0.81}}
+        assert listed["rows"] == str(Path(listed["file"]).with_suffix(".rows.jsonl"))
 
 
 def test_a_calibration_fitted_elsewhere_is_imported_selectable_and_warned_about(tmp_path, config):
@@ -217,3 +226,59 @@ def test_importing_same_calibration_twice_never_overwrites_file_or_report(tmp_pa
     assert first.with_suffix(".report.txt").read_text() == "first report"
     assert json.loads(second.read_text()) == FITTED
     assert second.with_suffix(".report.txt").read_text() == "original report"
+
+
+def test_from_rows_report_only_skips_child_and_memory_reservation(tmp_path, monkeypatch, config):
+    calls = []
+    monkeypatch.setattr(calibrate, "main", lambda argv: (calls.append(argv), print("rows report")))
+    fleet, app = make_app(tmp_path)
+    rows = tmp_path / "fit.rows.jsonl"
+    rows.write_text('{"basal_calibrate_rows":1}\n')
+    settings.update_memory({"reserve_bytes": 1024**4})  # nothing fits: a refit runs no engine, so no check
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.post("/api/calibrate", json={"id": "mini", "input": str(rows), "from_rows": True,
+                                                       "advanced": {"report_only": True}})
+        assert response.status_code == 202
+        job = wait_job(client)
+    assert job["phase"] == "done", job["error"]
+    assert job["result"] == {"file": None, "report": "rows report", "report_only": True}
+    assert "--from-rows" in calls[0] and "--report-only" in calls[0]
+    assert not fleet.temporary and not fleet.reserved
+
+
+def test_report_only_on_decision_input_uses_the_temporary_child_and_writes_no_file(tmp_path, monkeypatch, config):
+    calls, children = [], []
+
+    def fake_main(argv):
+        calls.append(argv)
+        children.append(set(fleet.temporary))
+        print("report only")
+    monkeypatch.setattr(calibrate, "main", fake_main)
+    fleet, app = make_app(tmp_path)
+    labelled = tmp_path / "labelled.jsonl"
+    labelled.write_text('{"state": "s", "question": "q?", "options": ["a", "b"], "gold": 0}\n')
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.post("/api/calibrate", json={"id": "mini", "input": str(labelled),
+                                                       "advanced": {"report_only": True}})
+        assert response.status_code == 202
+        job = wait_job(client)
+    assert job["phase"] == "done", job["error"]
+    assert job["result"] == {"file": None, "report": "report only", "report_only": True}
+    assert "--url" in calls[0] and "--report-only" in calls[0]
+    assert children == [{"calibrate"}] and not fleet.temporary and fleet.reserved == {}
+    assert not list(settings.calibrations_dir("mini").glob("*.report.txt"))
+
+
+def test_a_missing_compare_or_reference_file_is_refused_before_the_job(tmp_path, monkeypatch):
+    monkeypatch.setattr(calibrate, "main", lambda argv: pytest.fail("basal-calibrate ran"))
+    fleet, app = make_app(tmp_path)
+    labelled = tmp_path / "labelled.jsonl"
+    labelled.write_text('{"state": "s", "question": "q?", "options": ["a", "b"], "gold": 0}\n')
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        for key in ("reference", "compare"):
+            missing = str(tmp_path / f"{key}.json")
+            response = client.post("/api/calibrate", json={"id": "mini", "input": str(labelled),
+                                                           "advanced": {key: missing}})
+            assert response.status_code == 400
+            assert response.json()["detail"] == f"{key}: {missing} is not a readable file"
+        assert not fleet.temporary

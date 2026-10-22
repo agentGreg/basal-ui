@@ -1,8 +1,7 @@
 """Hugging Face catalog of the basal models and hardware-aware model selection.
 
-Each repository of Remek/basal-* (and each .gguf file of a -GGUF repository) is one Variant. assess() says whether
-this machine can serve it in which --mode, and whether it fits the memory budget; suggest() selects model cards by fit
-and available memory.
+Each repository from the supported basal authors (and each .gguf file of a -GGUF repository) is one Variant. assess()
+reports whether this machine can serve it and whether it fits the memory budget; suggest() selects model cards by fit.
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -12,7 +11,12 @@ from pathlib import Path
 
 from .hardware import Hardware
 
-_REPO_RE = re.compile(r"^basal-(omni-)?(\d+\.\d+)-(mini|max|ultra|\d+(?:\.\d+)?B)(?:-(FP8|NVFP4|GGUF|MLX(?:-8bit|-fp4)?))?$")
+_REPO_RE = re.compile(
+    r"^basal-(omni-)?(\d+\.\d+)-(mini|max|ultra|\d+(?:\.\d+)?B)"
+    r"(?:-(FP8|NVFP4|GGUF|MLX(?:-8bit|-6bit|-bf16|-fp4)?|oQ6e))?$"
+)
+AUTHORS = ("Remek", "pawelkiszczak", "agentGreg")
+_BASE_FILES = ("*.json", "*.jinja", "*.model", "*.txt")
 TIER_ORDER = {"mini": 0, "1.5B": 1, "4.5B": 2, "max": 3, "ultra": 4}
 CURRENT_TEXT_FAMILY = "basal-2.0"
 # docs/HARDWARE.md, Recommendation: bf16 on data-centre GPUs (launch-bound at batch 1) and on the RTX 4090 (FP8
@@ -40,6 +44,14 @@ class Variant:
     weights_bytes: int | None
     experimental: bool
     media: tuple[str, ...] = ()
+    author: str = "Remek"
+    base_repo: str | None = None
+    base_revision: str | None = None  # the card's base_model_revision: the base snapshot is pinned to it
+    weights_only: bool = False  # a GGUF repository without tokenizer and calibration: they come from base_repo
+
+    @property
+    def community(self) -> bool:
+        return self.author != "Remek"
 
 
 @dataclass(frozen=True)
@@ -56,28 +68,37 @@ class Assessment:
 
 
 def parse_repo(repo_id: str) -> tuple[str, str, str] | None:
-    """(family, tier, port) of an official repository name, None for anything else."""
+    """(family, tier, port) of a basal repository name, None for anything else."""
     match = _REPO_RE.fullmatch(repo_id.rsplit("/", 1)[-1])
     if not match:
         return None
     omni, version, tier, port = match.groups()
-    return f"basal-{'omni-' if omni else ''}{version}", tier, port or "bf16"
+    port = {"oQ6e": "MLX-oQ6e"}.get(port, port) or "bf16"
+    return f"basal-{'omni-' if omni else ''}{version}", tier, port
 
 
 def _label(port: str, filename: str | None = None) -> str:
     if port == "GGUF" and filename:
         quant = re.search(r"-(Q\w+|F16|BF16)\.gguf$", filename, re.IGNORECASE)
         return f"GGUF {quant.group(1)}" if quant else "GGUF"
-    return {"MLX-8bit": "MLX 8-bit", "MLX-fp4": "MLX fp4", "MLX": "MLX 8-bit"}.get(port, port)
+    return {
+        "MLX-8bit": "MLX 8-bit", "MLX-6bit": "MLX 6-bit", "MLX-bf16": "MLX bf16",
+        "MLX-fp4": "MLX fp4", "MLX-oQ6e": "MLX oQ6e (oMLX 6-bit)", "MLX": "MLX 8-bit",
+    }.get(port, port)
 
 
-def _variants(repo: str, files: dict[str, int | None]) -> list[Variant]:
+def _variants(repo: str, files: dict[str, int | None], author: str = "Remek",
+              base_repo: str | None = None, base_revision: str | None = None) -> list[Variant]:
     """The variants of one repository from its file names and sizes."""
     family, tier, port = parse_repo(repo)
+    weights_only = port == "GGUF" and not any(name in files for name in ("tokenizer.json", "CALIBRATION.json"))
+    base_repo, base_revision = (base_repo, base_revision) if weights_only and base_repo else (None, None)
+
     def make(filename, size):
         return Variant(f"{repo}:{filename}" if filename else repo, repo, family, tier, port, _label(port, filename),
                        filename, size, family.startswith("basal-omni-"),
-                       MEDIA_KINDS.get((family, tier), ()) if port == "bf16" else ())
+                       MEDIA_KINDS.get((family, tier), ()) if port == "bf16" else (), author, base_repo,
+                       base_revision, weights_only)
     if port == "GGUF":
         return [make(name, size) for name, size in files.items() if name.lower().endswith(".gguf")]
     sizes = [size for name, size in files.items() if name.endswith(".safetensors") and not _optional(name)]
@@ -88,12 +109,34 @@ def _variants(repo: str, files: dict[str, int | None]) -> list[Variant]:
 def _hub_variants() -> tuple[Variant, ...]:
     from huggingface_hub import HfApi
     api = HfApi()
-    repos = [m.id for m in api.list_models(author="Remek", search="basal") if parse_repo(m.id)]
-    def get(repo):
+    repos = [(m.id, author) for author in AUTHORS
+             for m in api.list_models(author=author, search="basal")
+             if m.id.split("/", 1)[0] == author and parse_repo(m.id)]
+
+    def get(repo, author):
         info = api.model_info(repo, files_metadata=True)
-        return _variants(repo, {f.rfilename: f.size for f in info.siblings or []})
+        files = {f.rfilename: f.size for f in info.siblings or []}
+        card = getattr(info, "card_data", None)
+        return _variants(repo, files, author, _first(getattr(card, "base_model", None)),
+                         _first(getattr(card, "base_model_revision", None)))
+
     with ThreadPoolExecutor(max_workers=8) as pool:
-        return tuple(v for group in pool.map(get, repos) for v in group)
+        return tuple(v for group in pool.map(lambda item: get(*item), repos) for v in group)
+
+
+def _first(value) -> str | None:
+    """A model card's base_model value (a repo id, or a list of them: the first) as one repo id."""
+    if isinstance(value, list):
+        value = value[0] if value else None
+    return (value.strip("'\" ") or None) if isinstance(value, str) else None
+
+
+def _front_matter(readme: str, key: str) -> str | None:
+    """The first value of `key` in a README's YAML front matter (`key: value`, or the first `- value` of a list)."""
+    match = (re.search(rf"(?m)^{key}:[ \t]*([^\s\[\]-][^\s]*)[ \t]*$", readme)
+             or re.search(rf"(?m)^{key}:[ \t]*\n[ \t]*-[ \t]*([^\s]+)", readme)
+             or re.search(rf"(?m)^{key}:[ \t]*\[[ \t]*([^\s,\]]+)", readme))
+    return _first(match.group(1)) if match else None
 
 
 def _cache_variants(cache_dir: Path) -> list[Variant]:
@@ -105,8 +148,23 @@ def _cache_variants(cache_dir: Path) -> list[Variant]:
         return []
     out = []
     for repo in cache.repos:
-        if repo.repo_type == "model" and parse_repo(repo.repo_id):
-            out += _variants(repo.repo_id, {f.file_name: f.size_on_disk for rev in repo.revisions for f in rev.files})
+        author = repo.repo_id.split("/", 1)[0]
+        if repo.repo_type != "model" or author not in AUTHORS or not parse_repo(repo.repo_id):
+            continue
+        files = {f.file_name: f.size_on_disk for rev in repo.revisions for f in rev.files}
+        base_repo = base_revision = None
+        if parse_repo(repo.repo_id)[2] == "GGUF" and not any(
+            name in files for name in ("tokenizer.json", "CALIBRATION.json")
+        ):
+            for rev in repo.revisions:
+                readme = next((f.file_path for f in rev.files if f.file_name == "README.md"), None)
+                if readme and readme.is_file():
+                    text = readme.read_text(errors="replace")
+                    base_repo = _front_matter(text, "base_model")
+                    if base_repo:
+                        base_revision = _front_matter(text, "base_model_revision")
+                        break
+        out += _variants(repo.repo_id, files, author, base_repo, base_revision)
     return out
 
 
@@ -162,6 +220,8 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
             return None, "MLX ports need mlx and mlx-lm: install basal[mlx]."
         return "mlx", None
     if v.port == "GGUF":
+        if v.gguf_file and v.weights_only and v.base_repo is None:
+            return None, "this GGUF conversion ships no tokenizer or calibration and its model card names no base model"
         if "gguf" not in hw.engines:
             return None, "GGUF files need llama-cpp-python: install basal[gguf]."
         return "gguf", None
@@ -242,7 +302,7 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
         pool = [a for a in pool if now(a) == "fits"] or [a for a in pool if now(a) == "tight"]
         return max(pool, key=lambda a: TIER_ORDER.get(a.variant.tier, -1), default=None)
 
-    fitting = [a for a in items if a.fit != "too_large" and now(a) != "too_large"]
+    fitting = [a for a in items if not a.variant.community and a.fit != "too_large" and now(a) != "too_large"]
     text = [a for a in fitting if a.runnable and not a.variant.experimental]
     families = sorted({a.variant.family for a in text}, reverse=True)
     suggestions = []
@@ -285,23 +345,55 @@ def _optional(name: str) -> bool:
     return name.startswith("think/")
 
 
-def download_kwargs(v: Variant) -> dict:
-    """snapshot_download filters: for GGUF the chosen file plus tokenizer, prompt format and calibration (a -GGUF
-    repository holds several quantisations); otherwise the repository without the optional files."""
-    if v.port == "GGUF":
-        return {"allow_patterns": [v.gguf_file, "*.json", "*.jinja", "*.model", "*.txt"]}
-    return {"ignore_patterns": ["think/*"]}
+def download_kwargs(v: Variant, revision: str | None = None) -> dict:
+    """snapshot_download filters for one variant and optional pinned revision."""
+    kwargs = ({"allow_patterns": [v.gguf_file, *_BASE_FILES]} if v.port == "GGUF"
+              else {"ignore_patterns": ["think/*"]})
+    if revision is not None:
+        kwargs["revision"] = revision
+    return kwargs
 
 
-def is_downloaded(v: Variant, cache_dir: Path) -> Path | None:
-    """The local snapshot directory if the weights are in the selected cache."""
+def base_dir(v: Variant, cache_dir: Path) -> Path | None:
+    """The cached base model metadata snapshot required to serve a weights-only GGUF."""
+    if not v.base_repo:
+        return None
     from huggingface_hub import snapshot_download
     try:
-        path = Path(snapshot_download(v.repo, cache_dir=cache_dir, local_files_only=True, **download_kwargs(v)))
+        path = Path(snapshot_download(v.base_repo, cache_dir=cache_dir, local_files_only=True,
+                                      allow_patterns=list(_BASE_FILES), **_base_revision(v)))
+    except Exception:  # noqa: BLE001 — an absent or partial snapshot is not downloaded
+        return None
+    return path if all((path / name).is_file() for name in ("tokenizer.json", "CALIBRATION.json")) else None
+
+
+def _base_revision(v: Variant) -> dict:
+    return {"revision": v.base_revision} if v.base_revision else {}
+
+
+def is_downloaded(v: Variant, cache_dir: Path, revision: str | None = None) -> Path | None:
+    """The local snapshot directory if the weights and any required base metadata are cached."""
+    from huggingface_hub import snapshot_download
+    try:
+        path = Path(snapshot_download(v.repo, cache_dir=cache_dir, local_files_only=True,
+                                      **download_kwargs(v, revision)))
     except Exception:  # noqa: BLE001 — an absent or partial snapshot is not downloaded
         return None
     weights = [path / v.gguf_file] if v.gguf_file else list(path.glob("*.safetensors"))
-    return path if weights and all(w.exists() for w in weights) else None
+    return path if weights and all(w.exists() for w in weights) and (
+        not v.base_repo or base_dir(v, cache_dir) is not None
+    ) else None
+
+
+def download(v: Variant, cache_dir: Path, tqdm_class=None, revision: str | None = None) -> str:
+    """Download a variant and, when needed, its base model metadata snapshot."""
+    from huggingface_hub import snapshot_download
+    path = snapshot_download(v.repo, cache_dir=cache_dir, tqdm_class=tqdm_class,
+                             **download_kwargs(v, revision))
+    if v.base_repo:
+        snapshot_download(v.base_repo, cache_dir=cache_dir, tqdm_class=tqdm_class,
+                          allow_patterns=list(_BASE_FILES), **_base_revision(v))
+    return path
 
 
 def downloaded_bytes(v: Variant, cache_dir: Path) -> int | None:
@@ -368,6 +460,11 @@ def serve_args(v: Variant, local_dir: Path, mode: str, media_platform: str | Non
         args = ["--model", str(local_dir), "--mode", "eager", "--media", "on"]
         return args + {"apple": ["--device", "mps"], "cpu": ["--device", "cpu"]}.get(media_platform, [])
     args = ["--model", str(local_dir), "--mode", mode]
+    if v.base_repo and v.gguf_file:
+        model_dir = base_dir(v, local_dir.parents[2])
+        if model_dir is None:
+            raise FileNotFoundError(f"base model metadata is not downloaded: {v.base_repo}")
+        args[1] = str(model_dir)
     if v.port == "GGUF":
         args += ["--gguf", str(local_dir / v.gguf_file)]
     if mode == "eager" and v.port == "bf16" and not v.experimental and platform == "cpu":

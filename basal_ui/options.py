@@ -11,7 +11,7 @@ from basal.server import MODES, validate_quant
 from .catalog import _cuda_graph
 
 DEFAULTS = {
-    "mode": None, "quant": None, "attn": "auto", "gemma_attn": "auto", "deterministic": False, "orders": None,
+    "mode": None, "quant": None, "revision": None, "attn": "auto", "gemma_attn": "auto", "deterministic": False, "orders": None,
     "auto_tau": 0.6, "auto_band": [0.2, 0.8], "soam": True, "max_batch": 64, "wait_ms": 0.0, "batch_window_ms": 3.0,
     "state_cache_gb": 0.0, "prefix_cache": False, "scheduler": "auto", "long_lane": False, "long_tokens": 2048,
     "long_share": 0.5, "long_slice_ms": 10.0, "context_overflow": "truncate", "truncate_head": 1 / 3, "max_len": None,
@@ -88,6 +88,10 @@ def validate(options: dict | None, default_mode: str | None = None) -> dict:
                 raise ValueError(f"load option {key} must be true or false")
         elif key in NUMBERS:
             value = _number(key, value)
+        elif key == "revision":
+            value = (value.strip() or None) if isinstance(value, str) else value
+            if value is not None and (not isinstance(value, str) or not re.fullmatch(r"[0-9A-Za-z._/-]{1,64}", value)):
+                raise ValueError("load option revision must match [0-9A-Za-z._/-]{1,64}")
         elif key in TEXTS:
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"load option {key} must be a string")
@@ -130,7 +134,7 @@ def args(options: dict) -> list[str]:
     flags = []
     for key, value in non_default(validate(options)).items():
         flag = "--" + key.replace("_", "-")
-        if key == "mode":
+        if key in ("mode", "revision"):
             continue
         if key in ("deterministic", "strict_calibration", "mlx_packed"):
             flags.append(flag)

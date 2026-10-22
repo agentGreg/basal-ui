@@ -166,3 +166,12 @@ def test_load_options_reach_the_command_are_remembered_and_reused_by_restart(tmp
         assert settings.load_options("mini") == {"max_batch": 8}
         listed = client.get("/api/models/options", params={"id": "mini"}).json()
         assert listed["defaults"]["max_batch"] == 64 and {m["mode"] for m in listed["modes"]} >= {"eager", "tpu"}
+
+
+def test_revision_is_validated_but_never_emitted_as_a_serve_flag():
+    assert options.validate({"revision": "refs/pr/4"})["revision"] == "refs/pr/4"
+    assert options.args({"revision": "abc123"}) == []
+    with pytest.raises(ValueError, match="revision"):
+        options.validate({"revision": "bad revision"})
+    assert options.validate({"revision": ""})["revision"] is None  # a cleared field: the default branch
+    assert options.validate({"revision": " abc "})["revision"] == "abc"

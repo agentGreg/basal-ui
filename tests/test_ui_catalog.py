@@ -1,6 +1,8 @@
 import math
 from pathlib import Path
 
+import pytest
+
 from basal.ui.catalog import (
     Variant,
     _label,
@@ -13,6 +15,8 @@ from basal.ui.catalog import (
     serve_args,
     suggest,
 )
+from basal.ui import catalog
+from basal.ui.catalog import base_dir, download, is_downloaded
 from basal.ui.hardware import Hardware
 
 
@@ -259,3 +263,153 @@ def test_delete_gguf_keeps_a_blob_another_file_name_still_uses(tmp_path):
     assert delete(first, tmp_path) == 0
     assert not (snapshot / selected).exists()
     assert (snapshot / other).read_bytes() == b"12345"
+def test_new_community_ports_and_weights_only_gguf(monkeypatch):
+    class Api:
+        def list_models(self, *, author, search):
+            return [type("Model", (), {"id": f"{author}/basal-1.0-4.5B-GGUF"})(),
+                    type("Model", (), {"id": "other/basal-1.0-4.5B-GGUF"})()]
+
+        def model_info(self, repo, *, files_metadata):
+            return type("Info", (), {
+                "siblings": [type("File", (), {"rfilename": "model-Q8_0.gguf", "size": 12})()],
+                "card_data": type("Card", (), {"base_model": "Remek/basal-1.0-4.5B"})(),
+            })()
+
+    monkeypatch.setattr("huggingface_hub.HfApi", Api)
+    catalog._hub_variants.cache_clear()
+    variants = catalog._hub_variants()
+    assert {v.author for v in variants} == set(catalog.AUTHORS)
+    assert all(v.community == (v.author != "Remek") and v.base_repo == "Remek/basal-1.0-4.5B" for v in variants)
+    assert parse_repo("agentGreg/basal-1.5-mini-MLX-6bit")[2] == "MLX-6bit"
+    assert parse_repo("agentGreg/basal-1.5-mini-MLX-bf16")[2] == "MLX-bf16"
+    assert parse_repo("pawelkiszczak/basal-1.0-4.5B-oQ6e")[2] == "MLX-oQ6e"
+    assert _label("MLX-6bit") == "MLX 6-bit"
+    assert _label("MLX-bf16") == "MLX bf16"
+    assert _label("MLX-oQ6e") == "MLX oQ6e (oMLX 6-bit)"
+    assert not suggest([assess(v, hw()) for v in variants], hw())
+    community_media = Variant("community-media", "agentGreg/basal-omni-1.0-mini", "basal-omni-1.0", "mini",
+                              "bf16", "bf16", None, 10, True, media=("image",), author="agentGreg")
+    media_hw = hw(engines=frozenset({"cuda", "media"}))
+    assert suggest([assess(community_media, media_hw)], media_hw) == []
+    catalog._hub_variants.cache_clear()
+
+
+def test_community_cache_reads_weights_only_gguf_base_model(monkeypatch, tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text("---\nbase_model:\n- Remek/basal-1.0-4.5B\nbase_model_revision: abc123\n---\n")
+    readmefile = type("File", (), {"file_name": "README.md", "size_on_disk": readme.stat().st_size,
+                                   "file_path": readme})()
+    file = type("File", (), {"file_name": "model-Q8_0.gguf", "size_on_disk": 12,
+                             "file_path": readme})()
+    repo = type("Repo", (), {
+        "repo_type": "model", "repo_id": "pawelkiszczak/basal-1.0-4.5B-GGUF",
+        "revisions": [type("Revision", (), {"files": [file, readmefile]})()],
+    })()
+    outsider = type("Repo", (), {
+        "repo_type": "model", "repo_id": "other/basal-1.0-4.5B-GGUF",
+        "revisions": [type("Revision", (), {"files": [file, readmefile]})()],
+    })()
+    monkeypatch.setattr("huggingface_hub.scan_cache_dir",
+                        lambda _: type("Cache", (), {"repos": [repo, outsider]})())
+    (v,) = catalog._cache_variants(tmp_path)
+    assert v.community and v.author == "pawelkiszczak"
+    assert v.base_repo == "Remek/basal-1.0-4.5B" and v.base_revision == "abc123" and v.weights_only
+
+
+def test_weights_only_gguf_download_and_serve_require_base_metadata(monkeypatch, tmp_path):
+    v = Variant("repo:model-Q8_0.gguf", "pawelkiszczak/basal-1.0-4.5B-GGUF", "basal-1.0", "4.5B",
+                "GGUF", "GGUF Q8_0", "model-Q8_0.gguf", 12, False,
+                author="pawelkiszczak", base_repo="Remek/basal-1.0-4.5B", base_revision="b" * 40, weights_only=True)
+    variant_snapshot = tmp_path / "models--pawelkiszczak--basal-1.0-4.5B-GGUF" / "snapshots" / ("a" * 40)
+    metadata_snapshot = tmp_path / "models--Remek--basal-1.0-4.5B" / "snapshots" / ("b" * 40)
+    variant_snapshot.mkdir(parents=True)
+    (variant_snapshot / v.gguf_file).write_text("gguf")
+    metadata_snapshot.mkdir(parents=True)
+    for name in ("config.json", "tokenizer.json", "CALIBRATION.json"):
+        (metadata_snapshot / name).write_text("{}")
+    calls = []
+
+    def snapshot_download(repo, **kwargs):
+        calls.append((repo, kwargs))
+        return str(metadata_snapshot if repo == v.base_repo else variant_snapshot)
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    assert download_kwargs(v, "deadbeef")["revision"] == "deadbeef"
+    assert download(v, tmp_path, revision="deadbeef") == str(variant_snapshot)
+    assert [(repo_name, kwargs.get("revision")) for repo_name, kwargs in calls] == [
+        (v.repo, "deadbeef"), (v.base_repo, "b" * 40)  # the base snapshot pinned to the card's base_model_revision
+    ]
+    calls.clear()
+    assert is_downloaded(v, tmp_path, "deadbeef") == variant_snapshot
+    assert calls[0][1]["revision"] == "deadbeef"
+    assert base_dir(v, tmp_path) == metadata_snapshot and calls[-1][1]["revision"] == "b" * 40
+    local = tmp_path / "models--pawelkiszczak--basal-1.0-4.5B-GGUF" / "snapshots" / ("a" * 40)
+    assert serve_args(v, local, "gguf") == [
+        "--model", str(metadata_snapshot), "--mode", "gguf", "--gguf", str(local / v.gguf_file)
+    ]
+    (metadata_snapshot / "CALIBRATION.json").unlink()  # config.json and tokenizer only: not the served metadata
+    assert base_dir(v, tmp_path) is None
+    assert is_downloaded(v, tmp_path, "deadbeef") is None
+
+
+def test_weights_only_gguf_without_a_base_model_is_not_runnable():
+    gguf_hw = hw(engines=frozenset({"gguf"}))
+    (orphan,) = _variants("pawelkiszczak/basal-1.0-4.5B-GGUF", {"model-Q8_0.gguf": 12}, "pawelkiszczak")
+    assert orphan.weights_only and orphan.base_repo is None
+    assessment = assess(orphan, gguf_hw)
+    assert not assessment.runnable and "names no base model" in assessment.reason
+    (based,) = _variants("pawelkiszczak/basal-1.0-4.5B-GGUF", {"model-Q8_0.gguf": 12}, "pawelkiszczak",
+                         "Remek/basal-1.0-4.5B")
+    assert assess(based, gguf_hw).mode == "gguf"
+    (shipped,) = _variants("Remek/basal-2.0-mini-GGUF", {"m-Q8_0.gguf": 7, "tokenizer.json": 1})
+    assert not shipped.weights_only and assess(shipped, gguf_hw).mode == "gguf"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("---\nbase_model: Remek/basal-2.0-mini\n---\n", "Remek/basal-2.0-mini"),
+    ("---\nbase_model: 'Remek/basal-2.0-mini'\n---\n", "Remek/basal-2.0-mini"),
+    ("---\nbase_model:\n  - Remek/basal-2.0-mini\n  - other/x\n---\n", "Remek/basal-2.0-mini"),
+    ("---\nbase_model: [Remek/basal-2.0-mini, other/x]\n---\n", "Remek/basal-2.0-mini"),
+    ("---\nbase_model_relation: quantized\n---\n", None),
+])
+def test_readme_base_model_scalar_and_list_forms(text, expected):
+    assert catalog._front_matter(text, "base_model") == expected
+
+
+def test_hub_base_model_list_takes_the_first_entry(monkeypatch):
+    class Api:
+        def list_models(self, *, author, search):
+            return [type("Model", (), {"id": f"{author}/basal-1.0-4.5B-GGUF"})()] if author == "pawelkiszczak" else []
+
+        def model_info(self, repo, *, files_metadata):
+            return type("Info", (), {
+                "siblings": [type("File", (), {"rfilename": "model-Q8_0.gguf", "size": 12})()],
+                "card_data": type("Card", (), {"base_model": ["Remek/basal-1.0-4.5B", "other/x"],
+                                               "base_model_revision": "abc"})(),
+            })()
+
+    monkeypatch.setattr("huggingface_hub.HfApi", Api)
+    catalog._hub_variants.cache_clear()
+    try:
+        (v,) = catalog._hub_variants()
+    finally:
+        catalog._hub_variants.cache_clear()
+    assert v.base_repo == "Remek/basal-1.0-4.5B" and v.base_revision == "abc"
+
+
+def test_base_model_gguf_delete_keeps_its_metadata(tmp_path):
+    blobs, snapshot = _gguf_cache(tmp_path)
+    name = "basal-2.0-mini-Q8_0.gguf"
+    (snapshot / name).write_bytes(b"weights")
+    repo = "Remek/basal-2.0-mini-GGUF"
+    (snapshot.parent.parent / "refs" / "main").write_text("b" * 40)
+    base = tmp_path / "models--Remek--basal-2.0-mini"
+    base_snapshot = base / "snapshots" / ("c" * 40)
+    base_snapshot.mkdir(parents=True)
+    (base / "refs").mkdir()
+    (base / "refs" / "main").write_text("c" * 40)
+    (base_snapshot / "config.json").write_text("{}")
+    v = Variant(f"{repo}:{name}", repo, "basal-2.0", "mini", "GGUF", "GGUF Q8_0", name, 7, False,
+                base_repo="Remek/basal-2.0-mini")
+    assert delete(v, tmp_path) == 7
+    assert (base_snapshot / "config.json").exists()

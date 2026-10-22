@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.ui import catalog, settings
+from basal.ui import calibration, catalog, settings
 from basal.ui.app import Fleet, Runner, create_app, rss_by_pgid
 from basal.ui.catalog import Variant
 from basal.ui.hardware import Hardware
@@ -186,7 +186,7 @@ def test_delete_is_refused_while_repository_download_is_alive(tmp_path):
 
 def test_download_runs_without_a_model_and_reports_progress_then_errors(tmp_path, monkeypatch):
     on_disk = {}
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: on_disk.get(variant.repo))
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: on_disk.get(variant.repo))
     release, outcome = threading.Event(), {}
 
     def run(self, record, variant, cache_dir):
@@ -229,7 +229,7 @@ def test_startup_timeout_kills_child_process_group(tmp_path, monkeypatch):
             f"p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
             f"open({str(pid_file)!r},'w').write(str(p.pid)); time.sleep(60)")
     runner = Runner(models_dir_fn=lambda: tmp_path)
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: tmp_path)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     monkeypatch.setattr(runner, "_build_command", lambda *args: [sys.executable, "-c", code])
     monkeypatch.setattr("basal.ui.app.START_TIMEOUT_S", 0.5)
     runner.load(assessment)
@@ -281,7 +281,7 @@ def test_runner_command_is_private_with_internal_key_and_model_name(tmp_path):
 
 
 def test_real_subprocess_requires_internal_key_and_records_the_decision(tmp_path, monkeypatch):
-    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir: tmp_path)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     app, fleet = app_for(tmp_path, [MINI])
     secret = fleet.internal_secret
     code = f"""
@@ -474,7 +474,7 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
                                             None, 100, False), mode="eager")
     runner.gen = 1
     runner.state, runner.model = "starting", "old"
-    monkeypatch.setattr(catalog, "is_downloaded", lambda *_: tmp_path)
+    monkeypatch.setattr(catalog, "is_downloaded", lambda *args, **kwargs: tmp_path)
     monkeypatch.setattr(runner, "_build_command", lambda *args: ["fake"])
 
     class Process:
@@ -703,3 +703,88 @@ def test_shutdown_waits_for_gateway_drain_before_shared_state_teardown(tmp_path,
     with TestClient(app, base_url="http://127.0.0.1"):
         pass
     assert order == ["gateway", "gateway", "fleet", "stats", "keys"]
+
+
+def test_presets_validate_and_strip_request_model(tmp_path):
+    app, _ = app_for(tmp_path, [])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        assert client.get("/api/presets").json() == {"load": {}, "request": {}}
+        result = client.put("/api/presets", json={"kind": "load", "name": "cpu", "value": {"mode": "eager"}})
+        assert result.status_code == 200 and result.json()["load"]["cpu"] == {"mode": "eager"}  # the non-default ones
+        result = client.put("/api/presets", json={"kind": "request", "name": "hello",
+                                                  "value": {"model": "ignored", "questions": {"q": {"type": "choice"}}}})
+        assert result.json()["request"]["hello"] == {"questions": {"q": {"type": "choice"}}}
+        assert client.put("/api/presets", json={"kind": "load", "name": "bad", "value": {"unknown": 1}}).status_code == 400
+        assert client.put("/api/presets", json={"kind": "request", "name": "bad", "value": {"questions": {}}}).status_code == 400
+        assert client.put("/api/presets", json={"kind": "load", "name": ".hidden", "value": {}}).status_code == 400
+
+
+def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path, monkeypatch):
+    community = Variant("community", "pawelkiszczak/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16",
+                       None, 123, False, (), "pawelkiszczak")
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "README.md").write_text("Local model card")
+    (snapshot / "basal.json").write_text('{"prompt": 2}')
+    checks, modes, urls = [], [], []
+
+    def is_downloaded(variant, cache, revision=None):
+        checks.append((variant.id, revision))
+        return snapshot if variant.id == community.id else None
+    monkeypatch.setattr(catalog, "is_downloaded", is_downloaded)
+    monkeypatch.setattr(calibration, "shipped_file", lambda local_dir, mode: modes.append(mode) or snapshot / "none")
+    monkeypatch.setattr(httpx, "get", lambda url, **k: urls.append(url) or httpx.Response(404))
+    app, _ = app_for(tmp_path, [community, MINI])
+    settings.set_load_options("community", {"mode": "mlx-q8", "revision": "abc"})
+    settings.set_load_options("mini", {"revision": "refs/pr/2"})
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        card = client.get("/api/models/card", params={"id": "community"}).json()
+        missing = client.get("/api/models/card", params={"id": "mini"}).json()
+    assert card["downloaded"] and card["local_dir"] == str(snapshot)
+    assert card["author"] == "pawelkiszczak" and card["community"] is True
+    assert card["basal_json"] == {"prompt": 2} and card["readme"] == "Local model card"
+    assert missing["downloaded"] is False and missing["local_dir"] is None and missing["basal_json"] is None
+    assert checks == [("community", "abc"), ("mini", "refs/pr/2")]  # the snapshot of the served revision
+    assert modes == ["mlx-q8"]  # the calibration file of the served mode, not the default one
+    assert urls == ["https://huggingface.co/Remek/basal-2.0-mini/raw/refs/pr/2/README.md"]
+
+
+def test_catalog_rows_carry_the_saved_revision(tmp_path, monkeypatch):
+    monkeypatch.setattr(catalog, "downloaded_bytes", lambda variant, cache_dir: None)
+    app, _ = app_for(tmp_path, [MINI, SMALL])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        assert client.put("/api/models/options", json={"id": "mini", "options": {"revision": " abc "}}).status_code == 200
+        rows = {m["id"]: m for m in client.get("/api/models").json()["models"]}
+    assert rows["mini"]["revision"] == "abc" and rows["small"]["revision"] is None
+
+
+def test_revision_reaches_cached_check_and_download_but_not_child_flags(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(catalog, "is_downloaded",
+                        lambda variant, cache_dir, revision=None: calls.append(("check", revision)) or None)
+
+    class Finished:
+        @staticmethod
+        def is_alive():
+            return False
+
+    class Downloads:
+        @staticmethod
+        def start(variant, cache_dir, revision=None):
+            calls.append(("download", revision))
+            return {"thread": Finished(), "error": None, "path": tmp_path}
+
+    runner = Runner(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", downloads=Downloads())
+    assessment = catalog.assess(MINI, HW)
+    runner.options = {"revision": "refs/pr/5"}
+    runner._build_command = lambda *args: ["fake"]
+    runner._models_entry = lambda media: (None, [])
+    monkeypatch.setattr("basal.ui.app.subprocess.Popen",
+                        lambda *args, **kwargs: SimpleNamespace(stdout=__import__("io").StringIO(), poll=lambda: None,
+                                                                returncode=None, pid=0))
+    monkeypatch.setattr("basal.ui.app.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
+    runner._start(assessment, runner.gen, cache_dir=tmp_path)
+    assert calls == [("check", "refs/pr/5"), ("download", "refs/pr/5")]
+    del runner._build_command
+    command = runner._build_command(MINI, tmp_path, assessment, False, 1, settings.serve_settings())
+    assert "--revision" not in command
