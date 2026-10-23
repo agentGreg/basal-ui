@@ -4,10 +4,12 @@ eager forward, calibration strictness, thinking, early exit). DEFAULTS are basal
 emits only the options that differ from them. Incompatible combinations are not re-checked here: the child refuses
 them with basal-serve's own message, shown on the model's row and in its log."""
 import re
+from types import SimpleNamespace
 
 from basal.engine import VLLM_PRESETS
 from basal.gdn_graph import refused as gdn_refused
-from basal.server import MODES, lean_arg, lean_tree, validate_quant
+from basal.prompt import LAYOUTS
+from basal.server import MODES, lean_arg, lean_tree, refuse_layout_caches, validate_quant
 
 from .catalog import _cuda_graph
 
@@ -25,7 +27,7 @@ DEFAULTS = {
     "long_share": 0.5, "long_slice_ms": 10.0, "context_overflow": "truncate", "truncate_head": 1 / 3, "max_len": None,
     "vllm_preset": "default", "gpu_memory": 0.6, "ollama_url": "http://127.0.0.1:11434", "ollama_model": None,
     "llamacpp_url": "http://127.0.0.1:8080", "http_parallel": 1, "device": None, "think": False, "think_tokens": 256,
-    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False,
+    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False, "layout": None,
     # the CUDA graph engine's kernel switches
     "merge": "auto", "lean": "off", "tree": "dense", "batches": "auto", "readout_layer": "off", "template_prefix": "auto",
     "fp8_accum": "fast",
@@ -43,7 +45,7 @@ CHOICES = {
     "merge": ("auto", "on", "off"), "lean": ("auto", "on", "pass2", "off"), "tree": ("auto", "dense", "flex"),
     "batches": ("auto", "compact", "default", "fine"), "readout_layer": ("auto", "on", "off"),
     "template_prefix": ("auto", "on", "off"), "fp8_accum": ("fast", "full"), "eager_forward": (None, "basal", "hf"),
-    "vllm_fast_prefill": ("auto", "off"), "dtype": ("bfloat16", "float16", "float32"),
+    "vllm_fast_prefill": ("auto", "off"), "dtype": ("bfloat16", "float16", "float32"), "layout": (None, *LAYOUTS),
 }
 BOOLS = ("deterministic", "soam", "prefix_cache", "long_lane", "think", "ple_offload", "strict_calibration", "mlx_packed")
 # key: (minimum, maximum, integer, minimum excluded)
@@ -250,6 +252,12 @@ def check_combination(v, hw, options, default_mode, media=False):
             raise ValueError(reason)
     if options["batches"] not in ("auto", "default") and MODES[mode][0] not in ("graph", "exit"):
         raise ValueError("--batches compact/fine needs the CUDA graph engine")
+    if options["layout"] not in (None, "canonical"):  # basal-serve 2.4.1: the caches hold the canonical prompt only
+        try:
+            refuse_layout_caches(options["layout"], SimpleNamespace(
+                state_cache_gb=options["state_cache_gb"], prefix_cache="on" if options["prefix_cache"] else "off"))
+        except SystemExit as exc:  # basal-serve's own message
+            raise ValueError(str(exc)) from None
     kind, mode_quant, compiled = MODES[mode]
     quant = options["quant"] or mode_quant
     if v.recurrent and kind == "graph":  # basal-serve 2.4: Qwen3.5 in the graph engine runs bf16 plain/branched rows

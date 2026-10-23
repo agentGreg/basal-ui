@@ -48,6 +48,17 @@ def test_defaults_emit_nothing_and_every_non_default_its_flag():
                      "--device", "cpu", "--think", "auto", "--think-tokens", "512", "--early-exit", "0.99"]
 
 
+def test_layout_is_passed_and_refused_with_the_caches():
+    assert options.args({"layout": "qfirst"}) == ["--layout", "qfirst"]
+    with pytest.raises(ValueError, match="layout"):
+        options.validate({"layout": "statefirst"})
+    for cache in ({"prefix_cache": True}, {"state_cache_gb": 1.0}):
+        with pytest.raises(ValueError, match="need the canonical layout"):
+            options.check_combination(BF16, CUDA, options.validate({"layout": "state_twice", **cache}), "fast")
+        options.check_combination(BF16, CUDA, options.validate({"layout": "canonical", **cache}), "fast")
+    options.check_combination(BF16, CUDA, options.validate({"layout": "qfirst"}), "fast")
+
+
 @pytest.mark.parametrize("orders", ["2le00", "2le01"])
 def test_orders_limit_must_be_at_least_two(orders):
     with pytest.raises(ValueError, match="orders"):
