@@ -112,6 +112,37 @@ def test_cuda_graph_modes_require_ampere_or_newer():
     for mode in ("fast", "fast-nocompile", "fast-exit", "fp8", "nvfp4"):
         assert not modes[mode]["available"]
         assert "8.0+" in modes[mode]["reason"]
+    sm86 = Hardware("cuda", "RTX 3090", 24 * 1024**3, None, (8, 6), frozenset({"cuda"}))
+    modes = {m["mode"]: m for m in options.available_modes(BF16, sm86, catalog.assess(BF16, sm86))}
+    assert modes["fast"]["available"] and not modes["fp8"]["available"]
+    assert modes["fp8"]["reason"] == options.fp8_unavailable(sm86) and "8.9+" in modes["fp8"]["reason"]
+    with pytest.raises(ValueError, match=r"8\.9\+"):
+        options.check_combination(BF16, sm86, options.validate({"quant": "fp8"}, "fast"), "fast")
+    sm89 = Hardware("cuda", "RTX 4090", 24 * 1024**3, None, (8, 9), frozenset({"cuda"}))
+    options.check_combination(BF16, sm89, options.validate({"quant": "fp8"}, "fast"), "fast")
+
+
+def test_pico_modes_follow_basal_serve_2_4_refusals():
+    pico = Variant("pico", "Remek/basal-omni-pico", "basal-omni", "pico", "bf16", "bf16", None, 100, True,
+                   recurrent=True)
+    fla = Hardware("cuda", "NVIDIA H100", 80 * 1024**3, None, (9, 0), frozenset({"cuda", "vllm", "fla"}))
+    modes = {m["mode"]: m for m in options.available_modes(pico, fla, catalog.assess(pico, fla))}
+    assert {m for m, row in modes.items() if row["available"]} >= {"fast", "fast-nocompile", "eager", "vllm"}
+    assert [m for m, row in modes.items() if row["default"]] == ["fast"]
+    for mode in ("fast-exit", "mps"):
+        assert modes[mode]["reason"] == options.RECURRENT_REASON
+    for mode in ("fp8", "nvfp4"):
+        assert not modes[mode]["available"] and "Qwen3.5" in modes[mode]["reason"]
+    assert modes["mlx"]["reason"] == modes["mlx-q8"]["reason"] == options.MLX_RECURRENT_REASON
+    no_fla = {m["mode"]: m for m in options.available_modes(pico, CUDA, catalog.assess(pico, CUDA))}
+    assert no_fla["fast"]["reason"] == no_fla["fast-nocompile"]["reason"] == options.FLA_REASON
+    assert [m for m, row in no_fla.items() if row["default"]] == ["eager"]
+    options.check_combination(pico, fla, options.validate({}, "fast"), "fast")
+    for refused in ({"batches": "compact"}, {"prefix_cache": True}, {"state_cache_gb": 1.0}, {"long_lane": True},
+                    {"lean": "on"}, {"quant": "fp8"}):
+        with pytest.raises(ValueError, match=r"Qwen3\.5"):
+            options.check_combination(pico, fla, options.validate(refused), "fast")
+    options.check_combination(pico, fla, options.validate({"prefix_cache": True}), "eager")
 
 
 def test_thinking_needs_basal_2_0_4_5b_with_vllm_and_early_exit_needs_fast_exit():

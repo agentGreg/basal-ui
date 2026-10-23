@@ -55,7 +55,7 @@ def _empty():
 
 def _read(path: Path) -> dict:
     try:
-        loaded = json.loads(path.read_text())
+        loaded = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(loaded.get("models"), dict) and isinstance(loaded.get("benchmarks"), dict):
             return loaded
     except (OSError, ValueError, AttributeError):

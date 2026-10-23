@@ -30,7 +30,7 @@ def variant(repo="Remek/basal-2.0-4.5B", port=None, size=None, gguf=None):
     port = port or parsed_port
     size = size if size is not None else int({"mini": 2, "4.5B": 8, "max": 12, "ultra": 16}.get(tier, 8) * 1024**3)
     return Variant(f"{repo}:{gguf}" if gguf else repo, repo, family, tier, port, _label(port, gguf), gguf, size,
-                   family.startswith("basal-omni-"))
+                   family.startswith("basal-omni"), recurrent=(family, tier) in catalog.RECURRENT_MODELS)
 
 
 def test_hardware_detects_media_engine(monkeypatch):
@@ -80,6 +80,23 @@ def test_parse_repo_contract_names():
     assert parse_repo("Remek/basal-2.0-4.5B-MLX-8bit") == ("basal-2.0", "4.5B", "MLX-8bit")
     assert parse_repo("Remek/basalt-1.0-4.5B") is None
     assert parse_repo("Remek/basal-1.0-4.5B-GGUF-extra") is None
+    assert parse_repo("Remek/basal-omni-pico") == ("basal-omni", "pico", "bf16")
+    assert parse_repo("Remek/basal-omni-pico-GGUF") == ("basal-omni", "pico", "GGUF")
+    assert parse_repo("Remek/basal-pico") is None
+    assert parse_repo("Remek/basal-omni-1.0-pico") is None
+
+
+def test_quantisation_reads_the_repo_markers():
+    mlx = variant("Remek/basal-2.0-mini-MLX-8bit")
+    config = {"quantization": {"bits": 8, "group_size": 64, "mode": "affine"}}
+    assert catalog.quantisation(mlx, None, config)["scheme"] == "MLX affine 8-bit, group size 64"
+    gguf = variant("Remek/basal-omni-pico-GGUF", "GGUF", gguf="basal-omni-pico-Q8_0.gguf")
+    assert catalog.quantisation(gguf, None, None)["scheme"] == "GGUF Q8_0"
+    fp8 = variant("Remek/basal-omni-1.0-mini-FP8")
+    basal_json = {"quantization": "ModelOpt FP8 of the language model", "engine": "basal-serve --mode vllm"}
+    assert catalog.quantisation(fp8, basal_json, {"quantization_config": {"quant_algo": "FP8"}}) == {
+        "scheme": "FP8", "description": basal_json["quantization"], "engine": basal_json["engine"]}
+    assert catalog.quantisation(fp8, None, None) == {"scheme": None, "description": None, "engine": None}
 
 
 def test_assessment_runtime_engines_and_fit_boundaries():
@@ -95,7 +112,9 @@ def test_assessment_runtime_engines_and_fit_boundaries():
     assert not assess(variant("Remek/basal-omni-1.0-mini", "bf16"), hw(platform="cpu", cap=None, engines=frozenset())).runnable
     size = 10 * 1024**3
     v = variant(size=size)
-    budget = size * 1.2 + 1024**3
+    budget = size * 1.2 + 4 * 1024**3  # the H100 default is fast: the CUDA graph engine's overhead
+    apple = hw("apple", "M4 Max", None, frozenset({"mlx"}), 64 * 1024**3)
+    assert assess(v, apple).est_memory_bytes == int(size * 1.2) + 1024**3
     assert assess(v, hw(memory=math.ceil(budget / .85))).fit == "fits"
     assert assess(v, hw(memory=int(budget))).fit == "tight"
     assert assess(v, hw(memory=int(budget), available=math.ceil(budget / .85))).fit_now == "fits"
@@ -104,6 +123,11 @@ def test_assessment_runtime_engines_and_fit_boundaries():
     unknown = Variant("unknown", "Remek/basal-2.0-4.5B", "basal-2.0", "4.5B", "bf16", "bf16", None, None, False)
     assert assess(unknown, hw()).fit == "unknown"
     assert assess(v, hw()).fit_now == "unknown"
+    weights_4_5b = variant(size=9_510_000_000)  # basal-2.0-4.5B in bf16, --mode fast measured 14.4-15.2 GB
+    assert assess(weights_4_5b, Hardware("cuda", "RTX 4060 Ti", 17_179_869_184, None, (8, 9),
+                                         frozenset({"cuda"}))).fit == "tight"
+    assert assess(weights_4_5b, Hardware("cuda", "RTX 4090", 25_769_803_776, None, (8, 9),
+                                         frozenset({"cuda"}))).fit == "fits"
 
 
 def test_suggestions_by_hardware_and_available_memory():
@@ -117,6 +141,7 @@ def test_suggestions_by_hardware_and_available_memory():
     cards = choices(apple, repos)
     assert cards[0]["slot"] == "recommended"
     assert cards[0]["id"] == "Remek/basal-2.0-mini-MLX-8bit"
+    assert cards[0]["why"].endswith("; about 1.5x faster with --mlx-packed (Load options)")
 
     dc = hw("cuda", "H100", (9, 0), frozenset({"cuda"}), 80 * 1024**3, 70 * 1024**3)
     cards = choices(dc, ["Remek/basal-2.0-mini", "Remek/basal-2.0-4.5B", "Remek/basal-2.0-max"])
@@ -125,7 +150,8 @@ def test_suggestions_by_hardware_and_available_memory():
         ("best_quality", "Remek/basal-2.0-max"),
         ("fastest", "Remek/basal-2.0-mini"),
     ]
-    assert cards[0]["why"] == "4.5B in bf16: needs about 11.4 GB of 75.2 GB available"
+    assert cards[0]["why"] == "4.5B in bf16: needs about 14.6 GB of 75.2 GB available"
+    assert "--mlx-packed" not in cards[0]["why"]
 
     omni = "Remek/basal-omni-1.0-mini"
     without_media = choices(dc, [omni])
@@ -136,6 +162,36 @@ def test_suggestions_by_hardware_and_available_memory():
                             "why": "images and audio, served with --mode eager"}]
 
 
+def test_pico_is_recurrent_and_follows_basal_serve_default_modes():
+    pico = variant("Remek/basal-omni-pico", size=1_700_000_000)
+    assert pico.recurrent and pico.experimental and pico.media == ()
+    (built,) = _variants("Remek/basal-omni-pico", {"model.safetensors": 1})
+    assert built.recurrent and built.media == ()
+    # basal-serve 2.4: fast on Hopper with flash-linear-attention, eager on other GPUs, Apple Silicon and the CPU
+    assert assess(pico, hw(engines=frozenset({"cuda", "fla"}))).mode == "fast"
+    for machine in (hw(), hw(cap=(8, 9), engines=frozenset({"cuda", "fla"})),
+                    hw("apple", "M4 Max", None, frozenset({"mlx"}), 64 * 1024**3),
+                    hw("cpu", "cpu", None, frozenset())):
+        a = assess(pico, machine)
+        assert a.runnable and a.mode == "eager"
+    assert serve_args(pico, Path("/m"), "eager", platform="cpu")[-2:] == ["--device", "cpu"]
+    gguf = variant("Remek/basal-omni-pico-GGUF", "GGUF", 900_000_000, "basal-omni-pico-Q8_0.gguf")
+    assert assess(gguf, hw("cpu", "cpu", None, frozenset({"gguf"}))).mode == "gguf"
+
+
+def test_lightest_suggestion_is_pico_in_the_preferred_format():
+    pico = variant("Remek/basal-omni-pico", size=1_700_000_000)
+    gguf = variant("Remek/basal-omni-pico-GGUF", "GGUF", 900_000_000, "basal-omni-pico-Q8_0.gguf")
+    cpu = hw("cpu", "CPU", None, frozenset({"gguf"}), 64 * 1024**3, 64 * 1024**3)
+    cards = suggest([assess(v, cpu) for v in (pico, gguf, variant())], cpu)
+    (light,) = [card for card in cards if card["slot"] == "lightest"]
+    assert light["id"] == gguf.id and light["why"].endswith("served with --mode gguf")
+    apple = hw("apple", "M4 Max", None, frozenset({"mlx"}), 64 * 1024**3)
+    cards = suggest([assess(v, apple) for v in (pico, gguf, variant("Remek/basal-2.0-mini-MLX-8bit"))], apple)
+    assert [card["slot"] for card in cards] == ["recommended", "lightest"]
+    assert cards[1]["id"] == pico.id and cards[1]["why"].endswith("served with --mode eager")
+
+
 def test_available_memory_parses_macos_vm_stat(monkeypatch):
     from basal.ui import hardware
 
@@ -144,6 +200,16 @@ def test_available_memory_parses_macos_vm_stat(monkeypatch):
     monkeypatch.setattr(hardware.sys, "platform", "darwin")
     monkeypatch.setattr(hardware.subprocess, "check_output", lambda *args, **kwargs: output)
     assert hardware._available_bytes() == 33 * 16384
+
+
+def test_memory_on_windows_comes_from_global_memory_status(monkeypatch):
+    from basal.ui import hardware
+
+    monkeypatch.setattr(hardware.sys, "platform", "win32")
+    monkeypatch.setattr(hardware, "_windows_memory", lambda: (16 * 1024**3, 6 * 1024**3))
+    assert hardware._ram() == 16 * 1024**3 and hardware._available_bytes() == 6 * 1024**3
+    monkeypatch.setattr(hardware, "_windows_memory", lambda: None)
+    assert hardware._ram() is None and hardware._available_bytes() is None
 
 
 def test_gguf_launch_and_download_patterns():

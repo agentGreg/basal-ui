@@ -135,7 +135,7 @@ def _write_private(path: Path, text: str) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
         os.replace(tmp, path)
     except BaseException:
@@ -145,7 +145,7 @@ def _write_private(path: Path, text: str) -> None:
 
 def load() -> dict:
     try:
-        value = json.loads(_settings_path().read_text())
+        value = json.loads(_settings_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     if not isinstance(value, dict):
@@ -435,7 +435,7 @@ def _sync_key_files(data: dict) -> None:
             internal = [{"name": "basal-ui", "sha256": _internal_sha256, "admin": True}] if _internal_sha256 else []
         else:
             try:
-                internal = [r for r in json.loads(path.read_text())["keys"] if r.get("admin")]
+                internal = [r for r in json.loads(path.read_text(encoding="utf-8"))["keys"] if r.get("admin")]
             except (OSError, ValueError, KeyError, TypeError):
                 internal = []
         _write_private(path, json.dumps({"keys": _user_records(data) + internal}, indent=2))

@@ -157,9 +157,9 @@ function renderHardware(data) {
   $('#engines').innerHTML = (data.engines || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="muted">No engines detected</span>';
 }
 function familyOrder(family) {
-  return ({'basal-2.0':5,'basal-omni-1.1':4,'basal-omni-1.0':3,'basal-1.5':2,'basal-1.0':1})[family] || 0;
+  return ({'basal-2.0':6,'basal-omni-1.1':5,'basal-omni-1.0':4,'basal-omni':3,'basal-1.5':2,'basal-1.0':1})[family] || 0;
 }
-function tierOrder(tier) { return ({mini:0,'1.5B':1,'4.5B':2,max:3,ultra:4})[tier] ?? 9; }
+function tierOrder(tier) { return ({pico:0,mini:1,'1.5B':2,'4.5B':3,max:4,ultra:5})[tier] ?? 9; }
 function renderModels(data) {
   modelData = data.models || [];
   renderDiskModels(); renderCalibrationModels(); renderInspectModels();
@@ -177,7 +177,7 @@ function renderModels(data) {
   if (!list.length) { $('#modelsTable').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
   let html = '<table><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th></th><th></th><th>Action</th></tr></thead><tbody>';
   for (const [family, rows] of groups) {
-    html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni-')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
+    html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
     for (const m of rows) {
       const classes = `fit-${esc(m.fit || 'unknown')}`;
       const nowClasses = `fit-${esc(m.fit_now || 'unknown')}`;
@@ -229,9 +229,9 @@ function renderSuggestions(suggestions) {
 document.addEventListener('click',e=>{const b=e.target.closest('.model-card-open');if(b)act(()=>openModelCard(b.dataset.id));});
 async function openModelCard(id) {
   const c=await api(`/api/models/card?id=${encodeURIComponent(id)}`);
-  const facts=[['Family',c.family],['Tier',c.tier],['Port',c.port],['Size',gb(c.size_bytes)],['Media',(c.media||[]).join(', ')||'none'],['Mode',`${c.assessment?.mode||'—'} · ${c.assessment?.runnable?'runnable':c.assessment?.reason||'not runnable'}`],['Fit',c.assessment?.fit],['Fit now',c.assessment?.fit_now],['Estimated memory',gb(c.assessment?.est_memory_bytes)],['Downloaded',c.downloaded?'yes':'no'],['Local directory',c.local_dir],['Cached revisions',(c.revisions||[]).join(', ')]];
+  const facts=[['Family',c.family],['Tier',c.tier],['Port',c.port],['Quantisation',c.quantisation?.scheme],['Size',gb(c.size_bytes)],['Media',(c.media||[]).join(', ')||'none'],['Mode',`${c.assessment?.mode||'—'} · ${c.assessment?.runnable?'runnable':c.assessment?.reason||'not runnable'}`],['Serving',c.quantisation?.engine],['Fit',c.assessment?.fit],['Fit now',c.assessment?.fit_now],['Estimated memory',gb(c.assessment?.est_memory_bytes)],['Downloaded',c.downloaded?'yes':'no'],['Local directory',c.local_dir],['Cached revisions',(c.revisions||[]).join(', ')]];
   const entry=c.loaded, shipped=c.shipped_calibration;
-  $('#modelCardBody').innerHTML=`<h2>${esc(c.label||c.id)}</h2><p><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.repo)}</a> · ${esc(c.author||'')}${c.community?' <span class="chip">community</span>':''}${c.base_repo?` · base ${esc(c.base_repo)}${c.base_revision?` @ ${esc(c.base_revision)}`:''}`:''}</p><table class="model-card-facts"><tbody>${facts.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v??'—')}</td></tr>`).join('')}</tbody></table><h3>Shipped calibration</h3>${shipped?.error?`<p class="reason">${esc(shipped.error)}</p>`:shipped?`${shipped.fitted_on&&typeof shipped.fitted_on==='object'?`<p>Fitted on ${esc(shipped.fitted_on.data||'—')} · ${esc(shipped.fitted_on.decisions??'—')} decisions</p>`:''}<div class="chips">${thresholdCell(shipped.thresholds)}</div>`:'<p class="muted">None</p>'}<h3>Prompt format</h3><pre>${esc(JSON.stringify(c.basal_json?.prompt_format??c.basal_json??null,null,2))}</pre>${entry?`<h3>Loaded entry</h3><pre>${esc(JSON.stringify(Object.fromEntries(['mode','orders','prompt_format','vllm_preset','certified','context'].filter(k=>entry[k]!=null).map(k=>[k,entry[k]])),null,2))}</pre>`:''}${c.readme?`<details><summary>README</summary><pre>${esc(c.readme)}</pre></details>`:''}`;
+  $('#modelCardBody').innerHTML=`<h2>${esc(c.label||c.id)}</h2><p><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.repo)}</a> · ${esc(c.author||'')}${c.community?' <span class="chip">community</span>':''}${c.base_repo?` · base ${esc(c.base_repo)}${c.base_revision?` @ ${esc(c.base_revision)}`:''}`:''}</p><table class="model-card-facts"><tbody>${facts.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v??'—')}</td></tr>`).join('')}</tbody></table>${c.quantisation?.description?`<h3>Quantisation</h3><p>${esc(c.quantisation.description)}</p>`:''}<h3>Shipped calibration</h3>${shipped?.error?`<p class="reason">${esc(shipped.error)}</p>`:shipped?`${shipped.fitted_on&&typeof shipped.fitted_on==='object'?`<p>Fitted on ${esc(shipped.fitted_on.data||'—')} · ${esc(shipped.fitted_on.decisions??'—')} decisions</p>`:''}<div class="chips">${thresholdCell(shipped.thresholds)}</div>`:'<p class="muted">None</p>'}<h3>Prompt format</h3><pre>${esc(JSON.stringify(c.basal_json?.prompt_format??c.basal_json??null,null,2))}</pre>${entry?`<h3>Loaded entry</h3><pre>${esc(JSON.stringify(Object.fromEntries(['mode','orders','prompt_format','vllm_preset','certified','context'].filter(k=>entry[k]!=null).map(k=>[k,entry[k]])),null,2))}</pre>`:''}${c.readme?`<details><summary>README</summary><pre>${esc(c.readme)}</pre></details>`:''}`;
   $('#modelCardDialog').showModal();
 }
 function renderDiskModels() {
@@ -1470,7 +1470,7 @@ function updateOptionVisibility() {
   const mode=selectedOptionMode(), think=optionsState.data.think||{};
   const packed=$('#opt-mlx_packed'), packedReason=optionsState.data.mlx_packed_reason;
   packed.disabled=Boolean(packedReason)||optionsState.media||!['mlx','mlx-q8'].includes(mode);
-  $('#optPackedNote').textContent=mode==='mps'?'Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.':packedReason||'MLX packed is off by default. Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path. Probabilities can differ from the shipped KV-cache calibration.';
+  $('#optPackedNote').textContent=mode==='mps'?'Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.':packedReason||'MLX packed is off by default. Measured on an Apple M5 Pro (basal 2.3.1, #36): basal-2.0-4.5B 134 → 88 ms per two-order decision, mini 47 → 31 ms, the same decisions as the KV-cache path in bf16 (mlx-q8 on the 4.5B: 0.955 instead of 0.977 agreement). Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path.';
   $('#opt-device option[value=cuda]').disabled=mode==='mps';
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
   // thinking: basal-2.0 4.5B with vLLM (here, in another environment, or a running server); early exit: fast-exit

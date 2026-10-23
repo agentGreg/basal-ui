@@ -733,7 +733,9 @@ def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path
         return snapshot if variant.id == community.id else None
     monkeypatch.setattr(catalog, "is_downloaded", is_downloaded)
     monkeypatch.setattr(calibration, "shipped_file", lambda local_dir, mode: modes.append(mode) or snapshot / "none")
-    monkeypatch.setattr(httpx, "get", lambda url, **k: urls.append(url) or httpx.Response(404))
+    fp8 = {"quantization_config": {"quant_algo": "FP8", "quant_method": "modelopt", "producer": {"version": "0.47.0"}}}
+    monkeypatch.setattr(httpx, "get", lambda url, **k: urls.append(url) or (
+        httpx.Response(200, json=fp8) if url.endswith("config.json") else httpx.Response(404)))
     app, _ = app_for(tmp_path, [community, MINI])
     settings.set_load_options("community", {"mode": "mlx-q8", "revision": "abc"})
     settings.set_load_options("mini", {"revision": "refs/pr/2"})
@@ -746,7 +748,10 @@ def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path
     assert missing["downloaded"] is False and missing["local_dir"] is None and missing["basal_json"] is None
     assert checks == [("community", "abc"), ("mini", "refs/pr/2")]  # the snapshot of the served revision
     assert modes == ["mlx-q8"]  # the calibration file of the served mode, not the default one
-    assert urls == ["https://huggingface.co/Remek/basal-2.0-mini/raw/refs/pr/2/README.md"]
+    assert card["quantisation"] == {"scheme": "bf16", "description": None, "engine": None}
+    assert missing["quantisation"]["scheme"] == "FP8 (modelopt 0.47.0)"
+    hub = "https://huggingface.co/Remek/basal-2.0-mini/raw/refs/pr/2"
+    assert urls == [f"{hub}/README.md", f"{hub}/basal.json", f"{hub}/config.json"]
 
 
 def test_catalog_rows_carry_the_saved_revision(tmp_path, monkeypatch):

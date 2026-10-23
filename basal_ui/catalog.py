@@ -15,14 +15,20 @@ _REPO_RE = re.compile(
     r"^basal-(omni-)?(\d+\.\d+)-(mini|max|ultra|\d+(?:\.\d+)?B)"
     r"(?:-(FP8|NVFP4|GGUF|MLX(?:-8bit|-6bit|-bf16|-fp4)?|oQ6e))?$"
 )
+_PICO_RE = re.compile(r"^basal-omni-(pico)(?:-(FP8|NVFP4|GGUF|MLX(?:-8bit)?))?$")
 AUTHORS = ("Remek", "pawelkiszczak", "agentGreg")
 _BASE_FILES = ("*.json", "*.jinja", "*.model", "*.txt")
-TIER_ORDER = {"mini": 0, "1.5B": 1, "4.5B": 2, "max": 3, "ultra": 4}
+TIER_ORDER = {"pico": 0, "mini": 1, "1.5B": 2, "4.5B": 3, "max": 4, "ultra": 5}
 CURRENT_TEXT_FAMILY = "basal-2.0"
 # docs/HARDWARE.md, Recommendation: bf16 on data-centre GPUs (launch-bound at batch 1) and on the RTX 4090 (FP8
 # compilation stalled there); FP8 on other GPUs with compute capability 8.9+
 _BF16_GPUS = ("A100", "H100", "H200", "H800", "B100", "B200", "B300", "GH200", "GB200", "4090")
 GIB = 1024**3
+# The --mode values of the CUDA graph engine, and what it holds besides the weights: CUDA graphs and the compile
+# workspace (basal 2.3.3-2.3.5 after start-up in --mode fast: basal-2.0-mini 7.1-9.0 GB for 3.19 GB of weights,
+# 4.5B 14.4-15.2 GB for 9.51, basal-omni-1.0-mini 18.9 for 15.9; H100, RTX 4060 Ti 16 GB, RTX 4090)
+GRAPH_ENGINE_MODES = ("fast", "fast-nocompile", "fast-exit", "fp8", "nvfp4")
+GRAPH_ENGINE_OVERHEAD = 4 * GIB
 # The basal-omni checkpoints that carry image / audio encoders (docs/OMNI.md); basal-omni-1.1-max is Gemma 4 Unified
 # without them, and the quantised ports drop them.
 MEDIA_KINDS = {
@@ -30,6 +36,11 @@ MEDIA_KINDS = {
     ("basal-omni-1.0", "max"): ("image", "audio"),
     ("basal-omni-1.0", "ultra"): ("image",),
 }
+# Models with recurrent-state layers (Qwen3.5: Gated DeltaNet and attention layers), text only. basal-serve 2.4 serves
+# them in --mode fast / fast-nocompile on CUDA with flash-linear-attention (gdn_graph.GDNGraphBackend), refuses
+# fast-exit, fp8, nvfp4 and mps, and defaults to fast on Hopper with fla, eager elsewhere; mlx is not checked on them
+# (basal/server.py:default_mode, basal/gdn_graph.py:refused, default_fast).
+RECURRENT_MODELS = {("basal-omni", "pico")}
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,7 @@ class Variant:
     base_repo: str | None = None
     base_revision: str | None = None  # the card's base_model_revision: the base snapshot is pinned to it
     weights_only: bool = False  # a GGUF repository without tokenizer and calibration: they come from base_repo
+    recurrent: bool = False  # RECURRENT_MODELS
 
     @property
     def community(self) -> bool:
@@ -70,11 +82,16 @@ class Assessment:
 def parse_repo(repo_id: str) -> tuple[str, str, str] | None:
     """(family, tier, port) of a basal repository name, None for anything else."""
     match = _REPO_RE.fullmatch(repo_id.rsplit("/", 1)[-1])
-    if not match:
-        return None
-    omni, version, tier, port = match.groups()
+    if match:
+        omni, version, tier, port = match.groups()
+        family = f"basal-{'omni-' if omni else ''}{version}"
+    else:  # basal-omni-pico has no version in its name
+        match = _PICO_RE.fullmatch(repo_id.rsplit("/", 1)[-1])
+        if not match:
+            return None
+        family, (tier, port) = "basal-omni", match.groups()
     port = {"oQ6e": "MLX-oQ6e"}.get(port, port) or "bf16"
-    return f"basal-{'omni-' if omni else ''}{version}", tier, port
+    return family, tier, port
 
 
 def _label(port: str, filename: str | None = None) -> str:
@@ -87,6 +104,29 @@ def _label(port: str, filename: str | None = None) -> str:
     }.get(port, port)
 
 
+def quantisation(v: Variant, basal_json: dict | None, config: dict | None) -> dict:
+    """{"scheme", "description", "engine"} of a variant from its repo markers; values None when absent. The scheme:
+    the GGUF file's quantisation (its label), config.json quantization_config (ModelOpt FP8 / NVFP4 ports) or
+    quantization (MLX ports), else bf16 for unquantised weights; description and engine: basal.json's free text."""
+    config, basal_json = config or {}, basal_json or {}
+    scheme = None
+    qc, mlx = config.get("quantization_config"), config.get("quantization")
+    if v.port == "GGUF":
+        scheme = v.label
+    elif isinstance(qc, dict) and qc.get("quant_algo"):
+        producer = qc.get("producer")
+        version = producer.get("version") if isinstance(producer, dict) else None
+        detail = " ".join(str(part) for part in (qc.get("quant_method"), version) if part)
+        scheme = f"{qc['quant_algo']} ({detail})" if detail else str(qc["quant_algo"])
+    elif isinstance(mlx, dict) and mlx.get("bits"):
+        scheme = " ".join(str(part) for part in ("MLX", mlx.get("mode"), f"{mlx['bits']}-bit") if part)
+        if mlx.get("group_size"):
+            scheme += f", group size {mlx['group_size']}"
+    elif v.port == "bf16":
+        scheme = "bf16"
+    return {"scheme": scheme, "description": basal_json.get("quantization"), "engine": basal_json.get("engine")}
+
+
 def _variants(repo: str, files: dict[str, int | None], author: str = "Remek",
               base_repo: str | None = None, base_revision: str | None = None) -> list[Variant]:
     """The variants of one repository from its file names and sizes."""
@@ -96,9 +136,9 @@ def _variants(repo: str, files: dict[str, int | None], author: str = "Remek",
 
     def make(filename, size):
         return Variant(f"{repo}:{filename}" if filename else repo, repo, family, tier, port, _label(port, filename),
-                       filename, size, family.startswith("basal-omni-"),
+                       filename, size, family.startswith("basal-omni"),
                        MEDIA_KINDS.get((family, tier), ()) if port == "bf16" else (), author, base_repo,
-                       base_revision, weights_only)
+                       base_revision, weights_only, (family, tier) in RECURRENT_MODELS)
     if port == "GGUF":
         return [make(name, size) for name, size in files.items() if name.lower().endswith(".gguf")]
     sizes = [size for name, size in files.items() if name.endswith(".safetensors") and not _optional(name)]
@@ -159,7 +199,7 @@ def _cache_variants(cache_dir: Path) -> list[Variant]:
             for rev in repo.revisions:
                 readme = next((f.file_path for f in rev.files if f.file_name == "README.md"), None)
                 if readme and readme.is_file():
-                    text = readme.read_text(errors="replace")
+                    text = readme.read_text(encoding="utf-8", errors="replace")
                     base_repo = _front_matter(text, "base_model")
                     if base_repo:
                         base_revision = _front_matter(text, "base_model_revision")
@@ -226,6 +266,10 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
             return None, "GGUF files need llama-cpp-python: install basal[gguf]."
         return "gguf", None
     # bf16 weights
+    if v.recurrent:  # basal-serve's default: fast where the Qwen3.5 port passed its gate (Hopper with fla), else
+        # eager (CUDA, Apple via torch's default device mps, CPU)
+        fast = hw.platform == "cuda" and (hw.cuda_capability or (0, 0))[0] == 9 and "fla" in hw.engines
+        return ("fast" if fast else "eager"), None
     if hw.platform == "cuda":
         if hw.cuda_capability and hw.cuda_capability < (8, 0) and not v.experimental:
             return None, "The basal engine needs an NVIDIA GPU with compute capability 8.0+ (Ampere or newer); " \
@@ -265,7 +309,8 @@ def _fit(est: int | None, budget: int | None) -> str:
 
 def assess(v: Variant, hw: Hardware) -> Assessment:
     mode, reason = _mode(v, hw)
-    est = int(v.weights_bytes * 1.2) + GIB if v.weights_bytes is not None else None  # weights + runtime + KV cache
+    overhead = GRAPH_ENGINE_OVERHEAD if mode in GRAPH_ENGINE_MODES else GIB
+    est = int(v.weights_bytes * 1.2) + overhead if v.weights_bytes is not None else None  # weights + runtime + KV cache
     fit = _fit(est, hw.memory_bytes) if hw.memory_bytes else "unknown"
     fit_now = _fit(est, hw.available_bytes)
     media_mode, media_reason = _media_mode(v, hw)
@@ -291,10 +336,10 @@ def _gb(size: int | None) -> str:
 
 
 def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
-    """Suggestion cards [{"slot", "id", "why"}] in slot order recommended, best_quality, fastest, multimodal; a slot is
-    left out when nothing qualifies. Only variants that fit both the memory budget and the memory available now are
-    candidates, and a comfortable fit wins over a tight one. Where the available memory is unknown, the budget fit
-    stands in for it."""
+    """Suggestion cards [{"slot", "id", "why"}] in slot order recommended, best_quality, fastest, lightest, multimodal;
+    a slot is left out when nothing qualifies. Only variants that fit both the memory budget and the memory available
+    now are candidates, and a comfortable fit wins over a tight one. Where the available memory is unknown, the budget
+    fit stands in for it."""
     def now(a: Assessment) -> str:
         return a.fit if a.fit_now == "unknown" else a.fit_now
 
@@ -323,15 +368,26 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
         if recommended:
             memory = (f"{_gb(hw.available_bytes)} available" if hw.available_bytes is not None
                       else f"a {_gb(hw.memory_bytes)} budget")
-            suggestions.append({"slot": "recommended", "id": recommended.variant.id,
-                                "why": f"{recommended.variant.tier} in {recommended.variant.label}: needs about "
-                                       f"{_gb(recommended.est_memory_bytes)} of {memory}"})
+            why = (f"{recommended.variant.tier} in {recommended.variant.label}: needs about "
+                   f"{_gb(recommended.est_memory_bytes)} of {memory}")
+            v = recommended.variant
+            if (hw.platform == "apple" and "mlx" in hw.engines and v.family in ("basal-1.0", "basal-1.5", "basal-2.0")
+                    and (v.port == "bf16" or v.port.startswith("MLX"))):
+                why += "; about 1.5x faster with --mlx-packed (Load options)"
+            suggestions.append({"slot": "recommended", "id": v.id, "why": why})
         if best and best is not recommended:
             suggestions.append({"slot": "best_quality", "id": best.variant.id,
                                 "why": f"the largest tier that fits now: needs about {_gb(best.est_memory_bytes)}"})
         if fastest and fastest not in (recommended, best):
             suggestions.append({"slot": "fastest", "id": fastest.variant.id,
                                 "why": f"the smallest tier: needs about {_gb(fastest.est_memory_bytes)}"})
+    light = [a for a in fitting if a.runnable and a.variant.recurrent]
+    if light:
+        pick = (next((a for a in light if a.variant.label == preferred_format(hw)), None)
+                or next((a for a in light if a.variant.port == "bf16"), light[0]))
+        suggestions.append({"slot": "lightest", "id": pick.variant.id,
+                            "why": f"{pick.variant.tier}: the smallest basal model, text on a CPU or a small GPU; "
+                                   f"needs about {_gb(pick.est_memory_bytes)}, served with --mode {pick.mode}"})
     multimodal = largest([a for a in fitting if a.media_mode is not None])
     if multimodal:
         kinds = " and ".join({"image": "images"}.get(kind, kind) for kind in multimodal.variant.media)
@@ -467,6 +523,6 @@ def serve_args(v: Variant, local_dir: Path, mode: str, media_platform: str | Non
         args[1] = str(model_dir)
     if v.port == "GGUF":
         args += ["--gguf", str(local_dir / v.gguf_file)]
-    if mode == "eager" and v.port == "bf16" and not v.experimental and platform == "cpu":
+    if mode == "eager" and v.port == "bf16" and platform == "cpu":
         args += ["--device", "cpu"]
     return args

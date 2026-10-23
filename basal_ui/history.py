@@ -84,7 +84,7 @@ class History:
         out = []
         self.lines = 0
         try:
-            for line in self.path.read_text().splitlines():
+            for line in self.path.read_text(encoding="utf-8").splitlines():
                 self.lines += 1
                 try:
                     record = json.loads(line)

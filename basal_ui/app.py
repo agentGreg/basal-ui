@@ -39,7 +39,7 @@ from .jobs import Jobs, LogBuffer
 from .stats import Stats
 
 STATIC = Path(__file__).parent / "static"
-FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "1.5", "1.0"))}
+FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "omni", "1.5", "1.0"))}
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
 MODEL_LOGS_KEPT = 10  # log buffers of unloaded models kept for the Logs view
 RSS_INTERVAL_S = 2  # `ps` runs at most this often for the resident memory of the children
@@ -319,7 +319,8 @@ class Runner:
                 self.base_url = f"http://127.0.0.1:{port}"
                 self.serve_snapshot = _child_settings(serve, self._calibration(v))
                 self.process = proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                                       text=True, bufsize=1, **options)
+                                                       text=True, encoding="utf-8", errors="replace", bufsize=1,
+                                                       **options)
             self.event("info", f"{v.id}: basal-serve starting on 127.0.0.1:{port}: {shlex.join(map(str, command))}")
             threading.Thread(target=self._read_logs, args=(proc,), daemon=True).start()
             deadline = time.monotonic() + START_TIMEOUT_S
@@ -1056,23 +1057,31 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                                 for s in repo.revisions})
         except (CacheNotFound, OSError, ValueError):
             revisions = []
+        revision = served_revision(variant) or "main"
         readme = None
         if local_dir and (Path(local_dir) / "README.md").is_file():
-            readme = (Path(local_dir) / "README.md").read_text(errors="replace")[:20000]
+            readme = (Path(local_dir) / "README.md").read_text(encoding="utf-8", errors="replace")[:20000]
         else:
             try:
-                response = httpx.get(f"https://huggingface.co/{variant.repo}/raw/{served_revision(variant) or 'main'}"
-                                     "/README.md", timeout=5)
+                response = httpx.get(f"https://huggingface.co/{variant.repo}/raw/{revision}/README.md", timeout=5)
                 if response.is_success:
                     readme = response.text[:20000]
             except httpx.HTTPError:
                 pass
-        basal_json = None
-        if local_dir:
+
+        def metadata(name):
+            """A JSON object of the repository (basal.json, config.json): from the snapshot, else from the Hub."""
             try:
-                basal_json = json.loads((Path(local_dir) / "basal.json").read_text())
-            except (OSError, ValueError):
-                pass
+                if local_dir:
+                    data = json.loads((Path(local_dir) / name).read_text(encoding="utf-8"))
+                else:
+                    response = httpx.get(f"https://huggingface.co/{variant.repo}/raw/{revision}/{name}", timeout=5)
+                    data = response.json() if response.is_success else None
+            except (OSError, ValueError, httpx.HTTPError):
+                return None
+            return data if isinstance(data, dict) else None
+
+        basal_json, config_json = metadata("basal.json"), metadata("config.json")
         shipped_calibration = None
         if local_dir:
             from . import calibration
@@ -1087,6 +1096,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 "family": variant.family, "tier": variant.tier, "port": variant.port, "label": variant.label,
                 "size_bytes": variant.weights_bytes, "media": list(variant.media), "downloaded": local_dir is not None,
                 "local_dir": str(local_dir) if local_dir else None, "revisions": revisions, "basal_json": basal_json,
+                "quantisation": catalog.quantisation(variant, basal_json, config_json),
                 "shipped_calibration": shipped_calibration, "readme": readme,
                 "assessment": {"mode": assessment.mode, "runnable": assessment.runnable,
                                "reason": assessment.reason, "est_memory_bytes": assessment.est_memory_bytes,
@@ -1487,7 +1497,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if file not in {f["file"] for f in calibration.listing(variant.id, settings_mod)}:
             raise HTTPException(404, f"{file!r} is not one of the calibrations of {variant.id} in basal-ui")
         try:
-            return {"report": Path(file).with_suffix(".report.txt").read_text()}
+            return {"report": Path(file).with_suffix(".report.txt").read_text(encoding="utf-8")}
         except OSError as exc:
             raise HTTPException(404, f"no report for {file}") from exc
 
@@ -1552,7 +1562,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             raise HTTPException(400, "input must be the path of a JSONL file (docs/SERVING.md#inference-on-a-jsonl-file)")
         source = Path(source).expanduser()
         try:
-            lines = [line for line in source.read_text().splitlines() if line.strip()]
+            lines = [line for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
         except (OSError, UnicodeDecodeError) as exc:
             raise HTTPException(400, f"cannot read {source}: {getattr(exc, 'strerror', None) or exc}") from exc
         for n, line in enumerate(lines, 1):

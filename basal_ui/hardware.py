@@ -26,8 +26,34 @@ class Hardware:
         return data
 
 
+def _windows_memory() -> tuple[int, int] | None:
+    """(total, available) physical bytes from GlobalMemoryStatusEx; None off Windows or on failure."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    class MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+    status = MEMORYSTATUSEX()
+    status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+    try:
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return None
+    except (AttributeError, OSError):
+        return None
+    return status.ullTotalPhys, status.ullAvailPhys
+
+
 def _available_bytes() -> int | None:
     try:
+        if sys.platform == "win32":
+            memory = _windows_memory()
+            return memory[1] if memory else None
         if sys.platform == "darwin":
             stats = subprocess.check_output(["vm_stat"], text=True)
             page_size = int(re.search(r"page size of (\d+) bytes", stats).group(1))
@@ -37,7 +63,7 @@ def _available_bytes() -> int | None:
             }
             return sum(pages.values()) * page_size
         if sys.platform.startswith("linux"):
-            with open("/proc/meminfo") as meminfo:
+            with open("/proc/meminfo", encoding="utf-8") as meminfo:
                 available = re.search(r"^MemAvailable:\s+(\d+) kB$", meminfo.read(), re.MULTILINE)
             return int(available.group(1)) * 1024
     except Exception:  # noqa: BLE001 — hardware probing is best-effort
@@ -46,6 +72,9 @@ def _available_bytes() -> int | None:
 
 
 def _ram() -> int | None:
+    if sys.platform == "win32":
+        memory = _windows_memory()
+        return memory[0] if memory else None
     try:
         if sys.platform == "darwin":
             return int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
@@ -90,6 +119,8 @@ def _static() -> Hardware:
                 engines.add("sglang")
             if importlib.util.find_spec("llama_cpp"):
                 engines.add("gguf")
+            if importlib.util.find_spec("fla"):  # flash-linear-attention: Qwen3.5 (pico) in the CUDA graph engine
+                engines.add("fla")
             return Hardware("cuda", props.name, props.total_memory, ram, capability, frozenset(engines))
         if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
             engines.add("mps")

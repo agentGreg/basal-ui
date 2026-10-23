@@ -6,9 +6,17 @@ them with basal-serve's own message, shown on the model's row and in its log."""
 import re
 
 from basal.engine import VLLM_PRESETS
-from basal.server import MODES, validate_quant
+from basal.gdn_graph import refused as gdn_refused
+from basal.server import MODES, lean_arg, lean_tree, validate_quant
 
 from .catalog import _cuda_graph
+
+# basal-omni-pico and other Qwen3.5 models (Variant.recurrent), basal-serve 2.4 (engine.recurrent_refused, gdn_graph)
+RECURRENT_REASON = ("recurrent-state layers (Gated DeltaNet, Qwen3.5): fast-exit and mps keep attention keys and values "
+                    "only and would answer wrongly; basal-serve refuses them. Use fast (CUDA), eager, vllm or gguf")
+MLX_RECURRENT_REASON = "MLX is not checked on recurrent-state models (Qwen3.5): use eager"
+FLA_REASON = ("the CUDA graph engine runs Qwen3.5's Gated DeltaNet layers with flash-linear-attention: pip install "
+              "flash-linear-attention (or serve with --mode eager)")
 
 DEFAULTS = {
     "mode": None, "quant": None, "revision": None, "attn": "auto", "gemma_attn": "auto", "deterministic": False, "orders": None,
@@ -160,7 +168,8 @@ def available_modes(v, hw, assessment) -> list[dict]:
     reasons = {
         "fast": graph, "fast-nocompile": graph,
         "fast-exit": graph or (None if v.family == "basal-1.0" else "exit heads ship with basal-1.0"),
-        "fp8": graph, "nvfp4": graph or (None if cap >= (10, 0) else "NVFP4 needs a Blackwell GPU (capability 10.0+)"),
+        "fp8": graph or fp8_unavailable(hw),
+        "nvfp4": graph or (None if cap >= (10, 0) else "NVFP4 needs a Blackwell GPU (capability 10.0+)"),
         "eager": None if v.port == "bf16" else f"the eager engine reads bf16 weights, not {v.port}",
         "vllm": ("install basal[vllm] (own environment, docs/INSTALL.md)" if "vllm" not in hw.engines
                  else None if hw.platform == "cuda" else "vLLM needs an NVIDIA GPU"),
@@ -179,6 +188,13 @@ def available_modes(v, hw, assessment) -> list[dict]:
     }
     reasons["mlx-q8"] = reasons["mlx"] or (None if v.port in ("bf16", "MLX") else
                                            f"{v.port} weights are quantised already (mlx-q8 quantises at load)")
+    if v.recurrent:
+        for m in ("fast", "fast-nocompile"):
+            reasons[m] = reasons[m] or (None if "fla" in hw.engines else FLA_REASON)
+        for m in ("fp8", "nvfp4"):  # refused on every GPU: the model's own reason first
+            reasons[m] = gdn_refused(m, device=False)
+        reasons["fast-exit"] = reasons["mps"] = RECURRENT_REASON
+        reasons["mlx"] = reasons["mlx-q8"] = MLX_RECURRENT_REASON
     return [{"mode": m, "available": reasons[m] is None, "reason": reasons[m], "default": m == assessment.mode}
             for m in MODE_ORDER]
 
@@ -215,6 +231,14 @@ def mlx_packed_unavailable(v, hw):
     return None
 
 
+def fp8_unavailable(hw):
+    """Why fp8 cannot run here, None when it can: basal-serve ≥ 2.3.2 stops --mode fp8 / --quant fp8 before loading
+    below compute capability 8.9 (engine.fp8_refused)."""
+    if hw.platform == "cuda" and (hw.cuda_capability or (0, 0)) < (8, 9):
+        return "FP8 matrix multiplies need compute capability 8.9+ (Ada, Hopper, Blackwell); use fast (bf16) on this GPU"
+    return None
+
+
 def check_combination(v, hw, options, default_mode, media=False):
     """ValueError for the experimental options this variant or machine cannot use (merged options)."""
     mode = options["mode"] or ("eager" if media else default_mode)
@@ -226,6 +250,20 @@ def check_combination(v, hw, options, default_mode, media=False):
             raise ValueError(reason)
     if options["batches"] not in ("auto", "default") and MODES[mode][0] not in ("graph", "exit"):
         raise ValueError("--batches compact/fine needs the CUDA graph engine")
+    kind, mode_quant, compiled = MODES[mode]
+    quant = options["quant"] or mode_quant
+    if v.recurrent and kind == "graph":  # basal-serve 2.4: Qwen3.5 in the graph engine runs bf16 plain/branched rows
+        lean, tree = lean_tree(options["lean"], options["tree"], kind, compiled, quant)
+        reason = gdn_refused(quant, options["state_cache_gb"], options["prefix_cache"], options["batches"],
+                             lean_arg(lean), tree, options["readout_layer"], options["template_prefix"], device=False)
+        if not reason and options["long_lane"]:
+            reason = "--long-lane is not available for Qwen3.5 (Gated DeltaNet) models"
+        if reason:
+            raise ValueError(reason)
+    if quant == "fp8" and kind in ("graph", "exit"):
+        reason = fp8_unavailable(hw)
+        if reason:
+            raise ValueError(reason)
     if mode == "mps" and options["device"] == "cuda":
         raise ValueError("--mode mps runs on Apple Silicon or CPU; choose --device mps or cpu")
     if options["device"] == "mps" and "mps" not in hw.engines:

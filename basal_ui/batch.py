@@ -19,7 +19,7 @@ def default_output(input_path) -> Path:
 def run_batch(job, fleet, model_id, input_path, output_path, concurrency=16, early_exit=None) -> dict:
     """The batch job: progress per answered line; a cancel stops the remaining requests (no output file then)."""
     runner = fleet.ready(model_id)
-    total = sum(1 for line in Path(input_path).read_text().splitlines() if line.strip())
+    total = sum(1 for line in Path(input_path).read_text(encoding="utf-8").splitlines() if line.strip())
     job.progress("running", 0, total)
 
     def progress(done, total):
@@ -35,5 +35,5 @@ def run_batch(job, fleet, model_id, input_path, output_path, concurrency=16, ear
 
 def rows(output_path, offset=0, limit=100) -> dict:
     """A page of a batch output file: {"rows", "total"}."""
-    lines = [line for line in Path(output_path).read_text().splitlines() if line.strip()]
+    lines = [line for line in Path(output_path).read_text(encoding="utf-8").splitlines() if line.strip()]
     return {"rows": [json.loads(line) for line in lines[offset:offset + limit]], "total": len(lines)}

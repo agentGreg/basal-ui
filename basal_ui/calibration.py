@@ -45,7 +45,7 @@ class _Lines(io.TextIOBase):
 def load(path) -> dict:
     """A calibration file's JSON; ValueError when it is not one (temperatures or certified thresholds expected)."""
     try:
-        cal = json.loads(Path(path).read_text())
+        cal = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as exc:
         raise ValueError(f"cannot read {path}: {getattr(exc, 'strerror', None) or exc}") from None
     except ValueError:
@@ -65,9 +65,9 @@ def report_warnings(report):
 def summary(path, local_dir=None) -> dict:
     """What the Calibration table shows of a calibration file; `warning` when it belongs to another model (as
     basal-serve warns at start-up)."""
-    cal = json.loads(Path(path).read_text())
+    cal = json.loads(Path(path).read_text(encoding="utf-8"))
     report_path = Path(path).with_suffix(".report.txt")
-    warnings = report_warnings(report_path.read_text()) if report_path.exists() else []
+    warnings = report_warnings(report_path.read_text(encoding="utf-8")) if report_path.exists() else []
     out = {"warnings": warnings, "fitted_on": cal.get("fitted_on"), "gates": cal.get("gates"), "thresholds": certified_table(cal),
            "task_thresholds": cal.get("task_thresholds") or {}, "temperature_per_prim": cal.get("temperature_per_prim"),
            "engine": cal.get("engine"), "has_report": Path(path).with_suffix(".report.txt").exists(),
@@ -246,5 +246,5 @@ def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, tar
         return {"file": None, "report": report, "report_only": True}
     if not Path(out_path).exists():
         raise RuntimeError("basal-calibrate wrote no file")
-    Path(out_path).with_suffix(".report.txt").write_text(report + "\n")
+    Path(out_path).with_suffix(".report.txt").write_text(report + "\n", encoding="utf-8")
     return {"file": str(out_path), "report": report, "engine_in_process": in_process, **summary(out_path)}
