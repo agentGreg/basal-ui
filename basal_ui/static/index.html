@@ -1368,7 +1368,7 @@ function renderCalibrationFiles(id, d) {
 // Load options: the engine mode and basal-serve's runtime settings of one load (basal/ui/options.py)
 const GRAPH_MODES=['fast','fast-nocompile','fast-exit','fp8','nvfp4'];
 const OPTION_SECTIONS=[
-  ['Engine',['revision','ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads','mlx_packed']],
+  ['Engine',['revision','adapter','ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads','mlx_packed']],
   ['Determinism & orders',['deterministic','orders','auto_tau','auto_band']],
   ['Batching',['max_batch','wait_ms','batch_window_ms','soam']],
   ['Caching',['state_cache_gb','prefix_cache']],
@@ -1424,6 +1424,7 @@ const OPTION_FIELDS={
   truncate_head:{label:'Kept from the beginning',kind:'percent'},
   max_len:{label:'Max length (vLLM / SGLang)',kind:'num',attrs:'min="512" max="131072" step="512"',placeholder:'API server setting'},
   revision:{label:'Model revision',kind:'text',placeholder:'latest (main)'},
+  adapter:{label:'LoRA adapter directory (merged at load)',kind:'text',placeholder:'/path/to/adapter'},
   think:{label:'Thinking (reason before low-margin decisions)',kind:'bool'},
   think_tokens:{label:'Reasoning tokens',kind:'num',attrs:'min="1" step="32"',think:true},
   think_python:{label:'Python with vLLM',kind:'text',placeholder:'basal-ui’s Python',think:true},

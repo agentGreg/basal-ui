@@ -83,7 +83,7 @@ def test_every_engine_switch_reaches_basal_serve_as_it_reads_it():
               "readout_layer": "on", "template_prefix": "off", "fp8_accum": "full", "eager_attn": "sliding=fa3,full=efficient",
               "eager_forward": "hf", "vllm_fast_prefill": "off", "dtype": "float16", "exit_heads": "/heads",
               "think_calibration": "off", "think_model": "/think", "think_adapter": "/adapter", "think_memory": 0.5,
-              "think_max_len": 4096, "think_log": "t.log"}
+              "think_max_len": 4096, "think_log": "t.log", "adapter": "/ad"}
     a = parser().parse_args(["--model", "m", "--ple-offload", "on", "--strict-calibration", *options.args(chosen)])
     assert {k: getattr(a, k) for k in chosen} == chosen
     assert options.args({"ple_offload": True, "strict_calibration": True}) == [

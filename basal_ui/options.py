@@ -27,7 +27,7 @@ DEFAULTS = {
     "long_share": 0.5, "long_slice_ms": 10.0, "context_overflow": "truncate", "truncate_head": 1 / 3, "max_len": None,
     "vllm_preset": "default", "gpu_memory": 0.6, "ollama_url": "http://127.0.0.1:11434", "ollama_model": None,
     "llamacpp_url": "http://127.0.0.1:8080", "http_parallel": 1, "device": None, "think": False, "think_tokens": 256,
-    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False, "layout": None,
+    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False, "layout": None, "adapter": None,
     # the CUDA graph engine's kernel switches
     "merge": "auto", "lean": "off", "tree": "dense", "batches": "auto", "readout_layer": "off", "template_prefix": "auto",
     "fp8_accum": "fast",
@@ -57,7 +57,7 @@ NUMBERS = {
     "think_tokens": (1, None, True, False), "think_memory": (0, 1, False, True), "think_max_len": (512, None, True, False),
 }
 TEXTS = ("ollama_url", "ollama_model", "llamacpp_url", "think_python", "think_url", "exit_heads", "think_calibration",
-         "think_model", "think_adapter", "think_log")
+         "think_model", "think_adapter", "think_log", "adapter")
 ORDERS = re.compile(r"1|2|auto|2le(?:[2-9]|[1-9]\d*)\Z")
 KERNELS = "sdpa|efficient|cudnn|fa3|fa4"
 EAGER_ATTN = re.compile(rf"math|auto|sliding=({KERNELS}),full=({KERNELS})\Z")
