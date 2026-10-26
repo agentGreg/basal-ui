@@ -6,6 +6,7 @@ them with basal-serve's own message, shown on the model's row and in its log."""
 import re
 from types import SimpleNamespace
 
+from basal import adapter as adapter_module
 from basal.engine import VLLM_PRESETS
 from basal.gdn_graph import refused as gdn_refused
 from basal.prompt import LAYOUTS
@@ -108,6 +109,11 @@ def validate(options: dict | None, default_mode: str | None = None) -> dict:
             value = value.strip() or None if isinstance(value, str) else None
             if value is None and DEFAULTS[key] is not None:
                 value = DEFAULTS[key]
+            if key == "adapter" and value is not None:  # a typo or a DoRA adapter: refused before basal-serve starts
+                try:
+                    adapter_module.validate(value)
+                except SystemExit as exc:  # basal-serve's own message
+                    raise ValueError(f"load option adapter: {exc}") from None
         elif key == "orders":
             if value is not None and not (isinstance(value, str) and ORDERS.fullmatch(value)):
                 raise ValueError("load option orders must be 1, 2, auto or 2le<N> (N >= 2)")
