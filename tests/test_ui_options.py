@@ -77,19 +77,34 @@ def test_invalid_options_name_the_option(bad, message):
         options.validate(bad)
 
 
-def test_every_engine_switch_reaches_basal_serve_as_it_reads_it():
+def test_every_engine_switch_reaches_basal_serve_as_it_reads_it(tmp_path):
     from basal.server import parser
+    ad = tmp_path / "ad"
+    ad.mkdir()
+    (ad / "adapter_config.json").write_text('{"peft_type": "LORA", "r": 2, "lora_alpha": 4}', encoding="utf-8")
+    (ad / "adapter_model.safetensors").write_bytes(b"")
     chosen = {"gemma_attn": "flex", "merge": "off", "lean": "pass2", "tree": "flex", "batches": "fine",
               "readout_layer": "on", "template_prefix": "off", "fp8_accum": "full", "eager_attn": "sliding=fa3,full=efficient",
               "eager_forward": "hf", "vllm_fast_prefill": "off", "dtype": "float16", "exit_heads": "/heads",
               "think_calibration": "off", "think_model": "/think", "think_adapter": "/adapter", "think_memory": 0.5,
-              "think_max_len": 4096, "think_log": "t.log"}
+              "think_max_len": 4096, "think_log": "t.log", "adapter": str(ad)}
     a = parser().parse_args(["--model", "m", "--ple-offload", "on", "--strict-calibration", *options.args(chosen)])
     assert {k: getattr(a, k) for k in chosen} == chosen
     assert options.args({"ple_offload": True, "strict_calibration": True}) == [
         "--ple-offload", "on", "--strict-calibration"]
     defaults = parser().parse_args(["--model", "m"])
     assert {k: getattr(defaults, k) for k in chosen} == {k: options.DEFAULTS[k] for k in chosen}
+
+
+def test_an_adapter_that_basal_serve_would_refuse_is_refused_before_loading(tmp_path):
+    with pytest.raises(ValueError, match="load option adapter: --adapter nowhere: no adapter_config.json"):
+        options.validate({"adapter": str(tmp_path / "nowhere")})
+    dora = tmp_path / "dora"
+    dora.mkdir()
+    (dora / "adapter_config.json").write_text('{"fine_tune_type": "dora", "lora_parameters": {"scale": 2}}',
+                                              encoding="utf-8")
+    with pytest.raises(ValueError, match="fine_tune_type dora"):
+        options.validate({"adapter": str(dora)})
 
 
 def test_media_loads_are_eager_or_vllm_where_cuda_has_vllm():
