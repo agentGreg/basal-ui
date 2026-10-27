@@ -65,7 +65,10 @@ def _format_message(code: str, params: dict) -> str:
         values["kinds"] = " and ".join({"image": "images"}.get(kind, kind) for kind in values["kinds"])
     if values.get("memory", 0) is None:
         values["memory"] = "—"
-    return ASSESSMENT_TEMPLATES[code].format(**values)
+    if values.get("estimate") is None:
+        values["estimate"] = "—"
+    text = ASSESSMENT_TEMPLATES[code].format(**values)
+    return text.replace("— GB", "—") if params.get("estimate", 0) is None else text
 
 
 def _message(code: str, **params) -> dict:

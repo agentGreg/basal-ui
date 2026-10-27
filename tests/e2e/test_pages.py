@@ -236,6 +236,9 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
         "s => ts(s.why, s.why_code, s.why_params)", fixture["multimodal"])
     assert "--mlx-packed" in page.evaluate(
         "s => ts(s.why, s.why_code, s.why_params)", fixture["packed"])
+    assert page.evaluate("""() => ts('mini in bf16: needs about — of a 8.6 GB budget',
+      'suggest_recommended_budget', {tier: 'mini', label: 'bf16', estimate: null, memory: 8.6})""") \
+      == "mini w formacie bf16: potrzeba około — z budżetu 8.6 GB"
 
     options_target = page.evaluate("""async () => {
       for (const m of modelData.filter(x => x.runnable)) {

@@ -921,11 +921,13 @@ function ts(text, code, params) {
   const values = LANG === 'pl' && params
     ? {...params,
        ...(params.memory === null ? {memory: '—'} : {}),
+       ...(params.estimate === null ? {estimate: '—'} : {}),
        ...(Array.isArray(params.kinds)
          ? {kinds: params.kinds.map(kind => ({image: 'obrazy', audio: 'audio'}[kind] || kind)).join(' i ')}
          : {})}
     : params;
-  return fill(translated || text, values);
+  const result = fill(translated || text, values);
+  return params?.estimate === null ? result.replace('— GB', '—') : result;
 }
 function plForm(n) {  // Polish: 1 model, 2-4 modele (not 12-14), 5+ modeli
   const a = Math.abs(n) % 100, b = a % 10;

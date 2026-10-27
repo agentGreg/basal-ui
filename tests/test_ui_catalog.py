@@ -189,6 +189,14 @@ def test_suggestion_codes_reproduce_english_text_with_structured_params():
     budget_card = suggest([assess(variant("Remek/basal-2.0-mini"), budget)], budget)[0]
     assert budget_card["why_code"] == "suggest_recommended_budget"
     assert budget_card["why"] == catalog._format_message(budget_card["why_code"], budget_card["why_params"])
+    unknown_size = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, None, False)
+    unknown_card = suggest([assess(unknown_size, budget)], budget)[0]
+    assert unknown_card["why_params"]["estimate"] is None
+    assert unknown_card["why"] == "mini in bf16: needs about — of a 8.6 GB budget"
+    source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
+    polish = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))[unknown_card["why_code"]]
+    translated = polish.format(**{**unknown_card["why_params"], "estimate": "—", "memory": 8.6})
+    assert translated.replace("— GB", "—") == "mini w formacie bf16: potrzeba około — z budżetu 8.6 GB"
 
 
 def test_server_templates_have_matching_polish_placeholders():
