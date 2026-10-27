@@ -5,7 +5,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const gb = n => n == null ? '—' : `${(Number(n) / 1e9).toFixed(1)} GB`;
 let modelData = [], hw = null, examples = [], pollTimer = null, loadedMedia = [], selectedMedia = [], mediaSelection = 0, statusSequence = 0;
 function httpFailure(status,message) {
-  const hint={422:'Invalid request: revise the input.',503:'Service unavailable: if GPU memory is exhausted, shorten the input or unload another model before retrying manually.',500:'Internal server error: inspect model logs and request ID.'}[status];
+  const hint={422:t('Invalid request: revise the input.'),503:t('Service unavailable: if GPU memory is exhausted, shorten the input or unload another model before retrying manually.'),500:t('Internal server error: inspect model logs and request ID.')}[status];
   return `${status?`HTTP ${status}. `:''}${hint?hint+' ':''}${message}`;
 }
 async function api(path, options={}) {
@@ -24,7 +24,7 @@ function toast(message, type='success') {
   const node=document.createElement('div'); node.className=`toast ${type}`; node.textContent=message;
   $('#toastStack').append(node); setTimeout(()=>node.remove(),4000);
 }
-function confirmDialog({title,description,confirmLabel='Confirm',destructive=false}) {
+function confirmDialog({title,description,confirmLabel=t('Confirm'),destructive=false}) {
   return new Promise(resolve=>{
     const dialog=$('#confirmDialog'), accept=$('#confirmAccept'), cancel=$('#confirmCancel');
     $('#confirmTitle').textContent=title; $('#confirmDescription').textContent=description;
@@ -77,12 +77,12 @@ document.querySelectorAll('.icon-button').forEach(button=>{
 });
 function renderHardware(data) {
   hw = data;
-  $('#deviceName').textContent = data.device_name || 'Unknown device';
+  $('#deviceName').textContent = data.device_name || t('Unknown device');
   $('#platform').textContent = data.platform || '—';
   $('#hardwareBudget').textContent = gb(data.memory_bytes);
   $('#availableMemory').textContent = gb(data.available_bytes);
   $('#systemRam').textContent = gb(data.system_ram_bytes);
-  $('#engines').innerHTML = (data.engines || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="muted">No engines detected</span>';
+  $('#engines').innerHTML = (data.engines || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || `<span class="muted">${t('No engines detected')}</span>`;
 }
 function familyOrder(family) {
   return ({'basal-2.0':6,'basal-omni-1.1':5,'basal-omni-1.0':4,'basal-omni':3,'basal-1.5':2,'basal-1.0':1})[family] || 0;
@@ -95,35 +95,35 @@ function renderModels(data) {
   const suggestions = data.suggestions || [];
   renderSuggestions(suggestions);
   const overviewSuggestion=$('#overviewSuggested'), firstSuggestion=$('#suggested .suggestion-card');
-  overviewSuggestion.replaceChildren(firstSuggestion?firstSuggestion.cloneNode(true):Object.assign(document.createElement('p'),{className:'muted',textContent:'No suggested model fits right now.'}));
+  overviewSuggestion.replaceChildren(firstSuggestion?firstSuggestion.cloneNode(true):Object.assign(document.createElement('p'),{className:'muted',textContent:t('No suggested model fits right now.')}));
   const slots = new Map(suggestions.map(s => [s.id, s.slot]));
   const older = $('#olderToggle').checked, showBad = $('#notRunnableToggle').checked, downloadedOnly = $('#downloadedToggle').checked;
   const list = modelData.filter(m => (!backendModelFilter||backendModelFilter.ids.has(m.id)) && (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
   list.sort((a,b) => familyOrder(b.family)-familyOrder(a.family) || tierOrder(a.tier)-tierOrder(b.tier) || a.port.localeCompare(b.port));
   const groups = new Map(); for (const m of list) { if (!groups.has(m.family)) groups.set(m.family, []); groups.get(m.family).push(m); }
-  if (!list.length) { $('#modelsTable').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
+  if (!list.length) { $('#modelsTable').innerHTML = `<div class="empty">${t('No models match these filters.')}</div>`; return; }
   let html = '';
-  const tableHead='<table class="model-variants"><colgroup><col style="width:20%"><col style="width:13%"><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:9%"><col style="width:30%"></colgroup><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th>Action</th></tr></thead><tbody>';
+  const tableHead=`<table class="model-variants"><colgroup><col style="width:20%"><col style="width:13%"><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:9%"><col style="width:30%"></colgroup><thead><tr><th>${t('Tier')}</th><th>${t('Format')}</th><th>${t('Size')}</th><th>${t('Est. memory')}</th><th>${t('Fit')}</th><th>${t('Fit now')}</th><th>${t('Action')}</th></tr></thead><tbody>`;
   for (const [family, rows] of groups) {
-    html += `<section class="model-family-group"><div class="disk-group-heading"><h4>${esc(family)}</h4><span class="muted">${rows.length} ${rows.length===1?'variant':'variants'}</span></div><div class="table-wrap">${tableHead}`;
+    html += `<section class="model-family-group"><div class="disk-group-heading"><h4>${esc(family)}</h4><span class="muted">${tp(rows.length,'{n} variant','{n} variants',{n:rows.length})}</span></div><div class="table-wrap">${tableHead}`;
     for (const m of rows) {
       const classes = `fit-${esc(m.fit || 'unknown')}`;
       const nowClasses = `fit-${esc(m.fit_now || 'unknown')}`;
       const reason = !m.runnable && m.reason ? `<span class="reason" title="${esc(m.reason)}">${esc(m.reason)}</span>` : '';
       const slot = slots.get(m.id);
-      const badges = `${slot?`<span class="badge ${({recommended:'rec',best_quality:'best',multimodal:'omni'})[slot]||''}">${esc(slot.replace('_',' '))}</span>`:''}${m.experimental?'<span class="badge experimental">Experimental</span>':''}`;
+      const badges = `${slot?`<span class="badge ${({recommended:'rec',best_quality:'best',multimodal:'omni'})[slot]||''}">${esc(t(slot.replace('_',' ')))}</span>`:''}${m.experimental?`<span class="badge experimental">${t('Experimental')}</span>`:''}`;
       const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
       const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
       const downloadButton=downloadControl(m,downloadStatus);
       // Models: download, set up and delete; loading is the Model manager's (renderDiskModels)
-      const actions=`${!m.downloaded?downloadButton:''}${m.runnable?optionsButton(m.id,false,'save'):''}${loaded?'<span class="chip">loaded</span>':m.downloaded?deleteButton(m.id):''}`;
-      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="model-tier"><span class="model-name">${esc(m.tier)}</span>${badges?`<div class="model-badges">${badges}</div>`:''}${reason}${mediaReason}</td><td class="model-format">${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}${m.downloaded?`<small class="model-downloaded muted">On disk${m.downloaded_bytes==null?'':` · ${gb(m.downloaded_bytes)}`}</small>`:''}</td><td class="model-size">${gb(m.weights_bytes)}</td><td class="model-size">${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td><div class="model-actions"><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button>${actions}</div></td></tr>`;
+      const actions=`${!m.downloaded?downloadButton:''}${m.runnable?optionsButton(m.id,false,'save'):''}${loaded?`<span class="chip">${t('loaded')}</span>`:m.downloaded?deleteButton(m.id):''}`;
+      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="model-tier"><span class="model-name">${esc(m.tier)}</span>${badges?`<div class="model-badges">${badges}</div>`:''}${reason}${mediaReason}</td><td class="model-format">${esc(m.label)} ${m.community?`<span class="chip">${t('community')}</span>`:''}${m.revision?`<span class="chip">${t('revision {revision}',{revision:esc(m.revision)})}</span>`:''}${m.downloaded?`<small class="model-downloaded muted">${t('On disk')}${m.downloaded_bytes==null?'':` · ${gb(m.downloaded_bytes)}`}</small>`:''}</td><td class="model-size">${gb(m.weights_bytes)}</td><td class="model-size">${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(t(m.fit || 'unknown'))}</span></td><td><span class="badge ${nowClasses}">${esc(t(m.fit_now || 'unknown'))}</span></td><td><div class="model-actions"><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button>${actions}</div></td></tr>`;
     }
     html += '</tbody></table></div></section>';
   }
   $('#modelsTable').innerHTML = html;
 }
-const deleteButton=id=>`<button type="button" class="delete-model" data-id="${esc(id)}">Delete</button>`;
+const deleteButton=id=>`<button type="button" class="delete-model" data-id="${esc(id)}">${t('Delete')}</button>`;
 // the model buttons of every list (Models, Model manager, the Overview's copy of a suggestion card), bound once
 document.addEventListener('click',e=>{
   const b=e.target.closest('.download-model,.unload-model,.delete-model,.load-model');
@@ -136,8 +136,8 @@ document.addEventListener('click',e=>{
 });
 async function deleteModel(id) {
   const model=modelData.find(m=>m.id===id);
-  if(!model||!await confirmDialog({title:'Delete model from disk?',description:`${model.family} ${model.tier} (${model.label}) will be removed from disk.`,confirmLabel:'Delete',destructive:true}))return;
-  await api('/api/models/delete',{method:'POST',body:JSON.stringify({id})}); toast('Model deleted'); await loadModels();
+  if(!model||!await confirmDialog({title:t('Delete model from disk?'),description:t('{model} will be removed from disk.',{model:`${model.family} ${model.tier} (${model.label})`}),confirmLabel:t('Delete'),destructive:true}))return;
+  await api('/api/models/delete',{method:'POST',body:JSON.stringify({id})}); toast(t('Model deleted')); await loadModels();
 }
 // "basal-2.0" / "basal-omni-1.0" written the way basal.si5.pl writes the family names
 function familyMark(family) {
@@ -147,11 +147,11 @@ function familyMark(family) {
 }
 const ARROW = '<svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 function downloadControl(m, progress) {
-  if(progress&&!progress.error)return `<button class="download-model" data-id="${esc(m.id)}" disabled>Downloading…</button><small class="muted download-progress">${gb(progress.done_bytes)} / ${gb(progress.total_bytes)}</small>`;
-  return `<button class="download-model" data-id="${esc(m.id)}">Download</button>${progress?.error?`<span class="reason">${esc(progress.error)}</span>`:''}`;
+  if(progress&&!progress.error)return `<button class="download-model" data-id="${esc(m.id)}" disabled>${t('Downloading…')}</button><small class="muted download-progress">${gb(progress.done_bytes)} / ${gb(progress.total_bytes)}</small>`;
+  return `<button class="download-model" data-id="${esc(m.id)}">${t('Download')}</button>${progress?.error?`<span class="reason">${esc(progress.error)}</span>`:''}`;
 }
 function renderSuggestions(suggestions) {
-  if (!suggestions.length) { $('#suggested').innerHTML = '<div class="empty">Nothing fits the memory available now; free memory or use All models</div>'; return; }
+  if (!suggestions.length) { $('#suggested').innerHTML = `<div class="empty">${t('Nothing fits the memory available now; free memory or use All models')}</div>`; return; }
   const models = new Map(modelData.map(m => [m.id, m]));
   $('#suggested').innerHTML = `<div class="suggestion-grid">${suggestions.map(s => {
     const m = models.get(s.id);
@@ -159,8 +159,8 @@ function renderSuggestions(suggestions) {
     const media = s.slot === 'multimodal';
     const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
     const download=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
-    const action=`<div class="controls">${loaded?'<span class="chip">loaded</span>':!m.downloaded?downloadControl(m,download):''}${optionsButton(m.id,false,'save')}${m.downloaded&&!loaded?deleteButton(m.id):''}</div>${m.downloaded&&!loaded?`<a class="dashboard-link" href="#manager">Load in Model manager${ARROW}</a>`:''}`;
-    return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}${action}</article>`;
+    const action=`<div class="controls">${loaded?`<span class="chip">${t('loaded')}</span>`:!m.downloaded?downloadControl(m,download):''}${optionsButton(m.id,false,'save')}${m.downloaded&&!loaded?deleteButton(m.id):''}</div>${m.downloaded&&!loaded?`<a class="dashboard-link" href="#manager">${t('Load in Model manager')}${ARROW}</a>`:''}`;
+    return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(t(s.slot.replace('_',' ')))}</div><h3>${familyMark(m.family)}</h3><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)} ${m.community?`<span class="chip">${t('community')}</span>`:''}${m.revision?`<span class="chip">${t('revision {revision}',{revision:esc(m.revision)})}</span>`:''}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} ${t('est. memory')}</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(t(m.fit_now || 'unknown'))}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} ${t('downloaded')}</div>`:''}${action}</article>`;
   }).join('')}</div>`;
 }
 document.addEventListener('click',e=>{const b=e.target.closest('.model-card-open');if(b)act(()=>openModelCard(b.dataset.id));});
@@ -168,12 +168,12 @@ async function openModelCard(id) {
   const c=await api(`/api/models/card?id=${encodeURIComponent(id)}`);
   const scheme=c.quantisation?.scheme, sameScheme=[c.port,c.label].some(x=>String(x||'').toLowerCase()===String(scheme||'').toLowerCase());
   // family, tier and format are the title; the quantisation only where it says more than the format
-  const facts=[['Quantisation',sameScheme?null:scheme],['Size',gb(c.size_bytes)],['Media',(c.media||[]).join(', ')||'none'],['Mode',`${c.assessment?.mode||'—'} · ${c.assessment?.runnable?'runnable':c.assessment?.reason||'not runnable'}`],['Serving',c.quantisation?.engine],['Fit',c.assessment?.fit],['Fit now',c.assessment?.fit_now],['Estimated memory',gb(c.assessment?.est_memory_bytes)],['Downloaded',c.downloaded?'yes':'no'],['Local directory',c.local_dir],['Cached revisions',(c.revisions||[]).join(', ')]];
+  const facts=[['Quantisation',sameScheme?null:scheme],['Size',gb(c.size_bytes)],['Media',(c.media||[]).join(', ')||t('none')],['Mode',`${c.assessment?.mode||'—'} · ${c.assessment?.runnable?t('runnable'):c.assessment?.reason||t('not runnable')}`],['Serving',c.quantisation?.engine],['Fit',c.assessment?.fit],['Fit now',c.assessment?.fit_now],['Estimated memory',gb(c.assessment?.est_memory_bytes)],['Downloaded',c.downloaded?t('yes'):t('no')],['Local directory',c.local_dir],['Cached revisions',(c.revisions||[]).join(', ')]];
   const entry=c.loaded, shipped=c.shipped_calibration;
   $('#modelCardTitle').textContent=[c.family,c.tier,c.label].filter(Boolean).join(' · ')||c.id;
-  $('#modelCardRepo').innerHTML=`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.repo)}</a> · ${esc(c.author||'')}${c.community?' <span class="chip">community</span>':''}${c.base_repo?` · base ${esc(c.base_repo)}${c.base_revision?` @ ${esc(c.base_revision)}`:''}`:''}`;
-  const shown=facts.filter(([,v])=>v!=null&&v!==''&&v!=='—'), wide=new Set(['Local directory','Cached revisions']);  // compact: facts this checkpoint does not have are left out; paths and hashes take a whole row
-  $('#modelCardBody').innerHTML=`<dl class="model-card-facts">${shown.map(([k,v])=>`<dt${wide.has(k)?' class="wide"':''}>${esc(k)}</dt><dd${wide.has(k)?' class="wide"':''}>${esc(v)}</dd>`).join('')}</dl>${c.quantisation?.description?`<h3>Quantisation</h3><p>${esc(c.quantisation.description)}</p>`:''}<h3>Shipped calibration</h3>${shipped?.error?`<p class="reason">${esc(shipped.error)}</p>`:shipped?`${shipped.fitted_on&&typeof shipped.fitted_on==='object'?`<p>Fitted on ${esc(shipped.fitted_on.data||'—')} · ${esc(shipped.fitted_on.decisions??'—')} decisions</p>`:''}<div class="chips">${thresholdCell(shipped.thresholds)}</div>`:'<p class="muted">None</p>'}<h3>Prompt format</h3><pre>${esc(JSON.stringify(c.basal_json?.prompt_format??c.basal_json??null,null,2))}</pre>${entry?`<h3>Loaded entry</h3><pre>${esc(JSON.stringify(Object.fromEntries(['mode','orders','prompt_format','layout','vllm_preset','certified','context'].filter(k=>entry[k]!=null).map(k=>[k,entry[k]])),null,2))}</pre>`:''}${c.readme?`<details><summary>README</summary><pre>${esc(c.readme)}</pre></details>`:''}`;
+  $('#modelCardRepo').innerHTML=`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.repo)}</a> · ${esc(c.author||'')}${c.community?` <span class="chip">${t('community')}</span>`:''}${c.base_repo?` · ${t('base')} ${esc(c.base_repo)}${c.base_revision?` @ ${esc(c.base_revision)}`:''}`:''}`;
+  const shown=facts.filter(([,v])=>v!=null&&v!==''&&v!=='—').map(([k,v])=>[k,k==='Fit'||k==='Fit now'?t(v):v]), wide=new Set(['Local directory','Cached revisions']);  // compact: facts this checkpoint does not have are left out; paths and hashes take a whole row
+  $('#modelCardBody').innerHTML=`<dl class="model-card-facts">${shown.map(([k,v])=>`<dt${wide.has(k)?' class="wide"':''}>${esc(t(k))}</dt><dd${wide.has(k)?' class="wide"':''}>${esc(v)}</dd>`).join('')}</dl>${c.quantisation?.description?`<h3>${t('Quantisation')}</h3><p>${esc(c.quantisation.description)}</p>`:''}<h3>${t('Shipped calibration')}</h3>${shipped?.error?`<p class="reason">${esc(shipped.error)}</p>`:shipped?`${shipped.fitted_on&&typeof shipped.fitted_on==='object'?`<p>${t('Fitted on {date} · {decisions} decisions',{date:esc(shipped.fitted_on.data||'—'),decisions:esc(shipped.fitted_on.decisions??'—')})}</p>`:''}<div class="chips">${thresholdCell(shipped.thresholds)}</div>`:`<p class="muted">${t('None')}</p>`}<h3>${t('Prompt format')}</h3><pre>${esc(JSON.stringify(c.basal_json?.prompt_format??c.basal_json??null,null,2))}</pre>${entry?`<h3>${t('Loaded entry')}</h3><pre>${esc(JSON.stringify(Object.fromEntries(['mode','orders','prompt_format','layout','vllm_preset','certified','context'].filter(k=>entry[k]!=null).map(k=>[k,entry[k]])),null,2))}</pre>`:''}${c.readme?`<details><summary>${t('README')}</summary><pre>${esc(c.readme)}</pre></details>`:''}`;
   $('#modelCardDialog').showModal();
   $('#modelCardBody').scrollTop=0;  // the dialog is reused: a new card starts at its top
 }
@@ -187,26 +187,26 @@ function renderDiskModels() {
   }
   $('#diskModels').innerHTML=rows.length?[...groups].sort(([a],[b])=>familyOrder(b)-familyOrder(a)||a.localeCompare(b)).map(([type,models])=>{
     const bytes=models.reduce((sum,m)=>sum+(Number(m.downloaded_bytes)||0),0);
-    return `<section class="disk-group"><div class="disk-group-heading"><h4>${esc(type)}</h4><span class="muted">${models.length} ${models.length===1?'model':'models'} · ${gb(bytes)}</span></div>${models.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?'<span class="chip">community</span>':''}<span class="muted">${gb(m.downloaded_bytes)}</span><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button></div><div class="disk-actions">${diskActions(m)}</div></div>`).join('')}</section>`;  // the family is the group's heading
-  }).join(''):'<div class="empty">Nothing downloaded yet</div>';
-  $('#diskTotal').textContent = `Total: ${gb(total)} in ${rows.length} ${rows.length === 1 ? 'model' : 'models'}`;
-  $('#diskSummary').textContent=`${rows.length} ${rows.length===1?'model':'models'} on disk`;
-  $('#diskSummaryMeta').textContent=`${gb(total)} total`;
+    return `<section class="disk-group"><div class="disk-group-heading"><h4>${esc(t(type))}</h4><span class="muted">${tp(models.length,'{n} model','{n} models',{n:models.length})} · ${gb(bytes)}</span></div>${models.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?`<span class="chip">${t('community')}</span>`:''}<span class="muted">${gb(m.downloaded_bytes)}</span><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button></div><div class="disk-actions">${diskActions(m)}</div></div>`).join('')}</section>`;  // the family is the group's heading
+  }).join(''):`<div class="empty">${t('Nothing downloaded yet')}</div>`;
+  $('#diskTotal').textContent = t('Total: {size} in {models}',{size:gb(total),models:tp(rows.length,'{n} model','{n} models',{n:rows.length})});
+  $('#diskSummary').textContent=t('{models} on disk',{models:tp(rows.length,'{n} model','{n} models',{n:rows.length})});
+  $('#diskSummaryMeta').textContent=t('{size} total',{size:gb(total)});
 }
 // Model manager: load (text or media, or with options) and unload the models on disk
 function diskActions(m) {
   const loaded=statusCache?.models?.find(x=>x.id===m.id);
-  if(loaded)return `<span class="chip">${esc(loaded.state==='ready'?'loaded':loaded.state)}</span><button type="button" class="unload-model" data-id="${esc(m.id)}">Unload</button>`;
-  if(!m.runnable)return `<span class="reason" title="${esc(m.reason||'')}">${esc(m.reason||'not runnable here')}</span>`;
-  const media=m.media_mode?`<button type="button" class="load-model load-media-model" data-id="${esc(m.id)}" data-media="true" title="${esc(mediaTitle(m.media||[]))}">Load with media</button>`:'';
+  if(loaded)return `<span class="chip">${esc(t(loaded.state==='ready'?'loaded':loaded.state))}</span><button type="button" class="unload-model" data-id="${esc(m.id)}">${t('Unload')}</button>`;
+  if(!m.runnable)return `<span class="reason" title="${esc(m.reason||'')}">${esc(m.reason||t('not runnable here'))}</span>`;
+  const media=m.media_mode?`<button type="button" class="load-model load-media-model" data-id="${esc(m.id)}" data-media="true" title="${esc(mediaTitle(m.media||[]))}">${t('Load with media')}</button>`:'';
   const noMedia=!m.media_mode&&(m.media||[]).length?`<small class="muted">${esc(m.media_reason||'')}</small>`:'';
-  return `<button type="button" class="load-model primary" data-id="${esc(m.id)}">Load</button>${media}${optionsButton(m.id)}${noMedia}`;
+  return `<button type="button" class="load-model primary" data-id="${esc(m.id)}">${t('Load')}</button>${media}${optionsButton(m.id)}${noMedia}`;
 }
 async function loadSettings() {
   try {
     const settings = await api('/api/settings');
     $('#modelsDir').value = settings.models_dir;
-    $('#defaultModelsDirHint').textContent = `Default: ${settings.default_models_dir}`;
+    $('#defaultModelsDirHint').textContent = t('Default: {path}',{path:settings.default_models_dir});
     setChecked($('#checkUpdates'),settings.check_updates!==false);
   } catch (e) { $('#modelsDirError').textContent = e.message; }
 }
@@ -214,8 +214,8 @@ async function refreshUpdates() {
   try {
     const d=await api('/api/updates');
     const parts=[];
-    if(d.newer)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="Dismiss">×</button><strong>basal ${esc(d.latest)} is available — you have ${esc(d.installed)}</strong> <a href="${esc(d.url)}" target="_blank" rel="noopener">Release notes</a></div>`);
-    if(d.new_models?.length)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="Dismiss">×</button><strong>${d.new_models.length} new models in the catalog</strong> <button type="button" id="showNewModels">View models</button></div>`);
+    if(d.newer)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${t('basal {latest} is available — you have {installed}',{latest:esc(d.latest),installed:esc(d.installed)})}</strong> <a href="${esc(d.url)}" target="_blank" rel="noopener">${t('Release notes')}</a></div>`);
+    if(d.new_models?.length)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${tp(d.new_models.length,'{n} new model','{n} new models',{n:d.new_models.length})} ${t('in the catalog')}</strong> <button type="button" id="showNewModels">${t('View models')}</button></div>`);
     $('#updatesBanner').innerHTML=parts.join('');
     const b=$('#showNewModels');if(b)b.onclick=()=>act(async()=>{await api('/api/updates/seen',{method:'POST'});await refreshUpdates();showView('models',true);selectModelsTab('all');});
   } catch {}
@@ -225,23 +225,23 @@ async function saveModelsDir(value) {
   $('#modelsDirError').textContent = '';
   try {
     await api('/api/settings', {method:'PUT', body:JSON.stringify({models_dir:value})});
-    await Promise.all([loadSettings(),loadModels()]); toast('Models directory saved');
+    await Promise.all([loadSettings(),loadModels()]); toast(t('Models directory saved'));
   } catch (e) { $('#modelsDirError').textContent = e.message; toast(e.message,'error'); }
 }
 async function loadModels(refresh=false) {
   $('#modelsTable').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
-  $('#suggested').innerHTML = '<div class="empty">Loading suggestions…</div>';
+  $('#suggested').innerHTML = `<div class="empty">${t('Loading suggestions…')}</div>`;
   try { renderModels(await api(`/api/models${refresh?'?refresh=1':''}`)); }
   catch (e) { $('#modelsTable').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; $('#suggested').innerHTML = `<div class="error-box">${esc(e.message)}</div>`; toast(e.message,'error'); }
 }
 async function loadModel(id, media=false) {
   statusSequence++;
   clearSelectedMedia();
-  try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); toast('Model load started'); await refreshStatus(); }
+  try { await api('/api/load', {method:'POST', body:JSON.stringify({id,...(media?{media:true}:{})})}); toast(t('Model load started')); await refreshStatus(); }
   catch (e) { showStatusError(e.message); toast(e.message,'error'); }
 }
 function showStatusError(text) { if(text)toast(text,'error'); }
-function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? 'images' : kind === 'audio' ? 'audio' : kind).join(' and '); }
+function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? t('images') : kind === 'audio' ? t('audio') : kind).join(` ${t('and')} `); }
 function clearSelectedMedia() {
   mediaSelection++;
   selectedMedia.forEach(item => URL.revokeObjectURL(item.url));
@@ -252,8 +252,8 @@ function clearSelectedMedia() {
 const fileSize = n => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 function renderSelectedMedia() {
   $('#mediaItems').innerHTML = selectedMedia.map((item,index) => `<div class="media-item">${item.kind === 'image'
-    ? `<button type="button" class="media-preview" data-preview="${index}" title="Open preview"><img src="${esc(item.url)}" alt="${esc(item.file.name)}"></button>`
-    : '<div class="media-audio">audio</div>'}<div class="media-meta"><span><span class="media-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span><small data-dims="${index}">${fileSize(item.file.size)}</small></span><button type="button" data-remove="${index}" aria-label="Remove ${esc(item.file.name)}">Remove</button></div></div>`).join('');
+    ? `<button type="button" class="media-preview" data-preview="${index}" title="${t('Open preview')}"><img src="${esc(item.url)}" alt="${esc(item.file.name)}"></button>`
+    : `<div class="media-audio">${t('audio')}</div>`}<div class="media-meta"><span><span class="media-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span><small data-dims="${index}">${fileSize(item.file.size)}</small></span><button type="button" data-remove="${index}" aria-label="${t('Remove {name}',{name:esc(item.file.name)})}">${t('Remove')}</button></div></div>`).join('');
   $('#mediaItems').querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
     URL.revokeObjectURL(selectedMedia[Number(button.dataset.remove)].url);
     selectedMedia.splice(Number(button.dataset.remove),1);
@@ -278,18 +278,18 @@ function showMediaError(message='') {
 async function selectMedia(files) {
   const selection = ++mediaSelection;
   showMediaError();
-  if (files.length > 8) { showMediaError('at most 8 media items'); return; }
+  if (files.length > 8) { showMediaError(t('at most 8 media items')); return; }
   const supported = new Set(loadedMedia);
   for (const file of files) {
-    if (file.size > 20 * 1024 * 1024) { showMediaError(`${file.name} is over 20 MiB`); return; }
+    if (file.size > 20 * 1024 * 1024) { showMediaError(t('{name} is over 20 MiB',{name:file.name})); return; }
     const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : null;
-    if (!kind) { showMediaError(`${file.name} must be an image or audio file`); return; }
-    if (!supported.has(kind)) { showMediaError(`This model does not support ${kind}`); return; }
+    if (!kind) { showMediaError(t('{name} must be an image or audio file',{name:file.name})); return; }
+    if (!supported.has(kind)) { showMediaError(t('This model does not support {kind}',{kind})); return; }
   }
   const readFile = file => new Promise((resolve,reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve({file,kind:file.type.startsWith('image/')?'image':'audio',data:String(reader.result).split(',')[1]});
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onerror = () => reject(new Error(t('Could not read {name}',{name:file.name})));
     reader.readAsDataURL(file);
   });
   try {
@@ -312,7 +312,7 @@ async function refreshStatus() {
 async function loadExamples() {
   try {
     examples=await api('/api/examples');
-    $('#examples').innerHTML='<option value="">Load an example…</option>'+examples.map((e,i)=>`<option value="${i}">${esc(e.file || e.id || `Example ${i+1}`)}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('');
+    $('#examples').innerHTML=`<option value="">${t('Load an example…')}</option>`+examples.map((e,i)=>`<option value="${i}">${esc(e.file || e.id || t('Example {number}',{number:i+1}))}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('');
     renderRequestPresets();
   } catch { examples=[];renderRequestPresets(); }
 }
@@ -327,15 +327,15 @@ async function loadPresets() {try{presetData=await api('/api/presets');renderReq
 function renderRequestPresets() {
   const select=$('#examples'), current=select.value;
   const saved=Object.keys(presetData.request||{});
-  select.innerHTML='<option value="">Load an example…</option>'+examples.map((e,i)=>`<option value="${i}">${esc(e.file||e.id||`Example ${i+1}`)}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('')+`<optgroup label="Saved requests">${saved.map(n=>`<option value="preset:${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`;
+  select.innerHTML=`<option value="">${t('Load an example…')}</option>`+examples.map((e,i)=>`<option value="${i}">${esc(e.file||e.id||t('Example {number}',{number:i+1}))}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('')+`<optgroup label="${t('Saved requests')}">${saved.map(n=>`<option value="preset:${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`;
   if(current&&[...select.options].some(o=>o.value===current))select.value=current;
 }
 function renderLoadPresets() {
   const select=$('#loadPresetSelect'); if(!select)return;
-  select.innerHTML='<option value="">Choose load preset…</option>'+Object.keys(presetData.load||{}).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  select.innerHTML=`<option value="">${t('Choose load preset…')}</option>`+Object.keys(presetData.load||{}).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
 }
 function promptPresetName(target) {
-  presetTarget=target; $('#presetNameTitle').textContent=target==='load'?'Save load preset':'Save request preset';
+  presetTarget=target; $('#presetNameTitle').textContent=target==='load'?t('Save load preset'):t('Save request preset');
   $('#presetName').value=''; $('#presetNameDialog').showModal(); $('#presetName').focus();
 }
 $('#presetNameSave').onclick=()=>act(async()=>{
@@ -344,7 +344,7 @@ $('#presetNameSave').onclick=()=>act(async()=>{
   try { value=presetTarget==='load'?collectOptions():$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
   catch(e) { toast(e.message,'error');$('.q-name:invalid')?.reportValidity();return; }
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind:presetTarget,name,value})});
-  $('#presetNameDialog').close(); renderLoadPresets();renderRequestPresets();toast('Preset saved');
+  $('#presetNameDialog').close(); renderLoadPresets();renderRequestPresets();toast(t('Preset saved'));
 });
 $('#examples').addEventListener('change',e=>{
   const val=e.target.value;
@@ -353,7 +353,7 @@ $('#examples').addEventListener('change',e=>{
 });
 async function deletePreset(kind,name) {
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind,name,value:null})});
-  renderLoadPresets();renderRequestPresets();toast('Preset deleted');
+  renderLoadPresets();renderRequestPresets();toast(t('Preset deleted'));
 }
 $('#exportPresets').onclick=()=>act(async()=>{
   const data=await api('/api/presets'),a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
@@ -364,11 +364,11 @@ $('#importPresets').onchange=()=>act(async()=>{
   const file=$('#importPresets').files[0];if(!file)return;
   const data=JSON.parse(await file.text());let count=0;
   for(const kind of ['load','request'])for(const [name,value] of Object.entries(data[kind]||{})){await api('/api/presets',{method:'PUT',body:JSON.stringify({kind,name,value})});count++;}
-  await loadPresets();toast(`Imported ${count} presets`);$('#importPresets').value='';
+  await loadPresets();toast(t('Imported {count} presets',{count}));$('#importPresets').value='';
 });
-$('#examples').insertAdjacentHTML('afterend','<button type="button" id="saveRequestPreset">Save request…</button><button type="button" id="deleteRequestPreset">Delete request</button>');
+$('#examples').insertAdjacentHTML('afterend',`<button type="button" id="saveRequestPreset">${t('Save request…')}</button><button type="button" id="deleteRequestPreset">${t('Delete request')}</button>`);
 $('#saveRequestPreset').onclick=()=>promptPresetName('request');
-$('#deleteRequestPreset').onclick=()=>act(async()=>{const v=$('#examples').value;if(!v.startsWith('preset:'))return toast('Choose a saved request first','error');await deletePreset('request',v.slice(7));$('#examples').value='';});
+$('#deleteRequestPreset').onclick=()=>act(async()=>{const v=$('#examples').value;if(!v.startsWith('preset:'))return toast(t('Choose a saved request first'),'error');await deletePreset('request',v.slice(7));$('#examples').value='';});
 const OWNED={choice:['criteria','levels','option_keys'],noul:['criteria','option_keys'],score:['criteria','levels','option_keys'],
   multi:['criteria','option_keys',...SET_KEYS],act:['criteria','base','costs','defer_action','option_keys'],
   tool:['tools','extra','rank','multi','description_chars',...SET_KEYS],classify:['labels','criteria','multi_label','none','threshold','min','max','objective'],
@@ -404,12 +404,12 @@ function criteriaText(q, type) {
 }
 function parseStructuredText(text) { const trimmed=text.trim(); if(trimmed.startsWith('{')||trimmed.startsWith('[')) { try{return JSON.parse(trimmed);}catch{}} return text; }
 let questionFieldId=0;
-const qField=(label,input,help='',cls='')=>{const id=`question-field-${++questionFieldId}`;return `<div class="qf${cls?` ${cls}`:''}"><label id="${id}-label" for="${id}">${label}</label>${input.replace(/<(input|textarea|select)\b/,`<$1 id="${id}" aria-labelledby="${id}-label"`)}${help?`<small class="muted">${help}</small>`:''}</div>`};
-const qNum=(f,v,attrs='')=>`<input class="input" type="number" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" ${attrs}>`;
-const qText=(f,v,ph='')=>`<input class="input" type="text" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" placeholder="${esc(ph)}">`;
-const qArea=(f,v,ph='',cls='')=>`<textarea class="textarea${cls?` ${cls}`:''}" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
-const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input class="switch" type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${label}</label>`;
-const qSelect=(f,options,v)=>`<select class="select" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(label)}</option>`).join('')}</select>`;
+const qField=(label,input,help='',cls='')=>{const id=`question-field-${++questionFieldId}`;return `<div class="qf${cls?` ${cls}`:''}"><label id="${id}-label" for="${id}">${t(label)}</label>${input.replace(/<(input|textarea|select)\b/,`<$1 id="${id}" aria-labelledby="${id}-label"`)}${help?`<small class="muted">${t(help)}</small>`:''}</div>`};
+const qNum=(f,v,attrs='')=>`<input class="input" type="number" data-f="${f}" aria-label="${esc(t(f.replaceAll('_',' ')))}" value="${esc(v??'')}" ${attrs}>`;
+const qText=(f,v,ph='')=>`<input class="input" type="text" data-f="${f}" aria-label="${esc(t(f.replaceAll('_',' ')))}" value="${esc(v??'')}" placeholder="${esc(t(ph))}">`;
+const qArea=(f,v,ph='',cls='')=>`<textarea class="textarea${cls?` ${cls}`:''}" data-f="${f}" aria-label="${esc(t(f.replaceAll('_',' ')))}" placeholder="${esc(cls==='json'?ph:t(ph))}">${esc(v??'')}</textarea>`;
+const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input class="switch" type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${t(label)}</label>`;
+const qSelect=(f,options,v)=>`<select class="select" data-f="${f}" aria-label="${esc(t(f.replaceAll('_',' ')))}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(t(label))}</option>`).join('')}</select>`;
 // the set options of multi, multi-label classify and multi tool; constraints: fallback and exclusive keys (multi and
 // tool only: classify takes objective, threshold, min and max)
 function setFields(q, constraints=true) {
@@ -425,9 +425,9 @@ function actFields(card, q) {
   const simple=q.costs&&!costRowsOf(q.costs)?q.costs:{wrong:10,defer:1};
   card._costMode=costRowsOf(q.costs)?'matrix':'simple'; card._costRows=costRowsOf(q.costs)||[]; card._costOutcomes=null;
   return qSwitch('yesno',isYesNo(q),'Yes / no outcomes')+qField('Outcomes',qArea('criteria',criteriaText(q,'act'),'key: description, one outcome per line'),'Yes / no: first line describes true, second false.')
-    +`<div class="qf"><span class="qf-label">Costs</span><div class="tabs cost-mode"><button type="button" data-cost-mode="simple">Simple</button><button type="button" data-cost-mode="matrix">Matrix</button></div>`
+    +`<div class="qf"><span class="qf-label">${t('Costs')}</span><div class="tabs cost-mode"><button type="button" data-cost-mode="simple">${t('Simple')}</button><button type="button" data-cost-mode="matrix">${t('Matrix')}</button></div>`
     +`<div class="qf-row cost-simple">${qField('Wrong action',qNum('cost_wrong',simple.wrong,'step="any"'))}${qField('Defer to a person',qNum('cost_defer',simple.defer,'step="any" placeholder="none"'))}</div>`
-    +`<div class="cost-matrix"><div class="table-wrap"><table class="cost-table"></table></div><button type="button" class="add-action">Add action</button>${qField('Defer action',qText('defer_action',q.defer_action,'defer or human'),'The action max_error falls back to.')}</div></div>`;
+    +`<div class="cost-matrix"><div class="table-wrap"><table class="cost-table"></table></div><button type="button" class="add-action">${t('Add action')}</button>${qField('Defer action',qText('defer_action',q.defer_action,'defer or human'),'The action max_error falls back to.')}</div></div>`;
 }
 function renderTypeFields(card, type, q) {
   let html='';
@@ -439,9 +439,9 @@ function renderTypeFields(card, type, q) {
   else if(type==='tool'){
     const extra=q.extra??(q.multi?[]:TOOL_EXTRAS);
     html=qField('Tools (JSON array)',qArea('tools',q.tools?JSON.stringify(q.tools,null,2):'','[{"name": "get_weather", "description": "…", "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}}}]','json'),'OpenAI function, OpenAI Responses, MCP tools/list or Anthropic definitions.')
-      +`<div class="qf"><span class="qf-label">Other options</span><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input class="switch" type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${x}</label>`).join('')}</div></div>`
+      +`<div class="qf"><span class="qf-label">${t('Other options')}</span><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input class="switch" type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${t(x)}</label>`).join('')}</div></div>`
       +`<div class="qf-row">${qField('Rank',qNum('rank',q.rank,'min="1" step="1" placeholder="off"'),'also the k most probable options')}${qField('Description chars',qNum('description_chars',q.description_chars,'min="0" step="1" placeholder="300"'),'0 = no cap')}</div>`+qSwitch('multi',q.multi,'Several tools (multi)')
-      +`<div class="multi-tool-only">${setFields(q)}<small class="muted">The other options (answer directly, ask the user, none) are always exclusive.</small></div>`;
+      +`<div class="multi-tool-only">${setFields(q)}<small class="muted">${t('The other options (answer directly, ask the user, none) are always exclusive.')}</small></div>`;
   }
   else if(type==='classify')html=qField('Labels',qArea('labels',labelsText(q.labels??q.criteria),'key: description, or one label per line'))+qSwitch('multi_label',q.multi_label,'Several labels (multi-label)')+' '+qSwitch('none',q.none,'Add a "none" label','single-only')+`<div class="multi-only">${setFields(q,false)}</div>`;
   else if(type==='verify')html=qField('Claims',qArea('claims',keyedText(q.claims),'key: claim text, or one claim per line'))+qSwitch('binary',q.binary,'Binary (supported / not supported)');
@@ -450,7 +450,7 @@ function renderTypeFields(card, type, q) {
   const me=q.max_error, preset=me==null||Array.isArray(me)?'':[0.01,0.05].includes(Number(me))?String(Number(me)):'custom', maxErrorId=`question-field-${++questionFieldId}`;
   html+=`<div class="qf-row common-fields">${qSwitch('evidence',q.evidence===true,'Evidence spans','evidence-only')}<div class="qf max-error-only"><label for="${maxErrorId}">max_error</label><div class="controls">${qSelect('max_error',[['','none'],['0.01','0.01'],['0.05','0.05'],['custom','custom…']],preset).replace('<select ',`<select id="${maxErrorId}" `)}${qNum('max_error_custom',preset==='custom'?me:'','min="0" max="1" step="0.001"')}</div></div></div><div class="q-error reason wide" role="alert" hidden></div>`;
   $('.q-fields',card).innerHTML=html;
-  $('.q-instructions-input',card).placeholder=['tool',...TASK_TYPES].includes(type)?'optional':'What should the model decide?';
+  $('.q-instructions-input',card).placeholder=['tool',...TASK_TYPES].includes(type)?t('optional'):t('What should the model decide?');
   if(type==='act')renderCostMatrix(card);
   updateCardVisibility(card);
 }
@@ -467,7 +467,7 @@ function renderCostMatrix(card, force=false) {
   if(!force&&JSON.stringify(outcomes)===JSON.stringify(card._costOutcomes))return;
   if(!force&&card._costOutcomes)card._costRows=readCostRows(card);  // forced callers set _costRows themselves
   card._costOutcomes=outcomes;
-  table.innerHTML=`<thead><tr><th>Action</th>${outcomes.map(o=>`<th>${esc(o)}</th>`).join('')}<th></th></tr></thead><tbody>${card._costRows.map((row,i)=>`<tr><td><input class="input cost-action" type="text" aria-label="Action ${i+1}" value="${esc(row.action)}"></td>${outcomes.map(o=>`<td><input class="input cost-cell" type="number" step="any" aria-label="${esc(o)} cost for ${esc(row.action)}" data-outcome="${esc(o)}" value="${esc(row.costs[o]??'')}"></td>`).join('')}<td><button type="button" class="remove-action" data-row="${i}" aria-label="Remove action ${i+1}">Remove</button></td></tr>`).join('')}</tbody>`;
+  table.innerHTML=`<thead><tr><th>${t('Action')}</th>${outcomes.map(o=>`<th>${esc(o)}</th>`).join('')}<th></th></tr></thead><tbody>${card._costRows.map((row,i)=>`<tr><td><input class="input cost-action" type="text" aria-label="${t('Action {number}',{number:i+1})}" value="${esc(row.action)}"></td>${outcomes.map(o=>`<td><input class="input cost-cell" type="number" step="any" aria-label="${t('{outcome} cost for {action}',{outcome:esc(o),action:esc(row.action)})}" data-outcome="${esc(o)}" value="${esc(row.costs[o]??'')}"></td>`).join('')}<td><button type="button" class="remove-action" data-row="${i}" aria-label="${t('Remove action {number}',{number:i+1})}">${t('Remove')}</button></td></tr>`).join('')}</tbody>`;
 }
 function setCostMode(card, mode) {
   if(card._costOutcomes)card._costRows=readCostRows(card);
@@ -526,7 +526,7 @@ function parseQuestionCard(card, type=$('.q-type',card).value) {
   }
   const el=f=>$(`[data-f="${f}"]`,card), str=f=>(el(f)?.value??'').trim(), num=f=>str(f)===''?undefined:Number(str(f)), on=f=>Boolean(el(f)?.checked);
   const q={type}, errors=[], set=(k,v)=>{if(v!==undefined&&v!==''&&!(Array.isArray(v)&&!v.length))q[k]=v;};
-  const json=(f,check,message)=>{const text=str(f);if(!text){errors.push(message);return undefined;}try{const v=JSON.parse(text);if(check(v))return v;}catch{}errors.push(message);return undefined;};
+  const json=(f,check,message)=>{const text=str(f);if(!text){errors.push(t(message));return undefined;}try{const v=JSON.parse(text);if(check(v))return v;}catch{}errors.push(t(message));return undefined;};
   // a field whose text the user did not edit keeps the original's keys and values (none of them when it had none)
   const unedited=f=>orig!=null&&el(f)!=null&&el(f).value===orig.lines[f]&&(f!=='criteria'||type!=='act'||on('yesno')===orig.lines.yesno);
   const keep=(...keys)=>{keys.forEach(k=>{if(k in orig.q)q[k]=structuredClone(orig.q[k]);});};
@@ -552,7 +552,7 @@ function parseQuestionCard(card, type=$('.q-type',card).value) {
     if(card._costMode==='matrix'){
       const rows=readCostRows(card).filter(r=>r.action.trim());
       const missing=rows.some(r=>Object.values(r.costs).some(v=>v===''));
-      if(missing)errors.push('every cost cell needs a number');
+      if(missing)errors.push(t('every cost cell needs a number'));
       q.costs=Object.fromEntries(rows.map(r=>[r.action.trim(),Object.fromEntries(Object.entries(r.costs).filter(([,v])=>v!=='').map(([o,v])=>[o,Number(v)]))]));
       set('defer_action',str('defer_action'));
     } else {
@@ -609,19 +609,19 @@ const REQUEST_OPTION_KEYS=['facts','lang','think','think_text','early_exit'];
 function setPlaygroundExperimental(model) {
   const think=Boolean(model?.options?.think), levels=model?.entry?.early_exit||[], select=$('#earlyExitSelect');
   $('#thinkSelect').hidden=$('#thinkTextLabel').hidden=!think;
-  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(['',...levels]))select.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?`Early exit: ${esc(l)}`:'Early exit: server default'}</option>`).join('');
+  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(['',...levels]))select.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?t('Early exit: {level}',{level:esc(l)}):t('Early exit: server default')}</option>`).join('');
   select.hidden=!levels.length;
 }
 function buildRequest() {
   const questions=Object.create(null), names=new Set();
   for(const card of document.querySelectorAll('.question')) {
     const input=$('.q-name',card), name=input.value, duplicate=names.has(name), invalid=!name.trim()||duplicate;
-    input.setCustomValidity(!name.trim()?'Enter a question name.':duplicate?'Question names must be unique.':'');
+    input.setCustomValidity(!name.trim()?t('Enter a question name.'):duplicate?t('Question names must be unique.'):'');
     if(invalid)input.setAttribute('aria-invalid','true');else input.removeAttribute('aria-invalid');
     names.add(name);
     const [,q]=parseQuestionCard(card);if(!invalid)questions[name]=q;
   }
-  if([...document.querySelectorAll('.q-name')].some(input=>!input.checkValidity()))throw new Error('Question names must be non-blank and unique.');
+  if([...document.querySelectorAll('.q-name')].some(input=>!input.checkValidity()))throw new Error(t('Question names must be non-blank and unique.'));
   const stateInput=$('#stateInput'), state=stateInput._requestState;
   return {state:state!==undefined&&stateInput.value===state.text?state.value:parseStructuredText(stateInput.value),questions,...requestOptionFields(),...mediaRequestFields()};
 }
@@ -631,7 +631,7 @@ function syncRequest(force=false, keys=['media','detail']) {
     let request;
     try { request = JSON.parse(textarea.value); }
     catch (e) { showMediaError(e.message); return; }
-    if (!request || typeof request !== 'object' || Array.isArray(request)) { showMediaError('request JSON must be an object'); return; }
+    if (!request || typeof request !== 'object' || Array.isArray(request)) { showMediaError(t('request JSON must be an object')); return; }
     keys.forEach(k=>delete request[k]);
     const fields={...requestOptionFields(),...mediaRequestFields()};
     keys.forEach(k=>{if(k in fields)request[k]=fields[k];});
@@ -647,7 +647,7 @@ function addQuestion(name, q={type:'choice',instructions:'',criteria:{}}) {
   const card=document.createElement('div'); card.className='question'; const fieldId=`question-card-${++questionFieldId}`;
   const type=QUESTION_TYPES.includes(q.type)?q.type:'choice';
   card._extra=extraOf(q,type); card._type=type;
-  card.innerHTML=`<div class="q-head"><div><label for="${fieldId}-name">Name</label><input id="${fieldId}-name" class="input q-name" type="text" value="${esc(name)}"></div><div><label for="${fieldId}-type">Type</label><select id="${fieldId}-type" class="select q-type">${QUESTION_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label for="${fieldId}-instructions">Instructions</label><textarea id="${fieldId}-instructions" class="textarea q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
+  card.innerHTML=`<div class="q-head"><div><label for="${fieldId}-name">${t('Name')}</label><input id="${fieldId}-name" class="input q-name" type="text" value="${esc(name)}"></div><div><label for="${fieldId}-type">${t('Type')}</label><select id="${fieldId}-type" class="select q-type">${QUESTION_TYPES.map(type=>`<option value="${type}">${type}</option>`).join('')}</select></div><button type="button" class="remove-question">${t('Remove')}</button></div><div class="q-instructions"><label for="${fieldId}-instructions">${t('Instructions')}</label><textarea id="${fieldId}-instructions" class="textarea q-instructions-input" placeholder="${t('What should the model decide?')}">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
   $('.q-type',card).value=type;
   renderTypeFields(card,type,q); rememberOriginal(card,type,q);
   card.addEventListener('input',e=>{
@@ -680,7 +680,7 @@ function setRequest(req) {
   const preserveJson=()=>{
     $('#editJsonToggle').checked=true;$('#editJsonArea').hidden=false;$('#builder').hidden=true;
     $('#requestJson').value=JSON.stringify(req,null,2);
-    showMediaError('This request contains fields or values the Playground builder cannot edit. It remains in Edit JSON mode.');
+    showMediaError(t('This request contains fields or values the Playground builder cannot edit. It remains in Edit JSON mode.'));
   };
   if(!req||typeof req!=='object'||Array.isArray(req)||!Object.hasOwn(req,'state')||req.state==null||
      !Object.hasOwn(req,'questions')||!req.questions||typeof req.questions!=='object'||Array.isArray(req.questions)){preserveJson();return;}
@@ -728,8 +728,8 @@ function setRequest(req) {
 function resultHeadline(name, answer, requestQuestion) {
   const type=answer.type || requestQuestion?.type || 'unknown';
   if(type==='choice') { const key=answer.choice ?? answer.answer ?? ''; const criteria=requestQuestion?.criteria; const desc=criteria && !Array.isArray(criteria) ? criteria[key] : null; return `${key}${desc?` · ${typeof desc==='string'?desc:JSON.stringify(desc)}`:''}`; }
-  if(type==='noul') { const p=Number(answer.noul ?? answer.probabilities?.true); return Number.isFinite(p)?`P(yes) ${(p*100).toFixed(1)}%`:'P(yes) —'; }
-  if(type==='score') { const legend=answer.legend; const score=Number(answer.score ?? answer.expected_score); const top=legend&&Number.isFinite(score)?legend[String(Math.round(score))]:null; return `Expected level ${Number.isFinite(score)?score.toFixed(2):'—'}${top?` · nearest: ${top}`:''}`; }
+  if(type==='noul') { const p=Number(answer.noul ?? answer.probabilities?.true); return Number.isFinite(p)?t('P(yes) {value}',{value:`${(p*100).toFixed(1)}%`}):t('P(yes) —'); }
+  if(type==='score') { const legend=answer.legend; const score=Number(answer.score ?? answer.expected_score); const top=legend&&Number.isFinite(score)?legend[String(Math.round(score))]:null; return `${t('Expected level {value}',{value:Number.isFinite(score)?score.toFixed(2):'—'})}${top?` · ${t('nearest: {value}',{value:top})}`:''}`; }
   return null;
 }
 // decision safety: deferral, automation against the served model's certified thresholds, calibration validity
@@ -748,31 +748,31 @@ function decisionBase(answer,q) {
 // question shape the calibration was not validated for ("unvalidated") and uncalibrated probabilities get no claim.
 function certificateGap(answer, entry) {
   if(entry?.calibration_warning)return `calibration warning: ${entry.calibration_warning}`;
-  if(answer.calibration==='text')return 'the thresholds are certified on text decisions, not on media';
-  if(answer.calibration==='unvalidated')return answer.type==='act'?'the calibration is not validated for this question shape':'the calibration was fitted on other option orders';
+  if(answer.calibration==='text')return t('the thresholds are certified on text decisions, not on media');
+  if(answer.calibration==='unvalidated')return t(answer.type==='act'?'the calibration is not validated for this question shape':'the calibration was fitted on other option orders');
   if(answer.calibration!=null&&answer.calibration!=='validated')return `calibration: ${answer.calibration}`;
-  if(uncalibrated(entry))return 'the probabilities are not calibrated';
+  if(uncalibrated(entry))return t('the probabilities are not calibrated');
   return null;
 }
 function automationBadge(answer,q,entry) {
   const type=decisionBase(answer,q);
   const gap=certificateGap(answer,entry);
-  if(answer.deferred===true||typeof answer.max_error==='string'||gap)return `<span class="badge fit-tight" title="${esc(gap||'this answer was deferred or its requested max_error is uncertified')}">Not certified for this answer — review</span>`;
+  if(answer.deferred===true||typeof answer.max_error==='string'||gap)return `<span class="badge fit-tight" title="${esc(gap||t('this answer was deferred or its requested max_error is uncertified'))}">${t('Not certified for this answer — review')}</span>`;
   if(!entry||!['choice','noul','score'].includes(type)||answer.confidence==null)return '';
   const cert=entry.certified||{}, t1=cert['0.01']?.[type], t5=cert['0.05']?.[type];
-  if(t1==null&&t5==null)return '<span class="muted">No certificate for this type</span>';
+  if(t1==null&&t5==null)return `<span class="muted">${t('No certificate for this type')}</span>`;
   const c=Number(answer.confidence), shown=t=>t==null?'—':Number(t).toFixed(4);
-  const title=`certified ${type} thresholds: 1% error ≥ ${shown(t1)}, 5% error ≥ ${shown(t5)}`;
-  const [cls,text]=t1!=null&&c>=t1?['fit-fits','Automatable at 1% error']:t5!=null&&c>=t5?['fit-tight','Automatable at 5% error']:['fit-too_large','Below the certified thresholds — review'];
+  const title=t('certified {type} thresholds: 1% error ≥ {one}, 5% error ≥ {five}',{type,one:shown(t1),five:shown(t5)});
+  const [cls,text]=t1!=null&&c>=t1?['fit-fits',t('Automatable at 1% error')]:t5!=null&&c>=t5?['fit-tight',t('Automatable at 5% error')]:['fit-too_large',t('Below the certified thresholds — review')];
   return `<span class="badge ${cls}" title="${esc(title)}">${text}</span>`;
 }
 function calibrationChip(answer,entry) {
   const c=answer.calibration;
-  if(c==='validated')return '<span class="badge fit-fits">calibrated</span>';
-  if(c==='unvalidated')return `<span class="badge fit-tight">${answer.type==='act'?'calibration not validated for this question shape':'unvalidated — fitted on other option orders'}</span>`;
-  if(c==='text')return '<span class="badge fit-tight">fitted on text (media request)</span>';
-  if(c==='per decision')return '<span class="badge fit-unknown">per decision</span>';
-  if(c==null&&uncalibrated(entry))return '<span class="badge fit-tight">uncalibrated probabilities</span>';
+  if(c==='validated')return `<span class="badge fit-fits">${t('calibrated')}</span>`;
+  if(c==='unvalidated')return `<span class="badge fit-tight">${t(answer.type==='act'?'calibration not validated for this question shape':'unvalidated — fitted on other option orders')}</span>`;
+  if(c==='text')return `<span class="badge fit-tight">${t('fitted on text (media request)')}</span>`;
+  if(c==='per decision')return `<span class="badge fit-unknown">${t('per decision')}</span>`;
+  if(c==null&&uncalibrated(entry))return `<span class="badge fit-tight">${t('uncalibrated probabilities')}</span>`;
   return '';
 }
 // a task answer's `automated`: {max_error: true (use as is) | false (review) | null (no certificate for the task)}
@@ -780,12 +780,12 @@ function automatedChips(automated) {
   if(!automated||typeof automated!=='object')return '';
   return Object.entries(automated).map(([risk,v])=>{
     const at=`${(Number(risk)*100).toFixed(0)}%`;
-    return v===true?`<span class="badge fit-fits" title="max_error ${esc(risk)}">${at}: automated</span>`:v===false?`<span class="badge fit-tight" title="max_error ${esc(risk)}">${at}: review</span>`:`<span class="badge fit-unknown" title="max_error ${esc(risk)}">${at}: no certificate</span>`;
+    return v===true?`<span class="badge fit-fits" title="max_error ${esc(risk)}">${at}: ${t('automated')}</span>`:v===false?`<span class="badge fit-tight" title="max_error ${esc(risk)}">${at}: ${t('review')}</span>`:`<span class="badge fit-unknown" title="max_error ${esc(risk)}">${at}: ${t('no certificate')}</span>`;
   }).join(' ');
 }
 function safetyStrip(answer,q,entry) {
   const parts=[];
-  if(answer.deferred===true)parts.push(`<span class="badge fit-too_large">Deferred to a person</span>${answer.refused!=null?` <span class="muted"><code>refused</code>: ${esc(answer.refused)}</span>`:''}`);
+  if(answer.deferred===true)parts.push(`<span class="badge fit-too_large">${t('Deferred to a person')}</span>${answer.refused!=null?` <span class="muted"><code>refused</code>: ${esc(answer.refused)}</span>`:''}`);
   parts.push(automationBadge(answer,q,entry),calibrationChip(answer,entry),automatedChips(answer.automated));
   const html=parts.filter(Boolean).join(' ');
   const reason=typeof answer.max_error==='string'?`<span class="reason">${esc(answer.max_error)}</span>`:'';
@@ -793,8 +793,8 @@ function safetyStrip(answer,q,entry) {
 }
 function resultBanners(entry,u) {
   let html=entry?.calibration_warning?`<div class="error-box">${esc(entry.calibration_warning)}</div>`:'';
-  const t=u?.truncated;
-  if(t)html+=`<div class="error-box">State truncated to the context: dropped ${esc(t.dropped_tokens)} of ${esc(t.state_tokens)} tokens (kept ${esc(t.head_tokens)} from the start, ${esc(t.tail_tokens)} from the end)</div>`;
+  const truncated=u?.truncated;
+  if(truncated)html+=`<div class="error-box">${t('State truncated to the context: dropped {dropped} of {total} tokens (kept {head} from the start, {tail} from the end)',{dropped:esc(truncated.dropped_tokens),total:esc(truncated.state_tokens),head:esc(truncated.head_tokens),tail:esc(truncated.tail_tokens)})}</div>`;
   return html;
 }
 const clamp01=v=>Math.max(0,Math.min(1,Number(v)||0));
@@ -809,42 +809,42 @@ function probBars(probs, q={}, marked=null) {
   return entries.map(([k,v])=>{const p=clamp01(v), d=labelOf(q,k);return `<div class="prob ${chosen.has(k)?'winner':''}"><span title="${esc(d?`${k} · ${d}`:k)}">${esc(k)}${d?` · ${esc(d)}`:''}</span><div class="bar"><span style="width:${p*100}%"></span></div><strong>${(p*100).toFixed(1)}%</strong></div>`;}).join('');
 }
 const metaLine=text=>`<div class="answer-meta">${text}</div>`;
-const confidenceLine=answer=>metaLine(`Confidence: ${answer.confidence==null?'—':pct(answer.confidence)}`);
-const chipList=(items,empty)=>items.length?`<div class="chips">${items.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:`<div class="muted">${esc(empty)}</div>`;
+const confidenceLine=answer=>metaLine(`${t('Confidence')}: ${answer.confidence==null?'—':pct(answer.confidence)}`);
+const chipList=(items,empty)=>items.length?`<div class="chips">${items.map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`:`<div class="muted">${esc(t(empty))}</div>`;
 const headlineDiv=text=>`<div class="headline">${text}</div>`;
 const RESULT_VIEWS={
   multi(a,q){
     const sel=a.selected||[], objective=a.objective&&a.objective!=='threshold';
     const constraints=Object.entries(a.constraints_applied||{}).map(([k,v])=>`<span class="chip muted">${esc(k)}: ${esc(textOf(v))}</span>`).join('');
-    return chipList(sel.map(k=>labelOf(q,k)?`${k} · ${labelOf(q,k)}`:k),'none selected')+metaLine(`${objective?`expected ${esc(a.objective)} score ${num(a.expected_score,3)} · `:''}set confidence ${pct(a.set_confidence)}${a.threshold!=null?` · threshold ${esc(a.threshold)}`:''}`)+(constraints?`<div class="chips">${constraints}</div>`:'')+probBars(a.probabilities,q,new Set(sel));
+    return chipList(sel.map(k=>labelOf(q,k)?`${k} · ${labelOf(q,k)}`:k),'none selected')+metaLine(`${objective?`${t('expected {objective} score {score}',{objective:esc(a.objective),score:num(a.expected_score,3)})} · `:''}${t('set confidence {confidence}',{confidence:pct(a.set_confidence)})}${a.threshold!=null?` · ${t('threshold {value}',{value:esc(a.threshold)})}`:''}`)+(constraints?`<div class="chips">${constraints}</div>`:'')+probBars(a.probabilities,q,new Set(sel));
   },
   act(a,q){
     const costs=Object.entries(a.expected_costs||{}).sort((x,y)=>x[1]-y[1]);
-    const table=costs.length?`<table class="mini-table"><thead><tr><th>Action</th><th>Expected cost</th></tr></thead><tbody>${costs.map(([k,v])=>`<tr${k===a.action?' class="chosen"':''}><td>${esc(k)}</td><td>${num(v,3)}</td></tr>`).join('')}</tbody></table>`:'';
-    return headlineDiv(`${esc(a.action)}${a.deferred?' <span class="badge fit-too_large">deferred</span>':''}`)+confidenceLine(a)+table+metaLine(`Most probable outcome: ${esc(a.answer)}`)+probBars(a.probabilities,q,new Set([a.answer]));
+    const table=costs.length?`<table class="mini-table"><thead><tr><th>${t('Action')}</th><th>${t('Expected cost')}</th></tr></thead><tbody>${costs.map(([k,v])=>`<tr${k===a.action?' class="chosen"':''}><td>${esc(k)}</td><td>${num(v,3)}</td></tr>`).join('')}</tbody></table>`:'';
+    return headlineDiv(`${esc(a.action)}${a.deferred?` <span class="badge fit-too_large">${t('deferred')}</span>`:''}`)+confidenceLine(a)+table+metaLine(t('Most probable outcome: {answer}',{answer:esc(a.answer)}))+probBars(a.probabilities,q,new Set([a.answer]));
   },
   tool(a){
-    const head=a.multi?chipList(a.tools||[],'no tool'):headlineDiv(esc(a.tool??'no tool'));
+    const head=a.multi?chipList(a.tools||[],'no tool'):headlineDiv(esc(a.tool??t('no tool')));
     const ranking=a.ranking?`<ol class="ranking">${a.ranking.map(r=>`<li><code>${esc(r.tool)}</code> · ${pct(r.probability)}</li>`).join('')}</ol>`:'';
-    return head+`<div class="chips"><span class="chip">call: ${a.call?'true':'false'}</span></div>`+metaLine(a.multi?`set confidence ${pct(a.set_confidence)}`:`Confidence: ${pct(a.confidence)}`)+ranking+probBars(a.probabilities,{},new Set(a.multi?a.tools||[]:[a.tool]));
+    return head+`<div class="chips"><span class="chip">${t('call')}: ${a.call?t('true'):t('false')}</span></div>`+metaLine(a.multi?t('set confidence {confidence}',{confidence:pct(a.set_confidence)}):`${t('Confidence')}: ${pct(a.confidence)}`)+ranking+probBars(a.probabilities,{},new Set(a.multi?a.tools||[]:[a.tool]));
   },
   classify(a,q){
     const multi=Array.isArray(a.labels);
     const head=multi?chipList(a.labels,'no label'):headlineDiv(`${esc(a.label)}${labelOf(q,a.label)?` · ${esc(labelOf(q,a.label))}`:''}`);
-    return head+metaLine(multi?`set confidence ${pct(a.set_confidence)}`:`Confidence: ${pct(a.confidence)}`)+probBars(a.scores,q,new Set(multi?a.labels:[a.label]));
+    return head+metaLine(multi?t('set confidence {confidence}',{confidence:pct(a.set_confidence)}):`${t('Confidence')}: ${pct(a.confidence)}`)+probBars(a.scores,q,new Set(multi?a.labels:[a.label]));
   },
   verify(a,q){
     const claims=q.claims, text=k=>Array.isArray(claims)?claims[Number(k)]:claims?.[k];
-    const verdict=v=>`<span class="badge ${v==='supported'?'fit-fits':v==='contradicted'?'fit-too_large':'fit-tight'}">${esc(v)}</span>`;
+    const verdict=v=>`<span class="badge ${v==='supported'?'fit-fits':v==='contradicted'?'fit-too_large':'fit-tight'}">${esc(t(v))}</span>`;
     const rows=Object.entries(a.claims||{}).map(([k,c])=>`<tr><td><code>${esc(k)}</code> ${esc(textOf(text(k)??''))}</td><td>${verdict(c.verdict)}</td><td>${pct(c.confidence)}</td><td>${automatedChips(c.automated)}</td></tr>`).join('');
-    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Automated</th></tr></thead><tbody>${rows}</tbody></table></div>`+metaLine(`All supported: ${a.all_supported?'yes':'no'}${(a.not_supported||[]).length?` · not supported: ${esc(a.not_supported.join(', '))}`:''}`);
+    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>${t('Claim')}</th><th>${t('Verdict')}</th><th>${t('Confidence')}</th><th>${t('Automated')}</th></tr></thead><tbody>${rows}</tbody></table></div>`+metaLine(t('All supported: {answer}',{answer:a.all_supported?t('yes'):t('no')})+((a.not_supported||[]).length?` · ${t('not supported: {items}',{items:esc(a.not_supported.join(', '))})}`:''));
   },
   compress(a){
-    return `<pre class="compressed">${esc(a.compressed)}</pre>`+metaLine(`kept ${(a.kept||[]).length} of ${(a.units||[]).length} ${esc(a.unit)}s · ${esc(a.compressed_chars)}/${esc(a.original_chars)} chars (${esc(a.ratio)})`);
+    return `<pre class="compressed">${esc(a.compressed)}</pre>`+metaLine(t('kept {kept} of {total} {unit}s · {compressed}/{original} chars ({ratio})',{kept:(a.kept||[]).length,total:(a.units||[]).length,unit:esc(a.unit),compressed:esc(a.compressed_chars),original:esc(a.original_chars),ratio:esc(a.ratio)}));
   },
   extract(a){
     const rows=Object.entries(a.fields||{}).map(([path,f])=>`<tr><td><code>${esc(path)}</code></td><td>${esc(f.value==null?'—':textOf(f.value))}${f.error?`<span class="reason">${esc(f.error)}</span>`:''}</td><td>${pct(f.confidence)}</td><td>${esc(f.source)}</td><td>${automatedChips(f.automated)}</td></tr>`).join('');
-    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>Field</th><th>Value</th><th>Confidence</th><th>Source</th><th>Automated</th></tr></thead><tbody>${rows}</tbody></table></div><details><summary>data</summary><pre>${esc(JSON.stringify(a.data,null,2))}</pre></details>`;
+    return `<div class="table-wrap"><table class="mini-table"><thead><tr><th>${t('Field')}</th><th>${t('Value')}</th><th>${t('Confidence')}</th><th>${t('Source')}</th><th>${t('Automated')}</th></tr></thead><tbody>${rows}</tbody></table></div><details><summary>${t('data')}</summary><pre>${esc(JSON.stringify(a.data,null,2))}</pre></details>`;
   },
 };
 function decisionView(name, a, q) {
@@ -874,14 +874,14 @@ function renderSource(state, spans) {
   }
   html+=esc(state.slice(at));
   const kinds=[...new Set(accepted.map(s=>s.kind))];
-  return `<div class="source-view"><div class="section-head"><strong>Source</strong><span class="chips">${kinds.map(k=>`<mark class="${k}">${esc(k)}</mark>`).join(' ')}</span></div><pre class="source">${html}</pre></div>`;
+  return `<div class="source-view"><div class="section-head"><strong>${t('Source')}</strong><span class="chips">${kinds.map(k=>`<mark class="${k}">${esc(t(k))}</mark>`).join(' ')}</span></div><pre class="source">${html}</pre></div>`;
 }
 // thinking (basal/think.py): readout 2 after the reasoning, with the answer it replaced
 function thinkBlock(a) {
-  const t=a.think, used=a.meta?.think;
-  if(t?.skipped)return `<div class="chips"><span class="chip muted">thinking skipped (${esc(t.skipped)})</span></div>`;
-  if(!t||t.tokens==null)return used?`<div class="chips"><span class="chip muted">no reasoning</span></div>`:'';
-  return `<div class="think-block"><span class="chip">reasoned</span> ${esc(t.tokens)} tokens · ${num(t.ms,0)} ms · calibration ${esc(t.calibration??'—')}; without thinking: ${pct(t.no_think?.confidence)}${t.text?`<details><summary>Reasoning</summary><pre>${esc(t.text)}</pre></details>`:''}</div>`;
+  const think=a.think, used=a.meta?.think;
+  if(think?.skipped)return `<div class="chips"><span class="chip muted">${t('thinking skipped ({reason})',{reason:esc(think.skipped)})}</span></div>`;
+  if(!think||think.tokens==null)return used?`<div class="chips"><span class="chip muted">${t('no reasoning')}</span></div>`:'';
+  return `<div class="think-block"><span class="chip">${t('reasoned')}</span> ${esc(think.tokens)} ${t('tokens')} · ${num(think.ms,0)} ms · ${t('calibration')} ${esc(t(think.calibration??'—'))}; ${t('without thinking')}: ${pct(think.no_think?.confidence)}${think.text?`<details><summary>${t('Reasoning')}</summary><pre>${esc(think.text)}</pre></details>`:''}</div>`;
 }
 function renderResults(data, request) {
   const answers=data?.answers || data || {}, entry=modelEntry(request.model); let html='';
@@ -890,16 +890,16 @@ function renderResults(data, request) {
     if(!answer||typeof answer!=='object'){html+=`<article class="answer"><h3>${esc(name)}</h3><pre>${esc(JSON.stringify(answer,null,2))}</pre></article>`;continue;}
     const type=answer.type||q.type||'unknown', view=RESULT_VIEWS[type];
     const body=view?view(answer,q):answer.probabilities&&typeof answer.probabilities==='object'?decisionView(name,answer,q):`<pre>${esc(JSON.stringify(answer,null,2))}</pre>`;
-    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span>${answer.experimental?'<span class="badge experimental">experimental</span>':''}</h3>${safetyStrip(answer,q,entry)}${thinkBlock(answer)}${body}</article>`;
+    html+=`<article class="answer"><h3><span>${esc(name)}</span><span class="chip">${esc(type)}</span>${answer.experimental?`<span class="badge experimental">${t('experimental')}</span>`:''}</h3>${safetyStrip(answer,q,entry)}${thinkBlock(answer)}${body}</article>`;
   }
   const spans=typeof request.state==='string'?sourceSpans(answers,request):[];
   const u=data?.usage, mediaUsage=u?.media;
-  const mediaSummary=mediaUsage?` · Media: ${mediaUsage.images??0} images, ${mediaUsage.audio??0} audio, ${mediaUsage.media_tokens??0} tokens`:'';
-  const thinkUsage=u?.think_questions!=null?` · Thought on: ${u.think_questions} · Output tokens: ${u.output_tokens??0}`:'';
+  const mediaSummary=mediaUsage?` · ${t('Media')}: ${mediaUsage.images??0} ${t('images')}, ${mediaUsage.audio??0} ${t('audio')}, ${mediaUsage.media_tokens??0} ${t('tokens')}`:'';
+  const thinkUsage=u?.think_questions!=null?` · ${t('Thought on')}: ${u.think_questions} · ${t('Output tokens')}: ${u.output_tokens??0}`:'';
   const extraUsage=[['branches',u?.branches],['second_order_branches',u?.second_order_branches],['lane',u?.lane]].filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${esc(v)}`).join(' · ');
-  const usage=u?`<div class="answer-meta">Latency: ${u.latency_ms??'—'} ms · Input tokens: ${u.input_tokens??'—'} · Questions: ${u.questions??'—'}${extraUsage?` · ${extraUsage}`:''}${mediaSummary}${thinkUsage}</div>`:'';
-  const meter=u&&entry?.context?`<div class="answer-meta">Longest prompt ${esc(u.longest_prompt_tokens??'—')} / ${esc(entry.context.limit??'—')} tokens · policy ${esc(entry.context.overflow)}</div>`:'';
-  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong>${html&&!request.media?'<button type="button" id="inspectDecision">Inspect this decision</button>':''}</div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : '<div class="empty">No answers returned.</div>');
+  const usage=u?`<div class="answer-meta">${t('Latency')}: ${u.latency_ms??'—'} ms · ${t('Input tokens')}: ${u.input_tokens??'—'} · ${t('Questions')}: ${u.questions??'—'}${extraUsage?` · ${extraUsage}`:''}${mediaSummary}${thinkUsage}</div>`:'';
+  const meter=u&&entry?.context?`<div class="answer-meta">${t('Longest prompt')} ${esc(u.longest_prompt_tokens??'—')} / ${esc(entry.context.limit??'—')} ${t('tokens')} · ${t('policy')} ${esc(entry.context.overflow)}</div>`:'';
+  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong>${html&&!request.media?`<button type="button" id="inspectDecision">${t('Inspect this decision')}</button>`:''}</div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : `<div class="empty">${t('No answers returned.')}</div>`);
   const inspectButton=$('#inspectDecision'); if(inspectButton)inspectButton.onclick=()=>inspectDecision(request);
   $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
 }
@@ -908,11 +908,11 @@ async function sendDecision() {
   $('#decideError').hidden=true; $('#results').innerHTML='';
   let request;const jsonMode=$('#editJsonToggle').checked;
   try { request=jsonMode?JSON.parse($('#requestJson').value):buildRequest(); }
-  catch(e) { showDecideError(jsonMode?`Invalid JSON: ${e.message}`:e.message);if(!jsonMode)$('.q-name:invalid')?.reportValidity();return; }
-  if(!request||typeof request!=='object'||Array.isArray(request)) { showDecideError('The request must be a JSON object.'); return; }
+  catch(e) { showDecideError(jsonMode?t('Invalid JSON: {message}',{message:e.message}):e.message);if(!jsonMode)$('.q-name:invalid')?.reportValidity();return; }
+  if(!request||typeof request!=='object'||Array.isArray(request)) { showDecideError(t('The request must be a JSON object.')); return; }
   if(!jsonMode){
     const invalid=[...document.querySelectorAll('.question')].filter(card=>card._error);
-    if(invalid.length){showDecideError(invalid.map(card=>`${$('.q-name',card).value||'question'}: ${card._error}`).join('\n'));return;}
+    if(invalid.length){showDecideError(invalid.map(card=>`${$('.q-name',card).value||t('question')}: ${card._error}`).join('\n'));return;}
   }
   request.model=selectedModel;
   if($('#editJsonToggle').checked)$('#requestJson').value=JSON.stringify(request,null,2);
@@ -938,8 +938,8 @@ $('#editJsonToggle').addEventListener('change',()=>{
   else{
     let request;
     try{request=JSON.parse($('#requestJson').value);}
-    catch(e){showMediaError(`Invalid request JSON: ${e.message}`);$('#editJsonToggle').checked=true;return;}
-    if(!request||typeof request!=='object'||Array.isArray(request)){showMediaError('request JSON must be an object');$('#editJsonToggle').checked=true;return;}
+    catch(e){showMediaError(t('Invalid request JSON: {message}',{message:e.message}));$('#editJsonToggle').checked=true;return;}
+    if(!request||typeof request!=='object'||Array.isArray(request)){showMediaError(t('request JSON must be an object'));$('#editJsonToggle').checked=true;return;}
     showMediaError();setRequest(request);
   }
   $('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;
@@ -1025,14 +1025,14 @@ The MCP server also provides list_models().`,
 // the endpoint line of the API server card: where the API answers now, and whether saved settings await a restart
 function renderServeStatus(status) {
   const serving=status?.serving;
-  const restart=serving?.restart_required?'<span class="badge fit-tight">Restart to apply</span>':'';
+  const restart=serving?.restart_required?`<span class="badge fit-tight">${t('Restart to apply')}</span>`:'';
   const text=$('#serveStatus .serve-status-text');
   text.innerHTML=serving
-    ?`${serving.url?`<span class="mono">${esc(serving.url)}</span>`:'<span>Not running</span>'} <span class="chip">${serving.models?.length??0} ${serving.models?.length===1?'model':'models'}</span>${serving.require_key?' <span class="chip">key required</span>':''}${serving.mcp?' <span class="chip">mcp</span>':''}${serving.error?` <span class="reason">${esc(serving.error)}</span>`:''} ${restart}`
-    :'<span>Only this app can reach the models</span>';
+    ?`${serving.url?`<span class="mono">${esc(serving.url)}</span>`:`<span>${t('Not running')}</span>`} <span class="chip">${tp(serving.models?.length??0,'{n} model','{n} models')}</span>${serving.require_key?` <span class="chip">${t('key required')}</span>`:''}${serving.mcp?` <span class="chip">${t('mcp')}</span>`:''}${serving.error?` <span class="reason">${esc(serving.error)}</span>`:''} ${restart}`
+    :`<span>${t('Only this app can reach the models')}</span>`;
   $('#restartServe').disabled=!(serveData?.settings?.enabled||serving?.running);
-  $('#apiSummary').textContent=serving?.running?'Serving':serving?.error?'Error':'Off';
-  $('#apiSummaryMeta').textContent=`${serving?.url||serving?.error||'API server is not serving'} · ${serveData?.keys?.length ?? 0} API keys`;
+  $('#apiSummary').textContent=serving?.running?t('Serving'):serving?.error?t('Error'):t('Off');
+  $('#apiSummaryMeta').textContent=`${serving?.url||serving?.error||t('API server is not serving')} · ${tp(serveData?.keys?.length ?? 0,'{n} API keys','{n} API keys')}`;
   renderConnect();
 }
 async function loadServe(){
@@ -1047,10 +1047,10 @@ async function loadServe(){
     $('#serveLan').classList.toggle('active',serveHost==='0.0.0.0');
     $('#serveWarning').hidden=s.host!=='0.0.0.0'||s.require_key;
     renderServeStatus(statusCache);
-    $('#serveKeys').innerHTML=serveData.keys.map(k=>`<div class="disk-row"><span class="disk-info">${esc(k.name)} · ${esc(k.prefix)} · created ${esc(new Date(k.created*1000).toLocaleString())} · last used ${k.last_used?esc(new Date(k.last_used*1000).toLocaleString()):'never'}</span><button type="button" data-revoke="${esc(k.name)}">Revoke</button></div>`).join('')||'<p class="muted">No API keys created.</p>';
+    $('#serveKeys').innerHTML=serveData.keys.map(k=>`<div class="disk-row"><span class="disk-info">${esc(k.name)} · ${esc(k.prefix)} · ${t('created')} ${esc(new Date(k.created*1000).toLocaleString())} · ${t('last used')} ${k.last_used?esc(new Date(k.last_used*1000).toLocaleString()):t('never')}</span><button type="button" data-revoke="${esc(k.name)}">${t('Revoke')}</button></div>`).join('')||`<p class="muted">${t('No API keys created.')}</p>`;
     $('#serveKeys').querySelectorAll('[data-revoke]').forEach(button=>button.addEventListener('click',async()=>{
-      if(await confirmDialog({title:'Revoke API key?',description:`${button.dataset.revoke} will no longer be able to access this server.`,confirmLabel:'Revoke',destructive:true})){
-        try{await api(`/api/serve/keys/${encodeURIComponent(button.dataset.revoke)}`,{method:'DELETE'});toast('API key revoked');await loadServe();}
+      if(await confirmDialog({title:t('Revoke API key?'),description:t('{key} will no longer be able to access this server.',{key:button.dataset.revoke}),confirmLabel:t('Revoke'),destructive:true})){
+        try{await api(`/api/serve/keys/${encodeURIComponent(button.dataset.revoke)}`,{method:'DELETE'});toast(t('API key revoked'));await loadServe();}
         catch(error){showServeError(error.message);toast(error.message,'error');}
       }
     }));
@@ -1072,19 +1072,19 @@ $('#saveServe').onclick=async()=>{
       log_decisions:$('#serveLog').value,mcp:$('#serveMcp').checked,auto_load:$('#autoLoad').checked
     })});
     showServeError(''); await loadServe(); await refreshStatus();
-    toast(statusCache?.serving?.restart_required?'Settings saved — restart the server to apply':'Settings saved');
+    toast(statusCache?.serving?.restart_required?t('Settings saved — restart the server to apply'):t('Settings saved'));
   }catch(error){showServeError(error.message);toast(error.message,'error');}
 };
 $('#createKey').onclick=async()=>{
   try{
     const key=await api('/api/serve/keys',{method:'POST',body:JSON.stringify({name:$('#newKeyName').value})});
-    $('#newKeySecret').innerHTML=`<code>${esc(key.key)}</code><p>Copy it now: it is not shown again.</p><button type="button" id="copyNewKey">Copy</button>`;
-    $('#newKeySecret').hidden=false; $('#copyNewKey').onclick=()=>copyText(key.key,'API key copied');
-    $('#newKeyName').value=''; await loadServe(); toast('API key created');
+    $('#newKeySecret').innerHTML=`<code>${esc(key.key)}</code><p>${t('Copy it now: it is not shown again.')}</p><button type="button" id="copyNewKey">${t('Copy')}</button>`;
+    $('#newKeySecret').hidden=false; $('#copyNewKey').onclick=()=>copyText(key.key,t('API key copied'));
+    $('#newKeyName').value=''; await loadServe(); toast(t('API key created'));
   }catch(error){showServeError(error.message);toast(error.message,'error');}
 };
-$('#restartServe').onclick=async()=>{try{await api('/api/serve/restart',{method:'POST'});toast('API server restarted');await refreshStatus();}catch(e){showServeError(e.message);toast(e.message,'error');}};
-async function copyText(text, success='Copied to clipboard') {
+$('#restartServe').onclick=async()=>{try{await api('/api/serve/restart',{method:'POST'});toast(t('API server restarted'));await refreshStatus();}catch(e){showServeError(e.message);toast(e.message,'error');}};
+async function copyText(text, success=t('Copied to clipboard')) {
   try { await navigator.clipboard.writeText(text); }
   catch {
     const area=document.createElement('textarea'); area.value=text; area.style.position='fixed'; area.style.opacity='0';
@@ -1093,12 +1093,12 @@ async function copyText(text, success='Copied to clipboard') {
     try { area.select(); copied=document.execCommand('copy'); }
     catch {}
     finally { area.remove(); }
-    if(!copied) { toast('Copy failed — select the text and copy manually','error'); return; }
+    if(!copied) { toast(t('Copy failed — select the text and copy manually'),'error'); return; }
   }
   toast(success);
 }
-$('#copyServeUrl').onclick=()=>copyText(connectionEndpoint(),'Endpoint copied');
-$('#copyServeConnect').onclick=()=>copyText($(`[data-connect-panel="${connectTab}"] code`).textContent,'Snippet copied');
+$('#copyServeUrl').onclick=()=>copyText(connectionEndpoint(),t('Endpoint copied'));
+$('#copyServeConnect').onclick=()=>copyText($(`[data-connect-panel="${connectTab}"] code`).textContent,t('Snippet copied'));
 // Several models: status rows, memory bar, statistics, benchmarks, History and Logs views.
 let selectedModel=localStorage.getItem('basal-ui.model')||'', previousDownloads=new Set(), rowsSignature='', playgroundSignature='';
 let statsData={models:{},benchmarks:{}}, statsSignature='', benchSignature='', benchRunning=false;
@@ -1121,12 +1121,12 @@ function renderStatus(s) {
   if(!ready.some(m=>m.id===selectedModel)&&ready.length)selectedModel=ready[0].id;
   if(selectedModel)localStorage.setItem('basal-ui.model',selectedModel);
   const busy=models.some(m=>['starting','downloading'].includes(m.state));
-  $('#footerState').textContent=ready.length?`${ready.length} ready${busy?' · loading…':''}`:busy?'loading…':'idle';
+  $('#footerState').textContent=ready.length?`${ready.length} ${t('ready')}${busy?` · ${t('loading…')}`:''}`:busy?t('loading…'):t('idle');
   $('#footerDot').className=`status-dot${ready.length?' ready':models.some(m=>m.state==='error')?' error':''}`;
-  $('#footerModel').textContent=models.map(m=>shortName(m.id)).join(', ')||'No model loaded';
-  $('#footerModel').title=models.map(m=>m.id).join(', ')||'No model loaded';
+  $('#footerModel').textContent=models.map(m=>shortName(m.id)).join(', ')||t('No model loaded');
+  $('#footerModel').title=models.map(m=>m.id).join(', ')||t('No model loaded');
   $('#footerUrl').textContent=s.serving?.url||''; $('#footerUrl').hidden=!s.serving?.url;
-  $('#footerUnload').hidden=!models.length; $('#footerUnload').textContent=models.length>1?'Unload all':'Unload';
+  $('#footerUnload').hidden=!models.length; $('#footerUnload').textContent=models.length>1?t('Unload all'):t('Unload');
   renderMemoryBar(s.memory||{},models);
   renderLoadedRows(models);
   renderPlaygroundModels(ready);
@@ -1141,20 +1141,20 @@ function renderMemoryBar(memory, models) {
   const budget=Number(memory.budget_bytes)||0, reserve=Number(memory.reserve_bytes)||0, limit=Math.max(1,budget-reserve);
   const sizes=models.map(m=>({m,bytes:Number(m.rss_bytes)||Number(m.est_memory_bytes)||0}));
   const used=sizes.reduce((sum,x)=>sum+x.bytes,0);
-  const segments=sizes.map(({m,bytes})=>`<span title="${esc(m.id)} · ${gb(bytes)}${m.rss_bytes?' resident':' estimated'}" style="width:${Math.min(100,bytes/limit*100)}%"></span>`).join('');
-  $('#memoryBar').innerHTML=budget?`<div class="memory-head"><span>Memory</span><span>${gb(used)} / ${gb(limit)} (budget ${gb(budget)}, keep ${gb(reserve)} free) · available now ${gb(memory.available_bytes)}</span></div><div class="progress memory-progress${memory.over?' over':''}">${segments}</div>`:'';
+  const segments=sizes.map(({m,bytes})=>`<span title="${esc(m.id)} · ${gb(bytes)}${m.rss_bytes?' '+t('resident'):' '+t('estimated')}" style="width:${Math.min(100,bytes/limit*100)}%"></span>`).join('');
+  $('#memoryBar').innerHTML=budget?`<div class="memory-head"><span>${t('Memory')}</span><span>${t('{used} / {limit} (budget {budget}, keep {reserve} free) · available now {available}',{used:gb(used),limit:gb(limit),budget:gb(budget),reserve:gb(reserve),available:gb(memory.available_bytes)})}</span></div><div class="progress memory-progress${memory.over?' over':''}">${segments}</div>`:'';
 }
 function renderLoadedRows(models) {
   $('#loadedModels').innerHTML=models.length?models.map(m=>{
     const stats=statsData.models?.[m.id], p=m.progress;
     const progress=p?`<div class="progress-wrap"><div class="progress"><span style="width:${p.total_bytes?Math.min(100,p.done_bytes/p.total_bytes*100):0}%"></span></div><small>${gb(p.done_bytes)} / ${gb(p.total_bytes)}</small></div>`:'';
-    const variant=modelData.find(x=>x.id===m.id), chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${variant?.community?'<span class="chip">community</span>':''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${['prompt_format','layout','orders','vllm_preset','adapter'].filter(k=>m.entry?.[k]!=null).map(k=>`<span class="chip">${esc(k)} ${esc(m.entry[k])}</span>`).join('')}${uncalibrated(m.entry)?'<span class="badge fit-tight" title="temperature_per_prim is {}: the probabilities are the raw model outputs">uncalibrated</span>':''}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
-    const health=m.health, load=health?.reachable===false?'unreachable':health?.reachable!==true?'load unavailable':health.running==null||health.queued==null?'load counters unavailable':health.running===0&&health.queued===0?'idle':`${health.running} running · ${health.queued} queued`;
+    const variant=modelData.find(x=>x.id===m.id), chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${variant?.community?`<span class="chip">${t('community')}</span>`:''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${['prompt_format','layout','orders','vllm_preset','adapter'].filter(k=>m.entry?.[k]!=null).map(k=>`<span class="chip">${esc(k)} ${esc(m.entry[k])}</span>`).join('')}${uncalibrated(m.entry)?`<span class="badge fit-tight" title="${t('temperature_per_prim is {}: the probabilities are the raw model outputs')}">${t('uncalibrated')}</span>`:''}${m.restart_required?`<span class="badge fit-tight">${t('Restart to apply')}</span>`:''}`;
+    const health=m.health, load=health?.reachable===false?t('unreachable'):health?.reachable!==true?t('load unavailable'):health.running==null||health.queued==null?t('load counters unavailable'):health.running===0&&health.queued===0?t('idle'):`${health.running} ${t('running')} · ${health.queued} ${t('queued')}`;
     const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
-    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,'restart'):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
-    const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="load option">${esc(v===true?k:v===false?`no ${k}`:`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
-    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button><span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
-  }).join(''):'<div class="empty">No model loaded · <a href="#manager">Load a model</a></div>';
+    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>${t('Restart')}</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,'restart'):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">${t('Logs')}</a><button type="button" data-unload="${esc(m.id)}">${t('Unload')}</button>`;
+    const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="${t('load option')}">${esc(v===true?k:v===false?t('no {option}',{option:k}):`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(t(m.state))}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button><span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${stats?t('{estimated} estimated → {resident} resident · {requests} · avg prob {prob}',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes),requests:tp(stats.requests,'{n} requests','{n} requests'),prob:pct(stats.avg_best_prob)}):t('{estimated} estimated → {resident} resident',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes)})}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
+  }).join(''):`<div class="empty">${t('No model loaded · {link}',{link:`<a href="#manager">${t('Load a model')}</a>`})}</div>`;
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
 }
@@ -1162,7 +1162,7 @@ function renderPlaygroundModels(ready) {
   const select=$('#playgroundModel'), signature=JSON.stringify(ready.map(m=>[m.id,m.media]));
   if(signature!==playgroundSignature){
     playgroundSignature=signature;
-    select.innerHTML=ready.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="">No model loaded</option>';
+    select.innerHTML=ready.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||`<option value="">${t('No model loaded')}</option>`;
   }
   select.value=selectedModel; select.disabled=!ready.length;
   $('#playgroundForm').disabled=!ready.length; $('#playgroundHint').hidden=Boolean(ready.length);
@@ -1177,9 +1177,9 @@ function setPlaygroundMedia(kinds) {
 }
 $('#playgroundModel').addEventListener('change',e=>{selectedModel=e.target.value;localStorage.setItem('basal-ui.model',selectedModel);const model=readyModels().find(m=>m.id===selectedModel);setPlaygroundMedia(model?.media||[]);setPlaygroundExperimental(model);syncRequest(false,REQUEST_OPTION_KEYS);if(serveData)renderConnect();});
 async function unloadOne(id){await api('/api/unload',{method:'POST',body:JSON.stringify({id})});await refreshStatus();}
-async function restartOne(id){await api('/api/restart',{method:'POST',body:JSON.stringify({id})});toast(`Restarting ${shortName(id)}`);await refreshStatus();}
+async function restartOne(id){await api('/api/restart',{method:'POST',body:JSON.stringify({id})});toast(`${t('Restarting {model}',{model:shortName(id)})}`);await refreshStatus();}
 $('#footerUnload').onclick=()=>act(async()=>{
-  if((statusCache?.models||[]).length>1&&!await confirmDialog({title:'Unload all models?',description:'Every loaded model stops; clients of the API server get 404 until a model is loaded again.',confirmLabel:'Unload all',destructive:true}))return;
+  if((statusCache?.models||[]).length>1&&!await confirmDialog({title:t('Unload all models?'),description:t('Every loaded model stops; clients of the API server get 404 until a model is loaded again.'),confirmLabel:t('Unload all'),destructive:true}))return;
   await api('/api/unload',{method:'POST',body:'{}'}); await refreshStatus();
 });
 let statsSequence=0;
@@ -1197,17 +1197,17 @@ async function loadStats() {
 }
 function renderStats() {
   const entries=Object.entries(statsData.models||{});
-  $('#statsTable').innerHTML=`<div class="section-head"><h3>Statistics</h3>${entries.length?'<button type="button" id="resetAllStats" class="destructive">Reset all</button>':''}</div>${entries.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Requests</th><th>Questions</th><th>Avg best-answer prob.</th><th>Avg / p95 latency</th><th>Input tokens</th><th>Last used</th><th></th></tr></thead><tbody>${entries.map(([id,x])=>`<tr><td title="${esc(id)}">${esc(shortName(id))}</td><td>${x.requests}${x.errors?` <span class="reason">${x.errors} errors</span>`:''}</td><td>${x.questions}</td><td>${pct(x.avg_best_prob)}</td><td>${num(x.avg_latency_ms,0)} / ${num(x.p95_ms,0)} ms</td><td>${x.input_tokens}</td><td>${x.last_used?esc(new Date(x.last_used*1000).toLocaleString()):'—'}</td><td><button type="button" data-reset="${esc(id)}">Reset</button></td></tr><tr class="stats-types"><td colspan="8">${Object.entries(x.by_type||{}).map(([type,v])=>`<span class="chip">${esc(type)} · ${v.questions} · ${pct(v.avg_best_prob)}</span>`).join(' ')||'<span class="muted">no answers yet</span>'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No decisions yet: statistics appear after the first playground, API or MCP decision.</div>'}`;
-  $('#statsTable').querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset statistics?',description:`The counters of ${b.dataset.reset} start from zero.`,confirmLabel:'Reset',destructive:true})){await api(`/api/stats/${encodeURIComponent(b.dataset.reset)}`,{method:'DELETE'});toast('Statistics reset');await loadStats();}}));
-  const all=$('#resetAllStats'); if(all)all.onclick=()=>act(async()=>{if(await confirmDialog({title:'Reset all statistics?',description:'The counters of every model start from zero. Benchmark results stay.',confirmLabel:'Reset all',destructive:true})){await api('/api/stats',{method:'DELETE'});toast('Statistics reset');await loadStats();}});
+  $('#statsTable').innerHTML=`<div class="section-head"><h3>${t('Statistics')}</h3>${entries.length?`<button type="button" id="resetAllStats" class="destructive">${t('Reset all')}</button>`:''}</div>${entries.length?`<div class="table-wrap"><table><thead><tr><th>${t('Model')}</th><th>${t('Requests')}</th><th>${t('Questions')}</th><th>${t('Avg best-answer prob.')}</th><th>${t('Avg / p95 latency')}</th><th>${t('Input tokens')}</th><th>${t('Last used')}</th><th></th></tr></thead><tbody>${entries.map(([id,x])=>`<tr><td title="${esc(id)}">${esc(shortName(id))}</td><td>${x.requests}${x.errors?` <span class="reason">${tp(x.errors,'{n} errors','{n} errors')}</span>`:''}</td><td>${x.questions}</td><td>${pct(x.avg_best_prob)}</td><td>${num(x.avg_latency_ms,0)} / ${num(x.p95_ms,0)} ms</td><td>${x.input_tokens}</td><td>${x.last_used?esc(new Date(x.last_used*1000).toLocaleString()):'—'}</td><td><button type="button" data-reset="${esc(id)}">${t('Reset')}</button></td></tr><tr class="stats-types"><td colspan="8">${Object.entries(x.by_type||{}).map(([type,v])=>`<span class="chip">${esc(type)} · ${v.questions} · ${pct(v.avg_best_prob)}</span>`).join(' ')||`<span class="muted">${t('no answers yet')}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${t('No decisions yet: statistics appear after the first playground, API or MCP decision.')}</div>`}`;
+  $('#statsTable').querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>act(async()=>{if(await confirmDialog({title:t('Reset statistics?'),description:t('The counters of {model} start from zero.',{model:b.dataset.reset}),confirmLabel:t('Reset'),destructive:true})){await api(`/api/stats/${encodeURIComponent(b.dataset.reset)}`,{method:'DELETE'});toast(t('Statistics reset'));await loadStats();}}));
+  const all=$('#resetAllStats'); if(all)all.onclick=()=>act(async()=>{if(await confirmDialog({title:t('Reset all statistics?'),description:t('The counters of every model start from zero. Benchmark results stay.'),confirmLabel:t('Reset all'),destructive:true})){await api('/api/stats',{method:'DELETE'});toast(t('Statistics reset'));await loadStats();}});
 }
-const BENCH_HINTS={benchmark:'5 warm-up, 30 sequential and 120 concurrent requests (8 at a time); items with a gold answer are scored. Own set: <code>docs/BENCHMARK_SETS.md</code>.',
-  loadtest:'basal-loadtest against the model: 10 warm-up, sequential requests for the latency, then the concurrent ones for the throughput. Synthetic states of about N tokens replace the set when given.',
-  determinism:'basal-loadtest --determinism: N requests alone, then the same N mixed with N others at the concurrency; a model loaded with Deterministic must return identical probabilities.',
-  modes:'basal-bench in basal-ui’s process: each mode is loaded, measured and freed in turn (the first is the reference of the agreement). Needs the model’s memory once more (twice for eager-fp32) while it runs.'};
-$('#benchmarks').innerHTML=`<div class="section-head"><h3>Benchmarks</h3></div><div class="controls"><select id="benchmarkKind" aria-label="Measurement"><option value="benchmark">Benchmark (preset)</option><option value="loadtest">Load test</option><option value="determinism">Determinism check</option><option value="modes">Compare engine modes</option></select><select id="benchmarkModel" aria-label="Model to benchmark"></select><select id="benchmarkSet" aria-label="Benchmark set"><option value="bundled">Bundled examples (44 items)</option><option value="custom">Custom path…</option></select><input id="benchmarkPath" type="text" placeholder="/path/to/set.jsonl or a directory of .jsonl" hidden><button type="button" id="runBenchmark">Run</button><button type="button" id="cancelBenchmark" hidden>Cancel</button><span id="benchmarkProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Abenchmark">Logs</a></div>
-<div class="bench-params" data-kinds="loadtest determinism"><div class="qf-row"><div class="qf"><label>Synthetic tokens</label><input type="number" id="bpSynthetic" min="50" step="50" placeholder="use the set"></div><div class="qf" data-kinds="loadtest"><label>Sequential</label><input type="number" id="bpNSeq" min="1" value="200"></div><div class="qf" data-kinds="loadtest"><label>Concurrent</label><input type="number" id="bpNConc" min="1" value="1000"></div><div class="qf"><label>Concurrency</label><input type="number" id="bpConcurrency" min="1" value="32"></div><div class="qf" data-kinds="loadtest"><label>Questions per request</label><input type="number" id="bpQpr" min="1" max="5" value="1"></div><div class="qf" data-kinds="loadtest"><label>Seed</label><input type="number" id="bpSeed" min="0" value="0"></div><div class="qf" data-kinds="loadtest"><label>Long share</label><input type="number" id="bpLong" min="0" max="1" step="0.1" value="0"></div><div class="qf" data-kinds="determinism"><label>Requests (N)</label><input type="number" id="bpN" min="1" value="50"></div><div class="qf" data-kinds="loadtest" id="bpEarlyExitField" hidden><label>Early exit</label><select id="bpEarlyExit"></select></div></div></div>
-<div class="bench-params" data-kinds="modes"><div id="bpModes" class="controls"></div><div class="qf-row"><div class="qf"><label>Questions (n)</label><input type="number" id="bpModesN" min="10" value="100"></div><div class="qf"><label>Latency samples</label><input type="number" id="bpLatN" min="5" value="30"></div></div></div>
+const BENCH_HINTS={benchmark:t('5 warm-up, 30 sequential and 120 concurrent requests (8 at a time); items with a gold answer are scored. Own set: {link}.',{link:'<code>docs/BENCHMARK_SETS.md</code>'}),
+  loadtest:t('basal-loadtest against the model: 10 warm-up, sequential requests for the latency, then the concurrent ones for the throughput. Synthetic states of about N tokens replace the set when given.'),
+  determinism:t('basal-loadtest --determinism: N requests alone, then the same N mixed with N others at the concurrency; a model loaded with Deterministic must return identical probabilities.'),
+  modes:t('basal-bench in basal-ui’s process: each mode is loaded, measured and freed in turn (the first is the reference of the agreement). Needs the model’s memory once more (twice for eager-fp32) while it runs.')};
+$('#benchmarks').innerHTML=`<div class="section-head"><h3>${t('Benchmarks')}</h3></div><div class="controls"><select id="benchmarkKind" aria-label="${t('Measurement')}"><option value="benchmark">${t('Benchmark (preset)')}</option><option value="loadtest">${t('Load test')}</option><option value="determinism">${t('Determinism check')}</option><option value="modes">${t('Compare engine modes')}</option></select><select id="benchmarkModel" aria-label="${t('Model to benchmark')}"></select><select id="benchmarkSet" aria-label="${t('Benchmark set')}"><option value="bundled">${tp(44,'Bundled examples ({n} item)','Bundled examples ({n} items)')}</option><option value="custom">${t('Custom path…')}</option></select><input id="benchmarkPath" type="text" placeholder="${t('/path/to/set.jsonl or a directory of .jsonl')}" hidden><button type="button" id="runBenchmark">${t('Run')}</button><button type="button" id="cancelBenchmark" hidden>${t('Cancel')}</button><span id="benchmarkProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Abenchmark">${t('Logs')}</a></div>
+<div class="bench-params" data-kinds="loadtest determinism"><div class="qf-row"><div class="qf"><label>${t('Synthetic tokens')}</label><input type="number" id="bpSynthetic" min="50" step="50" placeholder="${t('use the set')}"></div><div class="qf" data-kinds="loadtest"><label>${t('Sequential')}</label><input type="number" id="bpNSeq" min="1" value="200"></div><div class="qf" data-kinds="loadtest"><label>${t('Concurrent')}</label><input type="number" id="bpNConc" min="1" value="1000"></div><div class="qf"><label>${t('Concurrency')}</label><input type="number" id="bpConcurrency" min="1" value="32"></div><div class="qf" data-kinds="loadtest"><label>${t('Questions per request')}</label><input type="number" id="bpQpr" min="1" max="5" value="1"></div><div class="qf" data-kinds="loadtest"><label>${t('Seed')}</label><input type="number" id="bpSeed" min="0" value="0"></div><div class="qf" data-kinds="loadtest"><label>${t('Long share')}</label><input type="number" id="bpLong" min="0" max="1" step="0.1" value="0"></div><div class="qf" data-kinds="determinism"><label>${t('Requests (N)')}</label><input type="number" id="bpN" min="1" value="50"></div><div class="qf" data-kinds="loadtest" id="bpEarlyExitField" hidden><label>${t('Early exit')}</label><select id="bpEarlyExit"></select></div></div></div>
+<div class="bench-params" data-kinds="modes"><div id="bpModes" class="controls"></div><div class="qf-row"><div class="qf"><label>${t('Questions (n)')}</label><input type="number" id="bpModesN" min="10" value="100"></div><div class="qf"><label>${t('Latency samples')}</label><input type="number" id="bpLatN" min="5" value="30"></div></div></div>
 <p class="muted" id="benchmarkHint"></p><div id="benchmarkResults"></div>`;
 $('#benchmarkSet').value=localStorage.getItem('basal-ui.benchmarkSet')==='custom'?'custom':'bundled';
 $('#benchmarkPath').value=localStorage.getItem('basal-ui.benchmarkPath')||'';
@@ -1245,7 +1245,7 @@ $('#runBenchmark').onclick=()=>act(async()=>{
   if(kind==='modes')Object.assign(body,{modes:[...document.querySelectorAll('#bpModes [data-mode]:checked')].map(x=>x.dataset.mode),n:intOf('#bpModesN'),lat_n:intOf('#bpLatN')});
   if(body.params)body.params=Object.fromEntries(Object.entries(body.params).filter(([,v])=>v!==undefined));
   await api('/api/benchmark',{method:'POST',body:JSON.stringify(body)});
-  toast(`${$('#benchmarkKind').selectedOptions[0].textContent} started`); await refreshStatus();
+  toast(t('{benchmark} started',{benchmark:$('#benchmarkKind').selectedOptions[0].textContent})); await refreshStatus();
 });
 $('#cancelBenchmark').onclick=()=>act(async()=>{await api('/api/benchmark',{method:'DELETE'});await refreshStatus();});
 function renderBenchmarkState(bench, ready) {
@@ -1260,28 +1260,28 @@ function renderBenchmarkState(bench, ready) {
   }
   const running=Boolean(bench?.running);
   $('#runBenchmark').disabled=running||!ids.length; $('#cancelBenchmark').hidden=!running;
-  $('#benchmarkProgress').textContent=!bench?(ids.length?'':kind==='modes'?'Download a model to compare its modes.':'Load a model to benchmark it.'):running?`${shortName(bench.model)} · ${bench.label} · ${bench.phase} ${bench.done}/${bench.total}`:bench.phase==='error'?`Failed: ${bench.error}`:bench.phase==='cancelled'?'Cancelled':'';
+  $('#benchmarkProgress').textContent=!bench?(ids.length?'':kind==='modes'?t('Download a model to compare its modes.'):t('Load a model to benchmark it.')):running?`${shortName(bench.model)} · ${bench.label} · ${t(bench.phase)} ${bench.done}/${bench.total}`:bench.phase==='error'?`${t('Failed: {error}',{error:bench.error})}`:bench.phase==='cancelled'?t('Cancelled'):'';
   if(benchRunning&&!running)loadStats();
   benchRunning=running;
 }
 function benchmarkRow(x) {
-  const kind=x.kind||'benchmark', head=`<td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(kind)}</span></td><td title="${esc(x.set)}">${esc(x.set==='bundled'?'bundled':shortName(x.set))}${x.items!=null?` (${x.items})`:''}</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td>`;
-  if(kind==='determinism'){const d=x.determinism||{};return `<tr>${head}<td colspan="7"><span class="badge ${d.identical===d.requests?'fit-fits':'fit-tight'}">identical ${esc(d.identical)}/${esc(d.requests)}</span> max |Δp| ${esc(d.max_abs_diff)} · decision flips ${esc(d.decision_flips)} · concurrency ${esc(d.concurrency)}</td></tr>`;}
+  const kind=x.kind||'benchmark', head=`<td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(kind)}</span></td><td title="${esc(x.set)}">${esc(x.set==='bundled'?t('bundled'):shortName(x.set))}${x.items!=null?` (${x.items})`:''}</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td>`;
+  if(kind==='determinism'){const d=x.determinism||{};return `<tr>${head}<td colspan="7"><span class="badge ${d.identical===d.requests?'fit-fits':'fit-tight'}">${t('identical')} ${esc(d.identical)}/${esc(d.requests)}</span> ${t('max |Δp|')} ${esc(d.max_abs_diff)} · ${t('decision flips')} ${esc(d.decision_flips)} · ${t('concurrency')} ${esc(d.concurrency)}</td></tr>`;}
   if(kind==='modes'){
     const f=(v,d=1)=>v==null||Number.isNaN(Number(v))?'—':Number(v).toFixed(d);
     const rows=(x.modes||[]).map(m=>m.error?`<tr><td>${esc(m.mode)}</td><td colspan="8"><span class="reason wide">${esc(m.error)}</span></td></tr>`:`<tr><td>${esc(m.mode)}</td><td>${f(m.lat1_ms)}</td><td>${f(m.lat2_ms)}</td><td>${f(m.lat2_p95_ms)}</td><td>${f(m.dec_s)}</td><td>${m.agree==null?`ref`:f(m.agree,3)}</td><td>${m.acc==null?'—':pct(m.acc)}</td><td>${f(m.load_s)}</td><td>${f(m.mem_gb,2)}</td></tr>`).join('');
-    return `<tr>${head}<td colspan="7"><details><summary>${(x.modes||[]).map(m=>esc(m.mode)).join(' vs ')}</summary><table class="mini-table"><thead><tr><th>Mode</th><th>lat1 ms</th><th>lat2 ms</th><th>p95 ms</th><th>dec/s</th><th>agree</th><th>acc</th><th>load s</th><th>mem GB</th></tr></thead><tbody>${rows}</tbody></table></details></td></tr>`;
+    return `<tr>${head}<td colspan="7"><details><summary>${(x.modes||[]).map(m=>esc(m.mode)).join(' vs ')}</summary><table class="mini-table"><thead><tr><th>${t('Mode')}</th><th>${t('lat1 ms')}</th><th>${t('lat2 ms')}</th><th>${t('p95 ms')}</th><th>${t('dec/s')}</th><th>${t('agree')}</th><th>${t('acc')}</th><th>${t('load s')}</th><th>${t('mem GB')}</th></tr></thead><tbody>${rows}</tbody></table></details></td></tr>`;
   }
   return `<tr>${head}<td>${num(x.p50_ms,0)} ms</td><td>${num(x.p95_ms,0)} ms</td><td>${num(x.decisions_per_s)}</td><td>${num(x.questions_per_s)}</td><td>${num(x.input_tokens_per_s,0)}</td><td title="${esc(Object.entries(x.accuracy?.by_file||{}).map(([f,v])=>`${f}: ${pct(v)}`).join(', '))}">${pct(x.accuracy?.overall)}</td><td>${esc(x.errors??'—')}</td></tr>`;
 }
 function renderBenchmarkResults() {
   const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
-  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Kind</th><th>Set</th><th>When</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>Accuracy</th><th>Errors</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:'<div class="empty">No benchmark results yet.</div>';
+  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>${t('Model')}</th><th>${t('Kind')}</th><th>${t('Set')}</th><th>${t('When')}</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>${t('Accuracy')}</th><th>${t('Errors')}</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:`<div class="empty">${t('No benchmark results yet.')}</div>`;
 }
 // Calibration: basal-calibrate on the user's labelled requests (a temporary uncalibrated child of the model; with task
 // questions the engine in basal-ui's process), or a file fitted elsewhere imported
-$('#calibrationBlock').innerHTML=`<div class="section-head"><h3>Calibration</h3></div><div class="controls"><select id="calibrationModel" aria-label="Model to calibrate"></select><input id="calibrationInput" type="text" placeholder="/path/to/labelled.jsonl" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">Calibrate</button><button type="button" id="cancelCalibration" hidden>Cancel</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">Logs</a></div><div class="controls"><input id="calibrationImportPath" type="text" placeholder="/path/to/CALIBRATION.custom.json fitted elsewhere" size="40" aria-label="Calibration file to import"><button type="button" id="importCalibration">Import</button></div><p class="muted">Fits temperatures and certified thresholds on your labelled requests (format: <code>docs/CALIBRATION.md#input</code>; the simple <code>basal-run</code> items with <code>gold</code> work too). Decision questions run against a temporary uncalibrated copy of the model, which needs its memory once more while it runs; task questions (classify / verify / extract with gold) are certified on the answers as served, so the engine runs in basal-ui's process instead (cancelling then takes effect when basal-calibrate finishes). Import adds a file fitted elsewhere (basal-calibrate on another machine); one fitted on another model is listed with basal-serve's warning. The selected file applies from the model's next start.</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>Calibration report</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">Close</button></div></dialog>`;
-$('#calibrationBlock').insertAdjacentHTML('beforeend',`<details id="calibrationAdvanced"><summary>Advanced</summary><div class="controls"><label><input type="checkbox" id="calStrict"> Strict</label><label>Reference <input type="text" id="calReference" placeholder="basal-1.5 or path"></label><label>Min/type <input type="number" id="calMinType" min="1" value="1"></label><label>Min blend <input type="number" id="calMinBlend" min="0" value="0"></label><label>Min family <input type="number" id="calMinFamily" min="1" value="1"></label><label>Min/set <input type="number" id="calMinSet" min="1" value="1"></label><label>Concurrency <input type="number" id="calConcurrency" min="1" max="256" value="1"></label><label>Compare <select id="calCompare"><option value="shipped">shipped</option><option value="none">none</option><option value="path">calibration file…</option></select></label><input id="calComparePath" type="text" placeholder="calibration file path" hidden><label><input type="checkbox" id="calSaveRows"> Save rows</label><label><input type="checkbox" id="calReportOnly"> Report only</label></div></details>`);
+$('#calibrationBlock').innerHTML=`<div class="section-head"><h3>${t('Calibration')}</h3></div><div class="controls"><select id="calibrationModel" aria-label="${t('Model to calibrate')}"></select><input id="calibrationInput" type="text" placeholder="${t('/path/to/labelled.jsonl')}" size="40"><label><input id="calibrationT1" type="checkbox" checked> 1%</label><label><input id="calibrationT5" type="checkbox" checked> 5%</label><button type="button" id="runCalibration">${t('Calibrate')}</button><button type="button" id="cancelCalibration" hidden>${t('Cancel')}</button><span id="calibrationProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Acalibrate">${t('Logs')}</a></div><div class="controls"><input id="calibrationImportPath" type="text" placeholder="${t('/path/to/CALIBRATION.custom.json fitted elsewhere')}" size="40" aria-label="${t('Calibration file to import')}"><button type="button" id="importCalibration">${t('Import')}</button></div><p class="muted">${t("Fits temperatures and certified thresholds on your labelled requests (format: {input}; the simple {run} items with {gold} work too). Decision questions run against a temporary uncalibrated copy of the model, which needs its memory once more while it runs; task questions (classify / verify / extract with gold) are certified on the answers as served, so the engine runs in basal-ui's process instead (cancelling then takes effect when basal-calibrate finishes). Import adds a file fitted elsewhere (basal-calibrate on another machine); one fitted on another model is listed with basal-serve's warning. The selected file applies from the model's next start.",{input:'<code>docs/CALIBRATION.md#input</code>',run:'<code>basal-run</code>',gold:'<code>gold</code>'})}</p><div id="calibrationFiles"></div><dialog id="reportDialog" class="confirm-dialog report-dialog"><h3>${t('Calibration report')}</h3><pre id="reportText" class="logs"></pre><div class="dialog-actions"><button type="button" id="reportClose">${t('Close')}</button></div></dialog>`;
+$('#calibrationBlock').insertAdjacentHTML('beforeend',`<details id="calibrationAdvanced"><summary>${t('Advanced')}</summary><div class="controls"><label><input type="checkbox" id="calStrict"> ${t('Strict')}</label><label>${t('Reference')} <input type="text" id="calReference" placeholder="${t('basal-1.5 or path')}"></label><label>${t('Min/type')} <input type="number" id="calMinType" min="1" value="1"></label><label>${t('Min blend')} <input type="number" id="calMinBlend" min="0" value="0"></label><label>${t('Min family')} <input type="number" id="calMinFamily" min="1" value="1"></label><label>${t('Min/set')} <input type="number" id="calMinSet" min="1" value="1"></label><label>${t('Concurrency')} <input type="number" id="calConcurrency" min="1" max="256" value="1"></label><label>${t('Compare')} <select id="calCompare"><option value="shipped">${t('shipped')}</option><option value="none">${t('none')}</option><option value="path">${t('calibration file…')}</option></select></label><input id="calComparePath" type="text" placeholder="${t('calibration file path')}" hidden><label><input type="checkbox" id="calSaveRows"> ${t('Save rows')}</label><label><input type="checkbox" id="calReportOnly"> ${t('Report only')}</label></div></details>`);
 $('#calCompare').onchange=()=>$('#calComparePath').hidden=$('#calCompare').value!=='path';
 ['calStrict','calSaveRows','calReportOnly'].forEach(id=>{const x=$('#'+id);x.setAttribute('role','switch');setChecked(x,x.checked);});
 $('#calibrationInput').value=localStorage.getItem('basal-ui.calibrationInput')||'';
@@ -1294,7 +1294,7 @@ function renderCalibrationModels() {
   const signature=JSON.stringify(rows.map(m=>m.id));
   if(signature!==calibrationSignature){
     calibrationSignature=signature;
-    select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="">Download a model first</option>';
+    select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||`<option value="">${t('Download a model first')}</option>`;
     if(rows.some(m=>m.id===current))select.value=current;
     loadCalibrations();
   }
@@ -1304,19 +1304,19 @@ $('#calibrationModel').onchange=()=>{localStorage.setItem('basal-ui.calibrationM
 $('#runCalibration').onclick=()=>act(async()=>{
   const targets=[['#calibrationT1','0.01'],['#calibrationT5','0.05']].filter(([s])=>$(s).checked).map(([,t])=>t);
   await api('/api/calibrate',{method:'POST',body:JSON.stringify({id:$('#calibrationModel').value,input:$('#calibrationInput').value.trim(),targets})});
-  toast('Calibration started'); await refreshStatus();
+  toast(t('Calibration started')); await refreshStatus();
 });
 $('#cancelCalibration').onclick=()=>act(async()=>{await api('/api/calibrate',{method:'DELETE'});await refreshStatus();});
 $('#runCalibration').onclick=()=>act(async()=>{
   const targets=[['#calibrationT1','0.01'],['#calibrationT5','0.05']].filter(([s])=>$(s).checked).map(([,t])=>t);
   const compare=$('#calCompare').value,advanced={strict:$('#calStrict').checked,reference:$('#calReference').value.trim()||null,min_per_type:Number($('#calMinType').value),min_blend:Number($('#calMinBlend').value),min_family:Number($('#calMinFamily').value),min_per_set:Number($('#calMinSet').value),concurrency:Number($('#calConcurrency').value),compare:compare==='path'?$('#calComparePath').value.trim():compare,save_rows:$('#calSaveRows').checked,report_only:$('#calReportOnly').checked};
   await api('/api/calibrate',{method:'POST',body:JSON.stringify({id:$('#calibrationModel').value,input:$('#calibrationInput').value.trim(),targets,advanced})});
-  toast('Calibration started'); await refreshStatus();
+  toast(t('Calibration started')); await refreshStatus();
 });
 $('#importCalibration').onclick=()=>act(async()=>{
   const id=$('#calibrationModel').value, d=await api('/api/calibrations/import',{method:'POST',body:JSON.stringify({id,path:$('#calibrationImportPath').value.trim()})});
   renderCalibrationFiles(id,d); $('#calibrationImportPath').value='';
-  const f=d.files.find(x=>x.file===d.file); toast(f?.warning?`Imported — ${f.warning}`:'Calibration imported');
+  const f=d.files.find(x=>x.file===d.file); toast(f?.warning?`${t('Imported')} — ${f.warning}`:t('Calibration imported'));
 });
 // the certified thresholds {target: {type: threshold}} with the task ones {task: {target: threshold}}
 function allThresholds(f) {
@@ -1327,7 +1327,7 @@ function allThresholds(f) {
 function renderCalibrationState(job) {
   const running=Boolean(job?.running);
   $('#cancelCalibration').hidden=!running; $('#runCalibration').disabled=running||!$('#calibrationModel').value;
-  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`Failed: ${job.error}`:job.phase==='cancelled'?'Cancelled':['done','done_with_warnings'].includes(job.phase)?`${job.phase==='done_with_warnings'?'Completed with warnings':'Completed (see report for certification)'}: ${shortName(job.result?.file||'')}${job.result?.warnings?.length?' · '+job.result.warnings.join(' · '):''}`:'';
+  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`${t('Failed: {error}',{error:job.error})}`:job.phase==='cancelled'?t('Cancelled'):['done','done_with_warnings'].includes(job.phase)?`${job.phase==='done_with_warnings'?t('Completed with warnings'):t('Completed (see report for certification)')}: ${shortName(job.result?.file||'')}${job.result?.warnings?.length?' · '+job.result.warnings.join(' · '):''}`:'';
   if(calibrationRunning&&!running)loadCalibrations();
   if(!running&&job?.result?.report_only&&calibrationReportSeen!==job.started){calibrationReportSeen=job.started;$('#reportText').textContent=job.result.report||'';$('#reportDialog').showModal();}
   calibrationRunning=running;
@@ -1340,7 +1340,7 @@ async function loadCalibrations() {
 }
 function thresholdCell(thresholds) {
   const types=[...new Set(Object.values(thresholds||{}).flatMap(Object.keys))];
-  return types.map(t=>`<span class="chip">${esc(t)} ${['0.01','0.05'].map(k=>`${(Number(k)*100).toFixed(0)}%: ${thresholds?.[k]?.[t]==null?'—':Number(thresholds[k][t]).toFixed(3)}`).join(' · ')}</span>`).join(' ')||'<span class="muted">none certified</span>';
+  return types.map(t=>`<span class="chip">${esc(t)} ${['0.01','0.05'].map(k=>`${(Number(k)*100).toFixed(0)}%: ${thresholds?.[k]?.[t]==null?'—':Number(thresholds[k][t]).toFixed(3)}`).join(' · ')}</span>`).join(' ')||`<span class="muted">${t('none certified')}</span>`;
 }
 function renderCalibrationFiles(id, d) {
   const loaded=(statusCache?.models||[]).find(m=>m.id===id);
@@ -1348,25 +1348,25 @@ function renderCalibrationFiles(id, d) {
     const fitted=f?.fitted_on&&typeof f.fitted_on==='object'?f.fitted_on:null, gates=f?.gates||{};
     const automated=Object.entries(gates.automated_at||{}).map(([k,v])=>`${(Number(k)*100).toFixed(0)}%: ${pct(v)} at ${pct(gates.automated_error?.[k])} error`).join(' · ');
     const checked=(d.selected||'')===value;
-    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?' <span class="chip">imported</span>':''}${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}${(f?.warnings||[]).map(w=>`<span class="reason">${esc(w)}</span>`).join('')}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
+    return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?` <span class="chip">${t('imported')}</span>`:''}${checked&&loaded?.restart_required?` <span class="badge fit-tight">${t('Restart to apply')}</span>`:''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}${(f?.warnings||[]).map(w=>`<span class="reason">${esc(w)}</span>`).join('')}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} ${t('decisions')}`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">${t('Report')}</button>`:''}</td></tr>`;
   };
-  const ctx=d.shipped?.context||{}, context=d.shipped?`Shipped default: ${esc(shortName(d.shipped.file))} · ${esc(ctx.active?'running settings':'saved settings for next start')} · ${esc(ctx.mode)}${ctx.quant?` · ${esc(ctx.quant)}`:''}${ctx.preset?` · ${esc(ctx.preset)}`:''} · ${esc(ctx.layout)}${ctx.adapter?` · adapter ${esc(shortName(ctx.adapter))}`:''}`:'Shipped default unavailable';
-  const selection=d.selected?`Selected custom calibration for next start: ${esc(shortName(d.selected))}`:'Selected calibration: shipped default';
-  const shipped=d.shipped?row(d.shipped,'',`Shipped default · ${shortName(d.shipped.file)}`):'';
-  $('#calibrationFiles').innerHTML=`<p class="muted">${context}<br>${selection}</p><div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
+  const ctx=d.shipped?.context||{}, context=d.shipped?`${t('Shipped default')}: ${esc(shortName(d.shipped.file))} · ${esc(ctx.active?t('running settings'):t('saved settings for next start'))} · ${esc(ctx.mode)}${ctx.quant?` · ${esc(ctx.quant)}`:''}${ctx.preset?` · ${esc(ctx.preset)}`:''} · ${esc(ctx.layout)}${ctx.adapter?` · adapter ${esc(shortName(ctx.adapter))}`:''}`:t('Shipped default unavailable');
+  const selection=d.selected?`${t('Selected custom calibration for next start')}: ${esc(shortName(d.selected))}`:`${t('Selected calibration')}: ${t('shipped default')}`;
+  const shipped=d.shipped?row(d.shipped,'',`${t('Shipped default')} · ${shortName(d.shipped.file)}`):'';
+  $('#calibrationFiles').innerHTML=`<p class="muted">${context}<br>${selection}</p><div class="table-wrap"><table><thead><tr><th>${t('Use')}</th><th>${t('Fitted on')}</th><th>${t('Per type')}</th><th>${t('Certified thresholds')}</th><th>${t('Automated on CERT')}</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
   for(const f of d.files||[])if(f.rows){
     const radio=[...$('#calibrationFiles').querySelectorAll('input[name=calibrationUse]')].find(x=>x.value===f.file);
     if(!radio)continue;
-    const button=document.createElement('button');button.type='button';button.textContent='Refit';button.dataset.refit=f.rows;
+    const button=document.createElement('button');button.type='button';button.textContent=t('Refit');button.dataset.refit=f.rows;
     radio.closest('tr').lastElementChild.append(' ',button);
   }
   $('#calibrationFiles').querySelectorAll('[data-refit]').forEach(b=>b.onclick=()=>act(async()=>{
     await api('/api/calibrate',{method:'POST',body:JSON.stringify({id,input:b.dataset.refit,from_rows:true})});
-    toast('Calibration refit started');await refreshStatus();
+    toast(t('Calibration refit started'));await refreshStatus();
   }));
   $('#calibrationFiles').querySelectorAll('input[name=calibrationUse]').forEach(r=>r.onchange=()=>act(async()=>{
     renderCalibrationFiles(id,await api('/api/calibrations/select',{method:'POST',body:JSON.stringify({id,file:r.value||null})}));
-    toast(loaded?'Calibration selected — restart the model to apply':'Calibration selected'); await refreshStatus();
+    toast(loaded?t('Calibration selected — restart the model to apply'):t('Calibration selected')); await refreshStatus();
   }));
   $('#calibrationFiles').querySelectorAll('[data-report]').forEach(b=>b.onclick=()=>act(async()=>{
     const r=await api(`/api/calibrations/report?id=${encodeURIComponent(id)}&file=${encodeURIComponent(b.dataset.report)}`);
@@ -1446,9 +1446,9 @@ const OPTION_FIELDS={
   early_exit:{label:'Early exit (default policy)',kind:'select',values:['off','0.999','0.995','0.99','0.98']},
 };
 // action: "load" (Model manager), "save" (Models: set up the options of the next load), "restart" (a loaded model)
-const optionsButton=(id,media=false,action='load')=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-action="${action}" title="${{load:'Load with options',save:'Set up the load options',restart:'Restart with other load options'}[action]}">⚙${{load:' Options',save:' Setup',restart:''}[action]}</button>`;
-document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>Load options</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> Remember for this model</label><button type="button" id="optionsReset">Reset to defaults</button><button type="button" id="optionsCancel">Cancel</button><button type="button" id="optionsApply" class="primary">Load</button></div></dialog>`);
-$('#optionsModel').insertAdjacentHTML('afterend','<div id="loadPresetControls" class="controls"><select id="loadPresetSelect" aria-label="Load preset"></select><button type="button" id="applyLoadPreset">Apply</button><button type="button" id="saveLoadPreset">Save as…</button><button type="button" id="deleteLoadPreset">Delete</button></div>');
+const optionsButton=(id,media=false,action='load')=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-action="${action}" title="${t({load:'Load with options',save:'Set up the load options',restart:'Restart with other load options'}[action])}">⚙${t({load:' Options',save:' Setup',restart:''}[action])}</button>`;
+document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>${t('Load options')}</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> ${t('Remember for this model')}</label><button type="button" id="optionsReset">${t('Reset to defaults')}</button><button type="button" id="optionsCancel">${t('Cancel')}</button><button type="button" id="optionsApply" class="primary">${t('Load')}</button></div></dialog>`);
+$('#optionsModel').insertAdjacentHTML('afterend',`<div id="loadPresetControls" class="controls"><select id="loadPresetSelect" aria-label="${t('Load preset')}"></select><button type="button" id="applyLoadPreset">${t('Apply')}</button><button type="button" id="saveLoadPreset">${t('Save as…')}</button><button type="button" id="deleteLoadPreset">${t('Delete')}</button></div>`);
 $('#saveLoadPreset').onclick=()=>promptPresetName('load');
 $('#applyLoadPreset').onclick=()=>{const v=presetData.load?.[$('#loadPresetSelect').value];if(v)renderOptionsForm({...optionsState.data.defaults,...v});};
 $('#deleteLoadPreset').onclick=()=>act(async()=>{const n=$('#loadPresetSelect').value;if(n)await deletePreset('load',n);});
@@ -1457,20 +1457,20 @@ let optionsState=null;
 const optionValue=v=>v===null||v===undefined?'':String(v);
 function optionInput(key, value) {
   const f=OPTION_FIELDS[key], id=`opt-${key}`;
-  if(f.kind==='bool')return `<label><input type="checkbox" role="switch" id="${id}"${value?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(f.label)}</label>`;
+  if(f.kind==='bool')return `<label><input type="checkbox" role="switch" id="${id}"${value?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(t(f.label))}</label>`;
   const listed=(f.values||[]).map(v=>Array.isArray(v)?v:[v,v]);
-  const input=f.kind==='select'?`<select id="${id}">${listed.map(([v,l])=>`<option value="${esc(optionValue(v))}"${optionValue(v)===optionValue(value)?' selected':''}>${esc(l)}</option>`).join('')}${listed.some(([v])=>optionValue(v)===optionValue(value))?'':`<option value="${esc(optionValue(value))}" selected>${esc(value)}</option>`}</select>`
+  const input=f.kind==='select'?`<select id="${id}">${listed.map(([v,l])=>`<option value="${esc(optionValue(v))}"${optionValue(v)===optionValue(value)?' selected':''}>${esc(t(l))}</option>`).join('')}${listed.some(([v])=>optionValue(v)===optionValue(value))?'':`<option value="${esc(optionValue(value))}" selected>${esc(value)}</option>`}</select>`
     :f.kind==='band'?`<span class="controls"><input type="number" id="${id}-lo" min="0" max="1" step="0.05" value="${esc(value?.[0])}"><input type="number" id="${id}-hi" min="0" max="1" step="0.05" value="${esc(value?.[1])}"></span>`
     :f.kind==='percent'?`<span class="controls"><input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round(Number(value)*100)}"><output id="${id}-out">${Math.round(Number(value)*100)}%</output></span>`
-    :`<input type="${f.kind==='num'?'number':'text'}" id="${id}" value="${esc(optionValue(value))}" placeholder="${esc(f.placeholder||'')}" ${f.attrs||''}>`;
-  return `<label for="${id}">${esc(f.label)}</label>${input}`;
+    :`<input type="${f.kind==='num'?'number':'text'}" id="${id}" value="${esc(optionValue(value))}" placeholder="${esc(t(f.placeholder||''))}" ${f.attrs||''}>`;
+  return `<label for="${id}">${esc(t(f.label))}</label>${input}`;
 }
 function renderOptionsForm(values) {
   const d=optionsState.data, list=optionsState.media?d.media_modes:d.modes, defaultMode=list.find(m=>m.default)?.mode;
   const mode=list.some(m=>m.mode===values.mode)?values.mode:defaultMode;
-  const modes=`<div class="option-modes">${list.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?' <span class="chip">default</span>':''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?'<p class="muted">With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].</p>':''}`;
+  const modes=`<div class="option-modes">${list.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?` <span class="chip">${t('default')}</span>`:''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?`<p class="muted">${t('With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].')}</p>`:''}`;
   const experimental='<p class="muted option-note" id="optExperimentalNote"></p>';
-  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(title)}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:title==='Caching'?'<p class="muted">State cache reuses the longest cached prefix of growing or edited states, then computes the changed suffix. Its GB budget consumes GPU memory alongside weights and graphs; reduce it if memory is tight. No cache-hit counters are reported.</p>':title==='Kernels (CUDA graph engine)'?'<p class="muted">auto uses compact rows where supported. default uses padded graphs; fine captures more shapes and takes longer to start. compact needs supported attention kernels and more GPU memory (about 6 GB extra on measured RTX 3090 runs). Unsupported combinations show the engine’s refusal in the model row and Logs.</p>':title==='Engine'?'<p class="muted" id="optPackedNote"></p>':''}</fieldset>`).join('');
+  $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(t(title))}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:title==='Caching'?`<p class="muted">${t('State cache reuses the longest cached prefix of growing or edited states, then computes the changed suffix. Its GB budget consumes GPU memory alongside weights and graphs; reduce it if memory is tight. No cache-hit counters are reported.')}</p>`:title==='Kernels (CUDA graph engine)'?`<p class="muted">${t('auto uses compact rows where supported. default uses padded graphs; fine captures more shapes and takes longer to start. compact needs supported attention kernels and more GPU memory (about 6 GB extra on measured RTX 3090 runs). Unsupported combinations show the engine’s refusal in the model row and Logs.')}</p>`:title==='Engine'?'<p class="muted" id="optPackedNote"></p>':''}</fieldset>`).join('');
   $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});
   $('#optionsForm').onchange=()=>updateOptionVisibility();
   updateOptionVisibility();
@@ -1481,7 +1481,7 @@ function updateOptionVisibility() {
   const mode=selectedOptionMode(), think=optionsState.data.think||{};
   const packed=$('#opt-mlx_packed'), packedReason=optionsState.data.mlx_packed_reason;
   packed.disabled=Boolean(packedReason)||optionsState.media||!['mlx','mlx-q8'].includes(mode);
-  $('#optPackedNote').textContent=mode==='mps'?'Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.':packedReason||'MLX packed is off by default. Measured on an Apple M5 Pro (basal 2.3.1, #36): basal-2.0-4.5B 134 → 88 ms per two-order decision, mini 47 → 31 ms, the same decisions as the KV-cache path in bf16 (mlx-q8 on the 4.5B: 0.955 instead of 0.977 agreement). Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path.';
+  $('#optPackedNote').textContent=mode==='mps'?t('Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.'):packedReason||t('MLX packed is off by default. Measured on an Apple M5 Pro (basal 2.3.1, #36): basal-2.0-4.5B 134 → 88 ms per two-order decision, mini 47 → 31 ms, the same decisions as the KV-cache path in bf16 (mlx-q8 on the 4.5B: 0.955 instead of 0.977 agreement). Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path.');
   $('#opt-device option[value=cuda]').disabled=mode==='mps';
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
   // thinking: basal-2.0 4.5B with vLLM (here, in another environment, or a running server); early exit: fast-exit
@@ -1491,8 +1491,8 @@ function updateOptionVisibility() {
   exitBox.disabled=mode!=='fast-exit'; if(exitBox.disabled)exitBox.value='off';
   const notes=[];
   if(!think.model)notes.push(think.reason);
-  else if(!think.vllm)notes.push('vLLM is not installed in basal-ui’s environment: give the Python of one that has it, or the URL of a running think server.');
-  if(mode!=='fast-exit')notes.push('Early exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on a CUDA GPU).');
+  else if(!think.vllm)notes.push(t('vLLM is not installed in basal-ui’s environment: give the Python of one that has it, or the URL of a running think server.'));
+  if(mode!=='fast-exit')notes.push(t('Early exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on a CUDA GPU).'));
   $('#optExperimentalNote').textContent=notes.join(' ');
 }
 function collectOptions() {
@@ -1514,8 +1514,8 @@ async function openLoadOptions(id, media=false, action='load') {
   const data=await api(`/api/models/options?id=${encodeURIComponent(id)}`);
   const loaded=(statusCache?.models||[]).find(m=>m.id===id), restart=action==='restart', save=action==='save';
   optionsState={id,media,restart,save,data};
-  $('#optionsModel').textContent=`${id}${media?' · with media':''}${restart?' · restarts the running model':save?' · kept for the next load':''}`;
-  $('#optionsApply').textContent=restart?'Restart':save?'Save':'Load';
+  $('#optionsModel').textContent=`${id}${media?` · ${t('with media')}`:''}${restart?` · ${t('restarts the running model')}`:save?` · ${t('kept for the next load')}`:''}`;
+  $('#optionsApply').textContent=restart?t('Restart'):save?t('Save'):t('Load');
   $('#optionsRemember').closest('label').hidden=save;  // Save always remembers
   setChecked($('#optionsRemember'),data.saved);
   renderOptionsForm(restart&&loaded?{...data.defaults,...loaded.options}:data.options);
@@ -1533,17 +1533,17 @@ $('#optionsApply').onclick=async()=>{
   $('#optionsApply').disabled=true;
   try{
     if(remember||data.saved)await api('/api/models/options',{method:'PUT',body:JSON.stringify({id,options:remember?options:{}})});
-    if(save){$('#loadOptions').close();toast(`Load options saved for ${shortName(id)}`);await loadModels();return;}
+    if(save){$('#loadOptions').close();toast(t('Load options saved for {model}',{model:shortName(id)}));await loadModels();return;}
     if(restart)await api('/api/restart',{method:'POST',body:JSON.stringify({id,options})});
     else{statusSequence++;clearSelectedMedia();await api('/api/load',{method:'POST',body:JSON.stringify({id,...(media?{media:true}:{}),options})});}
-    $('#loadOptions').close(); toast(restart?`Restarting ${shortName(id)}`:'Model load started'); await refreshStatus();
+    $('#loadOptions').close(); toast(restart?t('Restarting {model}',{model:shortName(id)}):t('Model load started')); await refreshStatus();
   }catch(e){$('#optionsError').textContent=e.message;$('#optionsError').hidden=false;}
   finally{$('#optionsApply').disabled=false;}
 };
 function syncHistoryModels(models) {
   const select=$('#historyModel'), current=select.value, ids=[...new Set([...models,...(current?[current]:[])])];
   if(JSON.stringify([...select.options].map(o=>o.value).slice(1))===JSON.stringify(ids))return;
-  select.innerHTML='<option value="">All models</option>'+ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
+  select.innerHTML=`<option value="">${t('All models')}</option>`+ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('');
   select.value=current;
 }
 let historySequence=0;
@@ -1581,8 +1581,8 @@ async function loadHistory(mode='reset') {
   if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);
 }
 function renderHistory(items) {
-  const flags=x=>`${x.deferred?' <span class="badge fit-too_large">deferred</span>':''}${x.truncated?' <span class="badge fit-tight">truncated</span>':''}`;
-  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>State</th><th>Answers</th><th>Latency</th><th>Status</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No decisions yet — try the Playground.</div>';
+  const flags=x=>`${x.deferred?` <span class="badge fit-too_large">${t('deferred')}</span>`:''}${x.truncated?` <span class="badge fit-tight">${t('truncated')}</span>`:''}`;
+  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>${t('Time')}</th><th>${t('Model')}</th><th>${t('Source')}</th><th>${t('State')}</th><th>${t('Answers')}</th><th>${t('Latency')}</th><th>${t('Status')}</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${t('No decisions yet — try the Playground.')}</div>`;
   $('#historyTable').querySelectorAll('[data-history]').forEach(row=>{
     row.onclick=()=>act(()=>toggleHistory(row));
     if(historyOpen.has(row.dataset.history))row.after(historyDetailRow(historyOpen.get(row.dataset.history)));
@@ -1596,18 +1596,18 @@ async function toggleHistory(row) {
 }
 function historyDetailRow(x) {
   const tr=document.createElement('tr'); tr.className='history-detail';
-  tr.innerHTML='<td colspan="7"><div class="history-panes"><div><strong>Recorded request</strong><pre class="history-request"></pre></div><div><strong>Response</strong><pre class="history-response"></pre></div></div><div class="controls"><button type="button" class="copy-request">Copy request</button><button type="button" class="replay-request">Replay in Playground</button></div><div class="history-replay-error error-box" role="alert" hidden></div></td>';
+  tr.innerHTML=`<td colspan="7"><div class="history-panes"><div><strong>${t('Recorded request')}</strong><pre class="history-request"></pre></div><div><strong>${t('Response')}</strong><pre class="history-response"></pre></div></div><div class="controls"><button type="button" class="copy-request">${t('Copy request')}</button><button type="button" class="replay-request">${t('Replay in Playground')}</button></div><div class="history-replay-error error-box" role="alert" hidden></div></td>`;
   $('.history-request',tr).textContent=JSON.stringify(x.request,null,2);
   $('.history-response',tr).textContent=JSON.stringify(x.response,null,2);
-  $('.copy-request',tr).onclick=()=>copyText(JSON.stringify(x.request,null,2),'Request copied');
+  $('.copy-request',tr).onclick=()=>copyText(JSON.stringify(x.request,null,2),t('Request copied'));
   const replay=$('.replay-request',tr), error=$('.history-replay-error',tr);
   if(x.replay_error){replay.disabled=true;error.textContent=x.replay_error;error.hidden=false;}
   replay.onclick=()=>replayRequest(x);
   return tr;
 }
 function replayRequest(x) {
-  if(x.replay_error||!x.replay_request){toast(x.replay_error||'This request cannot be replayed.','error');return;}
-  if(!readyModels().some(m=>m.id===x.model)){toast(`Model ${x.model} is not loaded`,'error');return;}
+  if(x.replay_error||!x.replay_request){toast(x.replay_error||t('This request cannot be replayed.'),'error');return;}
+  if(!readyModels().some(m=>m.id===x.model)){toast(t('Model {model} is not loaded',{model:x.model}),'error');return;}
   selectedModel=x.model; localStorage.setItem('basal-ui.model',selectedModel);
   $('#playgroundModel').value=selectedModel; setPlaygroundMedia(readyModels().find(m=>m.id===selectedModel)?.media||[]);
   $('#results').innerHTML='';$('#rawDetails').hidden=true;$('#decideError').hidden=true;
@@ -1621,8 +1621,8 @@ $('#historySource').querySelectorAll('[data-source]').forEach(b=>b.classList.tog
 $('#historySource').onclick=e=>{const b=e.target.closest('[data-source]');if(!b)return;historySource=b.dataset.source;$('#historySource').querySelectorAll('[data-source]').forEach(x=>x.classList.toggle('active',x===b));resetHistory();};
 $('#historyMore').onclick=()=>loadHistory('more');
 $('#clearHistory').onclick=()=>act(async()=>{
-  if(!await confirmDialog({title:'Clear history?',description:'Every recorded decision (playground, API and MCP) is deleted.',confirmLabel:'Clear history',destructive:true}))return;
-  const d=await api('/api/history',{method:'DELETE'}); toast(`${d.cleared} decisions deleted`); resetHistory();
+  if(!await confirmDialog({title:t('Clear history?'),description:t('Every recorded decision (playground, API and MCP) is deleted.'),confirmLabel:t('Clear history'),destructive:true}))return;
+  const d=await api('/api/history',{method:'DELETE'}); toast(tp(d.cleared,'{n} decisions deleted','{n} decisions deleted')); resetHistory();
 });
 async function loadLogs() {
   clearTimeout(logTimer);
@@ -1633,7 +1633,7 @@ async function loadLogs() {
     if(source!==logSource)return;  // the user switched tabs meanwhile: that tab's own fetch renders
     if(logGeneration&&d.generation!==logGeneration){out.textContent='';logAfter=0;}
     logGeneration=d.generation;
-    $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?' <span class="chip">gone</span>':x.id.startsWith('job:')&&x.state==='running'?' <span class="chip">running</span>':''}</button>`).join('');
+    $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?` <span class="chip">${t('gone')}</span>`:x.id.startsWith('job:')&&x.state==='running'?` <span class="chip">${t('running')}</span>`:''}</button>`).join('');
     const atBottom=out.scrollTop+out.clientHeight>=out.scrollHeight-8;
     if(d.lines.length){
       out.append(document.createTextNode(d.lines.map(x=>source==='basal-ui'?`${clock(x.ts)} ${x.text}`:x.text).join('\n')+'\n'));
@@ -1648,7 +1648,7 @@ async function loadLogs() {
   if(!$('#logs').hidden&&source===logSource)logTimer=setTimeout(loadLogs,2000);
 }
 $('#logSources').onclick=e=>{const b=e.target.closest('[data-logsource]');if(b)showView(`logs/${encodeURIComponent(b.dataset.logsource)}`,true);};
-$('#copyLogs').onclick=()=>copyText($('#logOutput').textContent,'Log copied');
+$('#copyLogs').onclick=()=>copyText($('#logOutput').textContent,t('Log copied'));
 $('#clearLogs').onclick=()=>{$('#logOutput').textContent='';$('#logEmpty').hidden=false;};
 $('#downloadLogs').onclick=()=>{
   const a=document.createElement('a'), url=URL.createObjectURL(new Blob([$('#logOutput').textContent],{type:'text/plain'}));
@@ -1658,7 +1658,7 @@ $('#downloadLogs').onclick=()=>{
 function answerBest(a) {
   if(!a||typeof a!=='object')return null;
   for(const key of ['choice','action','tool','label','score'])if(a[key]!=null)return String(typeof a[key]==='number'?Number(a[key]).toFixed(2):a[key]);
-  for(const key of ['selected','labels','tools'])if(Array.isArray(a[key]))return a[key].join(', ')||'none';
+  for(const key of ['selected','labels','tools'])if(Array.isArray(a[key]))return a[key].join(', ')||t('none');
   if(typeof a.noul==='number')return a.noul>=0.5?'true':'false';
   return a.type||null;
 }
@@ -1667,27 +1667,27 @@ $('#batchInput').value=localStorage.getItem('basal-ui.batchInput')||'';
 $('#batchInput').oninput=()=>localStorage.setItem('basal-ui.batchInput',$('#batchInput').value);
 function renderBatchState(job, ready) {
   const select=$('#batchModel'), current=select.value, ids=ready.map(m=>m.id);
-  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids))select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('')||'<option value="">Load a model first</option>';
+  if(JSON.stringify([...select.options].map(o=>o.value))!==JSON.stringify(ids))select.innerHTML=ids.map(id=>`<option value="${esc(id)}">${esc(id)}</option>`).join('')||`<option value="">${t('Load a model first')}</option>`;
   if(ids.includes(current))select.value=current; else if(ids.includes(selectedModel))select.value=selectedModel;
   const levels=modelEntry(select.value)?.early_exit||[], ee=$('#batchEarlyExit');
-  if(JSON.stringify([...ee.options].map(o=>o.value))!==JSON.stringify(['',...levels]))ee.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?`early exit ${esc(l)}`:'no early exit'}</option>`).join('');
+  if(JSON.stringify([...ee.options].map(o=>o.value))!==JSON.stringify(['',...levels]))ee.innerHTML=['',...levels].map(l=>`<option value="${esc(l)}">${l?`${t('early exit')} ${esc(l)}`:t('no early exit')}</option>`).join('');
   ee.hidden=!levels.length;
   const running=Boolean(job?.running);
   $('#runBatch').disabled=running||!ids.length; $('#cancelBatch').hidden=!running;
-  $('#batchProgress').innerHTML=!job?'':running?`<div class="progress-wrap"><div class="progress"><span style="width:${job.total?job.done/job.total*100:0}%"></span></div><small>${job.done} / ${job.total}</small></div>`:job.phase==='error'?`<div class="error-box">${esc(job.error)}</div>`:job.phase==='cancelled'?'<p class="muted">Cancelled.</p>':'';
+  $('#batchProgress').innerHTML=!job?'':running?`<div class="progress-wrap"><div class="progress"><span style="width:${job.total?job.done/job.total*100:0}%"></span></div><small>${job.done} / ${job.total}</small></div>`:job.phase==='error'?`<div class="error-box">${esc(job.error)}</div>`:job.phase==='cancelled'?`<p class="muted">${t('Cancelled.')}</p>`:'';
   if(!running&&job?.phase==='done'&&(batchRunning||!batchResult))showBatchResult(job.result);
   batchRunning=running;
 }
 function showBatchResult(r) {
   batchResult=r;
-  $('#batchSummary').innerHTML=`<div class="chips"><span class="chip">${esc(r.items)} items</span><span class="chip">${esc(r.errors)} errors</span><span class="chip">${esc(r.seconds)} s</span><span class="chip">${esc(r.items_per_s)} items/s</span><span class="chip">server p50 ${esc(r.server_latency_p50_ms??'—')} ms</span>${r.accuracy!=null?`<span class="chip">accuracy ${pct(r.accuracy)}</span>`:''}</div><p class="muted mono">${esc(r.output)}</p>`;
+  $('#batchSummary').innerHTML=`<div class="chips"><span class="chip">${tp(r.items,'{n} items','{n} items')}</span><span class="chip">${tp(r.errors,'{n} errors','{n} errors')}</span><span class="chip">${esc(r.seconds)} s</span><span class="chip">${esc(r.items_per_s)} ${t('items/s')}</span><span class="chip">${t('server p50')} ${esc(r.server_latency_p50_ms??'—')} ms</span>${r.accuracy!=null?`<span class="chip">${t('accuracy')} ${pct(r.accuracy)}</span>`:''}</div><p class="muted mono">${esc(r.output)}</p>`;
   $('#downloadBatch').hidden=$('#copyBatchPath').hidden=false;
   batchRowsLoaded=0; $('#batchRows').innerHTML=''; loadBatchRows();
 }
 async function loadBatchRows() {
   const d=await api(`/api/batch/rows?offset=${batchRowsLoaded}&limit=100`);
-  const rows=d.rows.map(x=>`<tr><td>${esc(x.id)}</td><td>${x.option!=null?`<span class="chip">${esc(x.prediction)}: ${esc(x.option)} (${pct(x.confidence)})</span>`:Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(answerBest(a)??'—')}${a?.confidence!=null?` (${pct(a.confidence)})`:''}</span>`).join(' ')}${x.correct===true?' <span class="badge fit-fits">correct</span>':x.correct===false?' <span class="badge fit-too_large">wrong</span>':''}</td><td>${num(x.latency_ms,1)} ms</td><td>${x.error?`<span class="reason">${esc(httpFailure(x.status,textOf(x.error)))}${x.request_id?` [request ${esc(x.request_id)}]`:""}</span>`:''}</td></tr>`).join('');
-  if(!batchRowsLoaded)$('#batchRows').innerHTML=`<table><thead><tr><th>Id</th><th>Answer</th><th>Latency</th><th>Error</th></tr></thead><tbody></tbody></table>`;
+  const rows=d.rows.map(x=>`<tr><td>${esc(x.id)}</td><td>${x.option!=null?`<span class="chip">${esc(x.prediction)}: ${esc(x.option)} (${pct(x.confidence)})</span>`:Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(answerBest(a)??'—')}${a?.confidence!=null?` (${pct(a.confidence)})`:''}</span>`).join(' ')}${x.correct===true?` <span class="badge fit-fits">${t('correct')}</span>`:x.correct===false?` <span class="badge fit-too_large">${t('wrong')}</span>`:''}</td><td>${num(x.latency_ms,1)} ms</td><td>${x.error?`<span class="reason">${esc(httpFailure(x.status,textOf(x.error)))}${x.request_id?` [${t('request')} ${esc(x.request_id)}]`:""}</span>`:''}</td></tr>`).join('');
+  if(!batchRowsLoaded)$('#batchRows').innerHTML=`<table><thead><tr><th>${t('Id')}</th><th>${t('Answer')}</th><th>${t('Latency')}</th><th>${t('Error')}</th></tr></thead><tbody></tbody></table>`;
   $('#batchRows tbody').insertAdjacentHTML('beforeend',rows);
   batchRowsLoaded+=d.rows.length; $('#batchMore').hidden=batchRowsLoaded>=d.total;
 }
@@ -1698,11 +1698,11 @@ $('#runBatch').onclick=()=>act(async()=>{
   if(!$('#batchEarlyExit').hidden&&$('#batchEarlyExit').value)body.early_exit=$('#batchEarlyExit').value;
   await api('/api/batch',{method:'POST',body:JSON.stringify(body)});
   $('#batchSummary').innerHTML=''; $('#batchRows').innerHTML=''; $('#batchMore').hidden=$('#downloadBatch').hidden=$('#copyBatchPath').hidden=true;
-  toast('Batch started'); await refreshStatus();
+  toast(t('Batch started')); await refreshStatus();
 });
 $('#cancelBatch').onclick=()=>act(async()=>{await api('/api/batch',{method:'DELETE'});await refreshStatus();});
 $('#downloadBatch').onclick=()=>{const a=document.createElement('a');a.href='/api/batch/download';a.click();};
-$('#copyBatchPath').onclick=()=>copyText(batchResult?.output||'','Output path copied');
+$('#copyBatchPath').onclick=()=>copyText(batchResult?.output||'',t('Output path copied'));
 // Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal/ui/inspect.py)
 const inspectableModel=m=>m.port==='bf16'&&!m.experimental;
 let inspectSignature='', inspectReady=false;
@@ -1711,23 +1711,23 @@ function renderInspectModels() {
   const signature=JSON.stringify(rows.map(m=>m.id));
   if(signature===inspectSignature)return;
   inspectSignature=signature;
-  select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}"${inspectableModel(m)?'':' disabled'}>${esc(m.id)}${inspectableModel(m)?'':' — basal-viz reads bf16 weights'}</option>`).join('')||'<option value="">Download a bf16 model first</option>';
+  select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}"${inspectableModel(m)?'':' disabled'}>${esc(m.id)}${inspectableModel(m)?'':` — ${t('basal-viz reads bf16 weights')}`}</option>`).join('')||`<option value="">${t('Download a bf16 model first')}</option>`;
   const ok=rows.filter(inspectableModel).map(m=>m.id);
   select.value=ok.includes(current)?current:ok[0]||'';
   loadInspectCalibrations();
 }
 async function loadInspectCalibrations() {
   const id=$('#inspectModel').value, sel=$('#inspectCalibration');
-  sel.innerHTML='<option value="">shipped calibration</option>';
+  sel.innerHTML=`<option value="">${t('shipped calibration')}</option>`;
   if(!id)return;
-  try{const d=await api(`/api/calibrations?id=${encodeURIComponent(id)}`);sel.insertAdjacentHTML('beforeend',d.files.map(f=>`<option value="${esc(f.file)}"${f.file===d.selected?' selected':''}>${esc(new Date(f.when*1000).toLocaleString())} · ${esc(f.fitted_on?.decisions??'?')} decisions</option>`).join(''));}catch{}
+  try{const d=await api(`/api/calibrations?id=${encodeURIComponent(id)}`);sel.insertAdjacentHTML('beforeend',d.files.map(f=>{const count=f.fitted_on?.decisions;return `<option value="${esc(f.file)}"${f.file===d.selected?' selected':''}>${esc(new Date(f.when*1000).toLocaleString())} · ${count==null?'?':tp(count,'{n} decisions','{n} decisions')}</option>`;}).join(''));}catch{}
 }
 $('#inspectModel').onchange=()=>{localStorage.setItem('basal-ui.inspectModel',$('#inspectModel').value);loadInspectCalibrations();};
-$('#startInspect').onclick=()=>act(async()=>{const orders=$('#inspectOrders').value;await api('/api/inspect',{method:'POST',body:JSON.stringify({id:$('#inspectModel').value,calibration:$('#inspectCalibration').value||null,orders:orders?Number(orders):null})});toast('Inspector loading');await refreshStatus();});
+$('#startInspect').onclick=()=>act(async()=>{const orders=$('#inspectOrders').value;await api('/api/inspect',{method:'POST',body:JSON.stringify({id:$('#inspectModel').value,calibration:$('#inspectCalibration').value||null,orders:orders?Number(orders):null})});toast(t('Inspector loading'));await refreshStatus();});
 $('#stopInspect').onclick=()=>act(async()=>{await api('/api/inspect',{method:'DELETE'});await refreshStatus();});
 function renderInspectState(state, job) {
   const loading=Boolean(job?.running), ready=state?.state==='ready', frame=$('#vizFrame');
-  $('#inspectState').textContent=loading?`loading ${shortName(job.model)}…`:ready?`ready: ${state.model} · ${state.mode} on ${state.device} · ${state.orders} option order${state.orders===1?'':'s'}`:job?.phase==='error'?`Failed: ${job.error}`:'idle';
+  $('#inspectState').textContent=loading?t('loading {model}…',{model:shortName(job.model)}):ready?t('{status}: {model} · {mode} on {device} · {orders}',{status:t('ready'),model:state.model,mode:state.mode,device:state.device,orders:tp(state.orders,'{n} option order','{n} option orders')}):job?.phase==='error'?t('Failed: {message}',{message:job.error}):t('idle');
   $('#stopInspect').hidden=!(ready||loading); $('#startInspect').disabled=loading||!$('#inspectModel').value;
   if(ready&&!inspectReady){frame.dataset.loaded='';frame.onload=()=>{frame.dataset.loaded='1';};frame.src='/viz/';}
   if(!ready&&inspectReady){frame.src='about:blank';$('#inspectNotice').hidden=true;}
@@ -1738,41 +1738,42 @@ function renderInspectState(state, job) {
 function inspectHandoff(request) {
   const st=statusCache?.inspect||{}, served=(statusCache?.models||[]).find(m=>m.id===request.model);
   const variant=id=>modelData.find(m=>m.id===id), sv=variant(request.model), iv=variant(st.model);
-  if(request.media)return {blocked:'basal-viz explains text decisions; this request carries media'};
+  if(request.media)return {blocked:t('basal-viz explains text decisions; this request carries media')};
   if(st.model!==request.model&&!(sv&&iv&&sv.family===iv.family&&sv.tier===iv.tier))
-    return {blocked:`the inspector runs ${st.model}, this decision came from ${request.model}: start the inspector with the bf16 weights of ${sv?`${sv.family} ${sv.tier}`:request.model}`};
+    return {blocked:t('the inspector runs {inspector}, this decision came from {model}: start the inspector with the bf16 weights of {weights}',{inspector:st.model,model:request.model,weights:sv?`${sv.family} ${sv.tier}`:request.model})};
   const body=structuredClone(request), notes=[];
   for(const key of ['model','think','think_text','early_exit'])delete body[key];
   const tasks=Object.entries(body.questions||{}).filter(([,q])=>TASK_TYPES.includes(q?.type)).map(([n])=>n);
   tasks.forEach(n=>delete body.questions[n]);
-  if(!Object.keys(body.questions||{}).length)return {blocked:'basal-viz explains decision questions; this request has only task questions'};
-  if(tasks.length)notes.push(`${tasks.join(', ')}: task questions are left out (basal-viz explains the decision questions)`);
-  if(st.model!==request.model)notes.push(`weights: served ${sv.label} (${request.model}), explained bf16 (${st.model})`);
-  if(served?.mode&&served.mode!==st.mode)notes.push(`engine: served ${served.mode}, explained ${st.mode} on ${st.device}`);
+  if(!Object.keys(body.questions||{}).length)return {blocked:t('basal-viz explains decision questions; this request has only task questions')};
+  if(tasks.length)notes.push(t('{questions}: task questions are left out (basal-viz explains the decision questions)',{questions:tasks.join(', ')}));
+  if(st.model!==request.model)notes.push(t('weights: served {label} ({model}), explained bf16 ({inspector})',{label:sv.label,model:request.model,inspector:st.model}));
+  if(served?.mode&&served.mode!==st.mode)notes.push(t('engine: served {mode}, explained {inspector} on {device}',{mode:served.mode,inspector:st.mode,device:st.device}));
   const orders=served?.entry?.orders;
-  if(orders!=null&&String(orders)!==String(st.orders))notes.push(`option orders: served ${orders}, explained ${st.orders}${['1','2'].includes(String(orders))?` (start the inspector with ${orders} option order${String(orders)==='1'?'':'s'} to match)`:''}`);
+  if(orders!=null&&String(orders)!==String(st.orders))notes.push(t('option orders: served {orders}, explained {inspector}{match}',{orders,inspector:st.orders,match:['1','2'].includes(String(orders))?` (${t('start the inspector with {n} option {order} to match',{n:orders,order:String(orders)==='1'?t('order'):t('orders')})})`:''}));
   if(served?.entry&&JSON.stringify(served.entry.temperature_per_prim||{})!==JSON.stringify(st.temperatures||{}))
-    notes.push('calibration: the served temperatures differ from the inspector’s (choose the calibration the model is served with)');
-  if(served?.options?.think&&request.think!=='off')notes.push('thinking: explained without the reasoning (the first readout)');
-  if(request.early_exit&&request.early_exit!=='off')notes.push(`early exit ${request.early_exit}: explained at the final layer`);
+    notes.push(t('calibration: the served temperatures differ from the inspector’s (choose the calibration the model is served with)'));
+  if(served?.options?.think&&request.think!=='off')notes.push(t('thinking: explained without the reasoning (the first readout)'));
+  if(request.early_exit&&request.early_exit!=='off')notes.push(t('early exit {policy}: explained at the final layer',{policy:request.early_exit}));
   return {body,notes};
 }
 function inspectDecision(request) {
-  if(statusCache?.inspect?.state!=='ready'){toast(`Start the inspector for ${request.model||'a model'} first`,'error');showView('inspect',true);return;}
+  if(statusCache?.inspect?.state!=='ready'){toast(t('Start the inspector for {model} first',{model:request.model||t('a model')}),'error');showView('inspect',true);return;}
   const handoff=inspectHandoff(request), notice=$('#inspectNotice');
   if(handoff.blocked){toast(handoff.blocked,'error');return;}
   notice.className=handoff.notes.length?'inspect-notice differs':'inspect-notice same';
-  notice.innerHTML=handoff.notes.length?`<strong>This explanation differs from the served decision of ${esc(request.model)}:</strong><ul>${handoff.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`:`Same model, engine, option orders and calibration as the served decision of ${esc(request.model)}.`;
+  notice.innerHTML=handoff.notes.length?`<strong>${t('This explanation differs from the served decision of {model}:',{model:esc(request.model)})}</strong><ul>${handoff.notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`:t('Same model, engine, option orders and calibration as the served decision of {model}.',{model:esc(request.model)});
   notice.hidden=false;
   showView('inspect',true);
   const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:handoff.body},location.origin);
   if(frame.dataset.loaded==='1')send(); else frame.addEventListener('load',send,{once:true});
 }
-const PAGES={backends:['10 / BACKENDS','Backends','Local inference engines, compatibility, setup and explicit verification.'],overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
+const PAGES={backends:['10 / BACKENDS','Backends','Local inference engines, compatibility, setup and explicit verification.'],overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk, and loading them.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
 function showView(hash, updateHash=false) {
   const raw=String(hash||'').replace(/^#/,''), slash=raw.indexOf('/');
   const view=slash<0?raw:raw.slice(0,slash), arg=slash<0?'':raw.slice(slash+1), name=PAGES[view]?view:'overview';
-  $('#pageEyebrow').textContent=PAGES[name][0]; $('#pageTitle').textContent=PAGES[name][1]; $('#pageDescription').textContent=PAGES[name][2];
+  const [eyebrow,title,description]=PAGES[name], number=eyebrow.split(' / ')[0];
+  $('#pageEyebrow').textContent=LANG==='en'?eyebrow:`${number} / ${t(title).toLocaleUpperCase(LANG)}`; $('#pageTitle').textContent=t(title); $('#pageDescription').textContent=t(description);
   document.querySelectorAll('.view').forEach(v=>v.hidden=v.dataset.page!==name);
   document.querySelectorAll('.side-nav [data-view]').forEach(b=>{const active=b.dataset.view===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   const target=`#${name}${arg?`/${arg}`:''}`;
@@ -1796,7 +1797,7 @@ selectModelsTab(['loaded','suggested','all'].includes(localStorage.getItem('basa
 async function loadMemorySettings(){
   try{
     const d=await api('/api/memory'), budget=$('input#memoryBudget');
-    budget.placeholder=`Hardware budget: ${(d.hardware_budget_bytes/2**30).toFixed(1)} GiB`;
+    budget.placeholder=t('Hardware budget: {size} GiB',{size:(d.hardware_budget_bytes/2**30).toFixed(1)});
     for(const [input,bytes] of [[budget,d.settings.budget_bytes],[$('#memoryReserve'),d.settings.reserve_bytes]]){
       input.value=bytes==null?'':String(Number((bytes/2**30).toFixed(3)));
       input.dataset.bytes=bytes==null?'':String(bytes); input.dataset.shown=input.value;  // an unedited field saves its exact bytes
@@ -1807,10 +1808,10 @@ $('#saveMemory').onclick=async()=>{
   const bytesOf=input=>{const value=input.value.trim();if(value===input.dataset.shown&&input.dataset.bytes!==undefined)return input.dataset.bytes===''?null:Number(input.dataset.bytes);return value===''?null:Math.round(Number(value)*2**30);};
   try{
     await api('/api/memory',{method:'PUT',body:JSON.stringify({budget_bytes:bytesOf($('input#memoryBudget')),reserve_bytes:bytesOf($('#memoryReserve'))??0})});
-    $('#memoryError').hidden=true; toast('Memory settings saved'); await Promise.all([loadMemorySettings(),refreshStatus()]);
+    $('#memoryError').hidden=true; toast(t('Memory settings saved')); await Promise.all([loadMemorySettings(),refreshStatus()]);
   }catch(e){$('#memoryError').textContent=e.message;$('#memoryError').hidden=false;toast(e.message,'error');}
 };
 showView(location.hash);
 loadMemorySettings();
 loadPresets();refreshUpdates();
- (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=`Hardware unavailable: ${e.message}`;}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);})();
+ (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=t('Hardware unavailable: {message}',{message:e.message});}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);})();
