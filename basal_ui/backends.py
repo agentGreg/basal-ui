@@ -7,9 +7,33 @@ import subprocess
 import sys
 import threading
 import time
+import re
 from concurrent.futures import ThreadPoolExecutor
-
 import httpx
+
+BACKEND_TEMPLATES = {
+    "backend_mlx_device": "This Basal integration supports MLX on Apple Silicon.",
+    "backend_cuda_linux": "This Basal integration requires NVIDIA CUDA on Linux.",
+    "backend_strix": "Requires AMD Strix Halo with a compatible ROCm PyTorch installation.",
+    "backend_tpu": "No accessible TPU detected; requires a TPU host and JAX/libtpu.",
+    "backend_setup_default": "Commands target this app environment. Restart basal-ui after installation, then Refresh.",
+    "backend_setup_separate": "Use a separate environment: these packages bring their own PyTorch dependencies. Install this same Basal fork with its UI dependencies there and launch basal-ui from that environment. Installing there does not change this inventory.",
+    "backend_setup_platform": "Use the platform-specific installer in the documentation for the correct PyTorch/ROCm build; do not replace a working GPU build with a generic wheel.",
+}
+
+
+def _message_fields(text):
+    if text is None:
+        return None, None
+    for code, template in BACKEND_TEMPLATES.items():
+        keys = re.findall(r"\{(\w+)\}", template)
+        pattern = re.escape(template)
+        for key in keys:
+            pattern = pattern.replace(re.escape("{" + key + "}"), f"(?P<{key}>.*?)", 1)
+        match = re.fullmatch(pattern, text)
+        if match:
+            return code, match.groupdict()
+    return None, None
 
 from . import catalog, hardware, options
 from .jobs import Cancelled
@@ -73,19 +97,19 @@ def probe(backend, modules, hw):
 
 def machine_reason(backend, hw):
     if backend == 'mlx' and hw.platform != 'apple':
-        return 'This Basal integration supports MLX on Apple Silicon.'
+        return BACKEND_TEMPLATES['backend_mlx_device']
     if backend in ('vllm', 'sglang') and (hw.platform != 'cuda' or 'rocm' in hw.engines or sys.platform != 'linux'):
-        return 'This Basal integration requires NVIDIA CUDA on Linux.'
+        return BACKEND_TEMPLATES['backend_cuda_linux']
     if backend == 'strix' and 'strix' not in hw.engines:
-        return 'Requires AMD Strix Halo with a compatible ROCm PyTorch installation.'
+        return BACKEND_TEMPLATES['backend_strix']
     if backend == 'tpu' and 'tpu' not in hw.engines:
-        return 'No accessible TPU detected; requires a TPU host and JAX/libtpu.'
+        return BACKEND_TEMPLATES['backend_tpu']
     return None
 
 
 def setup(backend, hw):
     executable = shlex.quote(sys.executable)
-    command, note = '', 'Commands target this app environment. Restart basal-ui after installation, then Refresh.'
+    command, note = '', BACKEND_TEMPLATES['backend_setup_default']
     if backend == 'mlx':
         command = f'{executable} -m pip install "mlx>=0.32" "mlx-lm>=0.32"'
     elif backend == 'gguf':
@@ -94,12 +118,13 @@ def setup(backend, hw):
     elif backend in ('vllm', 'sglang'):
         package = '"vllm>=0.11"' if backend == 'vllm' else '"sglang[srt]==0.5.21"'
         command = 'uv venv --python 3.12 .venv-' + backend + '\nuv pip install --python .venv-' + backend + '/bin/python ' + package
-        note = ('Use a separate environment: these packages bring their own PyTorch dependencies. Install this same Basal fork with its UI dependencies there and launch basal-ui from that environment. Installing there does not change this inventory.')
+        note = BACKEND_TEMPLATES['backend_setup_separate']
     elif backend == 'tpu':
         command = f'{executable} -m pip install "jax[tpu]==0.11.1"'
     else:
-        note = 'Use the platform-specific installer in the documentation for the correct PyTorch/ROCm build; do not replace a working GPU build with a generic wheel.'
-    return {'command': command, 'note': note}
+        note = BACKEND_TEMPLATES['backend_setup_platform']
+    note_code, note_params = _message_fields(note)
+    return {'command': command, 'note': note, 'note_code': note_code, 'note_params': note_params}
 
 
 def matching_modes(backend, variant, hw):
@@ -185,8 +210,12 @@ class Manager:
                                        'estimated_memory_bytes': needed,
                                        'mode_estimates': {mode: estimate(v, hw, mode).est_memory_bytes for mode in allowed} if needed else {}})
                     models.sort(key=lambda m: (m['estimated_memory_bytes'] is None, m['estimated_memory_bytes'] or 0, m['id']))
+                reason_text = reason or check['error'] or (
+                    'Missing: ' + ', '.join(check['missing']) if check['missing']
+                    else 'Dependency/device checks passed; inference is not verified.')
+                reason_code, reason_params = _message_fields(reason)
                 entries.append({'id': key, 'name': name, 'status': status, 'compatible': reason is None,
-                                'reason': reason or check['error'] or ('Missing: ' + ', '.join(check['missing']) if check['missing'] else 'Dependency/device checks passed; inference is not verified.'),
+                                'reason': reason_text, 'reason_code': reason_code, 'reason_params': reason_params,
                                 'versions': check['versions'], 'modes': modes, 'models': models,
                                 'setup': setup(key, hw), 'documentation': docs})
             entries.sort(key=lambda e: (not e['compatible'], e['name']))

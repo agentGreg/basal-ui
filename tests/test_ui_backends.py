@@ -57,6 +57,16 @@ def test_inventory_missing_packages_still_shows_compatible_models(manager, monke
     assert 'basal[sglang]' not in backends.setup('sglang', manager.current_hardware())['command']
 
 
+
+def test_inventory_codes_machine_reasons_and_setup_notes(manager):
+    data = manager.inventory()
+    mlx = next(b for b in data['backends'] if b['id'] == 'mlx')
+    assert mlx['reason_code'] == 'backend_mlx_device' and mlx['reason_params'] == {}
+    assert mlx['reason'] == backends.BACKEND_TEMPLATES[mlx['reason_code']].format(**mlx['reason_params'])
+    assert mlx['setup']['note_code'] == 'backend_setup_default'
+    assert mlx['setup']['note'] == backends.BACKEND_TEMPLATES[mlx['setup']['note_code']].format(
+        **mlx['setup']['note_params'])
+
 def test_private_test_does_not_change_settings_history_or_stats(manager, tmp_path):
     before = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
     manager.start(request())

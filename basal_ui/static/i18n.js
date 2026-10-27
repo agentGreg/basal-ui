@@ -834,6 +834,13 @@ const PL = {
   "code:phase_done_warnings": "gotowe z ostrzeżeniami",
   "code:phase_cancelled": "anulowano",
   "code:phase_error": "błąd",
+  "code:backend_mlx_device": "Ta integracja Basal obsługuje MLX na Apple Silicon.",
+  "code:backend_cuda_linux": "Ta integracja Basal wymaga NVIDIA CUDA w systemie Linux.",
+  "code:backend_strix": "Wymagany AMD Strix Halo ze zgodną instalacją ROCm PyTorch.",
+  "code:backend_tpu": "Nie wykryto dostępnego TPU; wymagany host TPU oraz JAX/libtpu.",
+  "code:backend_setup_default": "Polecenia dotyczą środowiska tej aplikacji. Po instalacji uruchom ponownie basal-ui i wybierz Odśwież.",
+  "code:backend_setup_separate": "Użyj osobnego środowiska: te pakiety instalują własne zależności PyTorch. Zainstaluj tam ten sam fork Basal z zależnościami UI i uruchamiaj z niego basal-ui. Instalacja nie zmienia tego zestawienia.",
+  "code:backend_setup_platform": "Użyj instalatora platformy z dokumentacji, aby dobrać właściwą kompilację PyTorch/ROCm; nie zastępuj działającej wersji GPU ogólnym pakietem.",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],

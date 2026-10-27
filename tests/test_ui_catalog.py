@@ -179,12 +179,17 @@ def test_suggestion_codes_reproduce_english_text_and_match_template_params():
         assert card["why"] == template.format(**card["why_params"])
 
 
-def test_catalog_templates_have_matching_polish_placeholders():
+def test_server_templates_have_matching_polish_placeholders():
+    from basal.ui import backends
+    from basal.ui.jobs import PHASE_TEMPLATES
+
     source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
     translated = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))
-    for code, template in catalog.ASSESSMENT_TEMPLATES.items():
-        assert code in translated
-        assert set(re.findall(r"\{(\w+)\}", template)) == set(re.findall(r"\{(\w+)\}", translated[code]))
+    tables = (catalog.ASSESSMENT_TEMPLATES, backends.BACKEND_TEMPLATES, PHASE_TEMPLATES)
+    for table in tables:
+        for code, template in table.items():
+            assert code in translated
+            assert set(re.findall(r"\{(\w+)\}", template)) == set(re.findall(r"\{(\w+)\}", translated[code]))
 
 def test_pico_is_recurrent_and_follows_basal_serve_default_modes():
     pico = variant("Remek/basal-omni-pico", size=1_700_000_000)
