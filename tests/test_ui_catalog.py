@@ -161,22 +161,34 @@ def test_suggestions_by_hardware_and_available_memory():
     media_cards = choices(media_hw, [omni])
     assert media_cards == [{"slot": "multimodal", "id": omni,
                             "why": "images and audio, served with --mode eager", "why_code": "suggest_multimodal",
-                            "why_params": {"kinds": "images and audio", "mode": "eager"}}]
+                            "why_params": {"kinds": ["image", "audio"], "mode": "eager"}}]
 
 
-
-def test_suggestion_codes_reproduce_english_text_and_match_template_params():
+def test_suggestion_codes_reproduce_english_text_with_structured_params():
     apple = hw("apple", "M4 Max", None, frozenset({"mlx"}), 24 * 1024**3, 6 * 1024**3)
     repos = ["Remek/basal-2.0-mini-MLX-8bit", "Remek/basal-2.0-4.5B-MLX-8bit"]
     cards = suggest([assess(variant(repo), apple) for repo in repos], apple)
     assert cards[0]["why_code"] == "suggest_packed"
-    assert cards[0]["why"] == catalog.ASSESSMENT_TEMPLATES[cards[0]["why_code"]].format(
-        **cards[0]["why_params"])
-    assert cards[0]["why_params"] == {"base": "mini in MLX 8-bit: needs about 3.7 GB of 6.4 GB available"}
+    assert cards[0]["why_params"] == {
+        "tier": "mini", "label": "MLX 8-bit", "estimate": 3.7, "memory": 6.4}
+
     for card in cards:
         template = catalog.ASSESSMENT_TEMPLATES[card["why_code"]]
         assert set(card["why_params"]) == set(re.findall(r"\{(\w+)\}", template))
-        assert card["why"] == template.format(**card["why_params"])
+        assert card["why"] == catalog._format_message(card["why_code"], card["why_params"])
+        for key, value in card["why_params"].items():
+            if key in ("estimate", "memory"):
+                assert isinstance(value, (int, float))
+            elif key == "kinds":
+                assert isinstance(value, list) and set(value) <= {"image", "audio"}
+            else:
+                assert isinstance(value, str) and not any(
+                    word in value for word in ("available", "budget", "images and audio"))
+
+    budget = hw("cpu", "CPU", None, frozenset(), 8 * 1024**3, None)
+    budget_card = suggest([assess(variant("Remek/basal-2.0-mini"), budget)], budget)[0]
+    assert budget_card["why_code"] == "suggest_recommended_budget"
+    assert budget_card["why"] == catalog._format_message(budget_card["why_code"], budget_card["why_params"])
 
 
 def test_server_templates_have_matching_polish_placeholders():

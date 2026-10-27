@@ -46,25 +46,38 @@ ASSESSMENT_TEMPLATES = {
     "omni_hardware": "basal-omni needs an NVIDIA GPU or Apple Silicon.",
     "media_absent": "this checkpoint has no image or audio encoder",
     "media_dependency": "images and audio need pillow, soundfile, scipy and torchvision: install basal[media]",
-    "suggest_recommended": "{tier} in {label}: needs about {estimate} of {memory}",
-    "suggest_packed": "{base}; about 1.5x faster with --mlx-packed (Load options)",
-    "suggest_best": "the largest tier that fits now: needs about {estimate}",
-    "suggest_fastest": "the smallest tier: needs about {estimate}",
-    "suggest_lightest": "{tier}: the smallest basal model, text on a CPU or a small GPU; needs about {estimate}, served with --mode {mode}",
+    "suggest_recommended": "{tier} in {label}: needs about {estimate} GB of {memory} GB available",
+    "suggest_recommended_budget": "{tier} in {label}: needs about {estimate} GB of a {memory} GB budget",
+    "suggest_packed": "{tier} in {label}: needs about {estimate} GB of {memory} GB available; about 1.5x faster with --mlx-packed (Load options)",
+    "suggest_packed_budget": "{tier} in {label}: needs about {estimate} GB of a {memory} GB budget; about 1.5x faster with --mlx-packed (Load options)",
+    "suggest_recommended_unknown": "{tier} in {label}: needs about {estimate} GB of a {memory} budget",
+    "suggest_packed_unknown": "{tier} in {label}: needs about {estimate} GB of a {memory} budget; about 1.5x faster with --mlx-packed (Load options)",
+    "suggest_best": "the largest tier that fits now: needs about {estimate} GB",
+    "suggest_fastest": "the smallest tier: needs about {estimate} GB",
+    "suggest_lightest": "{tier}: the smallest basal model, text on a CPU or a small GPU; needs about {estimate} GB, served with --mode {mode}",
     "suggest_multimodal": "{kinds}, served with --mode {mode}",
 }
 
 
+def _format_message(code: str, params: dict) -> str:
+    values = dict(params)
+    if isinstance(values.get("kinds"), list):
+        values["kinds"] = " and ".join({"image": "images"}.get(kind, kind) for kind in values["kinds"])
+    if values.get("memory", 0) is None:
+        values["memory"] = "—"
+    return ASSESSMENT_TEMPLATES[code].format(**values)
+
+
 def _message(code: str, **params) -> dict:
-    return {"text": ASSESSMENT_TEMPLATES[code].format(**params), "code": code, "params": params}
+    return {"text": _format_message(code, params), "code": code, "params": params}
 
 
 def _coded(code: str | None, **params) -> tuple[str | None, str | None, dict]:
     if code is None:
         return None, None, {}
-    return ASSESSMENT_TEMPLATES[code].format(**params), code, params
+    return _format_message(code, params), code, params
 def _text(code: str, **params) -> str:
-    return ASSESSMENT_TEMPLATES[code].format(**params)
+    return _format_message(code, params)
 
 def _message_fields(text: str | None, codes: tuple[str, ...]) -> tuple[str | None, dict | None]:
     if text is None:
@@ -389,6 +402,8 @@ def preferred_format(hw: Hardware) -> str:
     if "gguf" in hw.engines:
         return "GGUF Q8_0"
     return "bf16"
+def _gb_number(size: int | None) -> float | None:
+    return None if size is None else float(f"{size / 1_000_000_000:.1f}")
 
 
 def _gb(size: int | None) -> str:
@@ -426,34 +441,32 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
         best = best if best and now(best) == "fits" else None
         fastest = by_tier.get("mini")
         if recommended:
-            memory = (f"{_gb(hw.available_bytes)} available" if hw.available_bytes is not None
-                      else f"a {_gb(hw.memory_bytes)} budget")
+            available = hw.available_bytes is not None
+            memory = _gb_number(hw.available_bytes if available else hw.memory_bytes)
             v = recommended.variant
-            params = {"tier": v.tier, "label": v.label, "estimate": _gb(recommended.est_memory_bytes),
-                      "memory": memory}
-            code = "suggest_recommended"
+            params = {"tier": v.tier, "label": v.label,
+                      "estimate": _gb_number(recommended.est_memory_bytes), "memory": memory}
+            code = "suggest_recommended" if available else "suggest_recommended_budget" if memory is not None else "suggest_recommended_unknown"
             if (hw.platform == "apple" and "mlx" in hw.engines and v.family in ("basal-1.0", "basal-1.5", "basal-2.0")
                     and (v.port == "bf16" or v.port.startswith("MLX"))):
-                code = "suggest_packed"
-                params = {"base": ASSESSMENT_TEMPLATES["suggest_recommended"].format(**params)}
+                code = "suggest_packed" if available else "suggest_packed_budget" if memory is not None else "suggest_packed_unknown"
             suggestions.append(_suggestion("recommended", v.id, code, **params))
         if best and best is not recommended:
             suggestions.append(_suggestion("best_quality", best.variant.id, "suggest_best",
-                                           estimate=_gb(best.est_memory_bytes)))
+                                           estimate=_gb_number(best.est_memory_bytes)))
         if fastest and fastest not in (recommended, best):
             suggestions.append(_suggestion("fastest", fastest.variant.id, "suggest_fastest",
-                                           estimate=_gb(fastest.est_memory_bytes)))
+                                           estimate=_gb_number(fastest.est_memory_bytes)))
     light = [a for a in fitting if a.runnable and a.variant.recurrent]
     if light:
         pick = (next((a for a in light if a.variant.label == preferred_format(hw)), None)
                 or next((a for a in light if a.variant.port == "bf16"), light[0]))
         suggestions.append(_suggestion("lightest", pick.variant.id, "suggest_lightest",
-                                       tier=pick.variant.tier, estimate=_gb(pick.est_memory_bytes), mode=pick.mode))
+                                       tier=pick.variant.tier, estimate=_gb_number(pick.est_memory_bytes), mode=pick.mode))
     multimodal = largest([a for a in fitting if a.media_mode is not None])
     if multimodal:
-        kinds = " and ".join({"image": "images"}.get(kind, kind) for kind in multimodal.variant.media)
         suggestions.append(_suggestion("multimodal", multimodal.variant.id, "suggest_multimodal",
-                                       kinds=kinds, mode=multimodal.media_mode))
+                                       kinds=list(multimodal.variant.media), mode=multimodal.media_mode))
     return suggestions
 
 

@@ -814,11 +814,15 @@ const PL = {
   "code:omni_hardware": "basal-omni wymaga karty NVIDIA lub Apple Silicon.",
   "code:media_absent": "ten checkpoint nie ma enkodera obrazu ani audio",
   "code:media_dependency": "obrazy i audio wymagają pillow, soundfile, scipy i torchvision: zainstaluj basal[media]",
-  "code:suggest_recommended": "{tier} w formacie {label}: potrzeba około {estimate} z {memory}",
-  "code:suggest_packed": "{base}; około 1,5 raza szybciej z --mlx-packed (Opcje ładowania)",
-  "code:suggest_best": "największy poziom mieszczący się teraz: potrzeba około {estimate}",
-  "code:suggest_fastest": "najmniejszy poziom: potrzeba około {estimate}",
-  "code:suggest_lightest": "{tier}: najmniejszy model basal, tekst na CPU lub małej karcie GPU; potrzeba około {estimate}, obsługa przez --mode {mode}",
+  "code:suggest_recommended": "{tier} w formacie {label}: potrzeba około {estimate} GB z {memory} GB dostępnej pamięci",
+  "code:suggest_recommended_budget": "{tier} w formacie {label}: potrzeba około {estimate} GB z budżetu {memory} GB",
+  "code:suggest_packed": "{tier} w formacie {label}: potrzeba około {estimate} GB z {memory} GB dostępnej pamięci; około 1,5 raza szybciej z --mlx-packed (Opcje ładowania)",
+  "code:suggest_packed_budget": "{tier} w formacie {label}: potrzeba około {estimate} GB z budżetu {memory} GB; około 1,5 raza szybciej z --mlx-packed (Opcje ładowania)",
+  "code:suggest_recommended_unknown": "{tier} w formacie {label}: potrzeba około {estimate} GB przy nieznanej pamięci ({memory})",
+  "code:suggest_packed_unknown": "{tier} w formacie {label}: potrzeba około {estimate} GB przy nieznanej pamięci ({memory}); około 1,5 raza szybciej z --mlx-packed (Opcje ładowania)",
+  "code:suggest_best": "największy poziom mieszczący się teraz: potrzeba około {estimate} GB",
+  "code:suggest_fastest": "najmniejszy poziom: potrzeba około {estimate} GB",
+  "code:suggest_lightest": "{tier}: najmniejszy model basal, tekst na CPU lub małej karcie GPU; potrzeba około {estimate} GB, obsługa przez --mode {mode}",
   "code:suggest_multimodal": "{kinds}, obsługa przez --mode {mode}",
   "code:phase_starting": "uruchamianie",
   "code:phase_running": "w trakcie",
@@ -914,7 +918,14 @@ function t(text, vars) {
 }
 function ts(text, code, params) {
   const translated = LANG === 'pl' && PL[`code:${code}`];
-  return fill(translated || text, params);
+  const values = LANG === 'pl' && params
+    ? {...params,
+       ...(params.memory === null ? {memory: '—'} : {}),
+       ...(Array.isArray(params.kinds)
+         ? {kinds: params.kinds.map(kind => ({image: 'obrazy', audio: 'audio'}[kind] || kind)).join(' i ')}
+         : {})}
+    : params;
+  return fill(translated || text, values);
 }
 function plForm(n) {  // Polish: 1 model, 2-4 modele (not 12-14), 5+ modeli
   const a = Math.abs(n) % 100, b = a % 10;

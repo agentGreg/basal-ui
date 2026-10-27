@@ -192,9 +192,25 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
           reason: 'needs an NVIDIA GPU (the CUDA graph engine)', reason_code: 'cuda_graph_gpu',
           reason_params: {}});
       }
+      const source = data.models.find(m => m.runnable);
+      const packed = {...source, id: '__e2e_packed__', family: 'basal-2.0', tier: 'mini',
+        label: 'MLX 8-bit', runnable: true};
+      const multimodal = {...source, id: '__e2e_multimodal__', family: 'basal-omni-1.0',
+        tier: 'mini', runnable: true};
+      data.models.push(packed, multimodal);
+      const packedParams = {tier: 'mini', label: 'MLX 8-bit', estimate: 3.7, memory: 6.4};
+      const packedText = 'mini in MLX 8-bit: needs about 3.7 GB of 6.4 GB available; about 1.5x faster with --mlx-packed (Load options)';
+      const multimodalParams = {kinds: ['image', 'audio'], mode: 'eager'};
+      const multimodalText = 'images and audio, served with --mode eager';
+      data.suggestions.push(
+        {slot: 'recommended', id: packed.id, why: packedText, why_code: 'suggest_packed', why_params: packedParams},
+        {slot: 'multimodal', id: multimodal.id, why: multimodalText,
+          why_code: 'suggest_multimodal', why_params: multimodalParams});
       renderModels(data);
       return {data, unavailable: data.models.find(m => !m.runnable && m.reason_code),
-              suggestion: data.suggestions.find(s => s.why_code)};
+              suggestion: data.suggestions.find(s => s.why_code),
+              packed: data.suggestions.find(s => s.id === packed.id),
+              multimodal: data.suggestions.find(s => s.id === multimodal.id)};
     }""")
     unavailable, suggestion = fixture["unavailable"], fixture["suggestion"]
     assert unavailable and suggestion
@@ -211,6 +227,15 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
     translated_why = page.evaluate("s => ts(s.why, s.why_code, s.why_params)", suggestion)
     assert translated_why != suggestion["why"]
     sync_api.expect(page.locator("#suggested .why").filter(has_text=translated_why).first).to_be_visible()
+    for key in ("packed", "multimodal"):
+        card = fixture[key]
+        translated = page.evaluate("s => ts(s.why, s.why_code, s.why_params)", card)
+        assert translated != card["why"]
+        sync_api.expect(page.locator("#suggested .why").filter(has_text=translated).first).to_be_visible()
+    assert "obrazy i audio" in page.evaluate(
+        "s => ts(s.why, s.why_code, s.why_params)", fixture["multimodal"])
+    assert "--mlx-packed" in page.evaluate(
+        "s => ts(s.why, s.why_code, s.why_params)", fixture["packed"])
 
     options_target = page.evaluate("""async () => {
       for (const m of modelData.filter(x => x.runnable)) {
