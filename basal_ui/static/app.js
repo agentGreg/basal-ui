@@ -1024,7 +1024,7 @@ let selectedModel=localStorage.getItem('basal-ui.model')||'', previousDownloads=
 let statsData={models:{},benchmarks:{}}, statsSignature='', benchSignature='', benchRunning=false;
 let historyAfter=null, historyBefore=null, historySource='', historyTimer=null, historyDebounce=null, historyRows=new Map();
 const historyOpen=new Map();
-let logSource='basal-ui', logAfter=0, logTimer=null, shownHash=null;
+let logSource='basal-ui', logAfter=0, logGeneration=null, logTimer=null, shownHash=null;
 const readyModels=()=>(statusCache?.models||[]).filter(m=>m.state==='ready');
 const pct=v=>v==null?'—':`${(Number(v)*100).toFixed(1)}%`;
 const num=(v,digits=1)=>v==null?'—':Number(v).toFixed(digits);
@@ -1270,8 +1270,10 @@ function renderCalibrationFiles(id, d) {
     const checked=(d.selected||'')===value;
     return `<tr><td><label><input type="radio" name="calibrationUse" value="${esc(value)}"${checked?' checked':''}> ${esc(label)}</label>${f?.imported?' <span class="chip">imported</span>':''}${checked&&loaded?.restart_required?' <span class="badge fit-tight">Restart to apply</span>':''}${f?.warning?`<span class="reason">${esc(f.warning)}</span>`:''}${f?.error?`<span class="reason">${esc(f.error)}</span>`:''}${(f?.warnings||[]).map(w=>`<span class="reason">${esc(w)}</span>`).join('')}</td><td>${fitted?`${esc(fitted.data??'')} · ${esc(fitted.decisions??'—')} decisions`:esc(typeof f?.fitted_on==='string'?f.fitted_on:'—')}</td><td>${fitted?Object.entries(fitted.per_type||{}).map(([t,n])=>`<span class="chip">${esc(t)} ${esc(n)}</span>`).join(' '):''}</td><td>${thresholdCell(allThresholds(f))}</td><td>${esc(automated||'—')}</td><td>${value&&f?.has_report?`<button type="button" data-report="${esc(value)}">Report</button>`:''}</td></tr>`;
   };
-  const shipped=d.shipped?row(d.shipped,'',`shipped · ${shortName(d.shipped.file)}`):'';
-  $('#calibrationFiles').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
+  const ctx=d.shipped?.context||{}, context=d.shipped?`Shipped default: ${esc(shortName(d.shipped.file))} · ${esc(ctx.active?'running settings':'saved settings for next start')} · ${esc(ctx.mode)}${ctx.quant?` · ${esc(ctx.quant)}`:''}${ctx.preset?` · ${esc(ctx.preset)}`:''} · ${esc(ctx.layout)}${ctx.adapter?` · adapter ${esc(shortName(ctx.adapter))}`:''}`:'Shipped default unavailable';
+  const selection=d.selected?`Selected custom calibration for next start: ${esc(shortName(d.selected))}`:'Selected calibration: shipped default';
+  const shipped=d.shipped?row(d.shipped,'',`Shipped default · ${shortName(d.shipped.file)}`):'';
+  $('#calibrationFiles').innerHTML=`<p class="muted">${context}<br>${selection}</p><div class="table-wrap"><table><thead><tr><th>Use</th><th>Fitted on</th><th>Per type</th><th>Certified thresholds</th><th>Automated on CERT</th><th></th></tr></thead><tbody>${shipped}${d.files.map(f=>row(f,f.file,new Date(f.when*1000).toLocaleString())).join('')}</tbody></table></div>`;
   for(const f of d.files||[])if(f.rows){
     const radio=[...$('#calibrationFiles').querySelectorAll('input[name=calibrationUse]')].find(x=>x.value===f.file);
     if(!radio)continue;
@@ -1471,16 +1473,24 @@ async function loadHistory(mode='reset') {
   if(historySource)params.set('source',historySource);
   if(query)params.set('q',query);
   if(mode==='more'&&historyBefore)params.set('before',historyBefore);
+  if(mode==='poll')params.set('order','asc');
   if(mode==='poll'&&historyAfter)params.set('after',historyAfter);
   try{
-    const d=await api(`/api/history?${params}`), items=d.items||[];
+    let d, items=[], pollCursor=null;
+    do{
+      d=await api(`/api/history?${params}`);
+      const page=d.items||[]; items.push(...page);
+      if(mode==='poll'&&page.length)pollCursor=page.at(-1).id;
+      if(mode!=='poll'||page.length<100)break;
+      params.set('after',page.at(-1).id);
+    }while(sequence===historySequence);
     if(sequence!==historySequence)return;  // the filter changed meanwhile: that query's own fetch renders
     syncHistoryModels(d.models||[]);
     if(mode==='reset'){historyRows=new Map();historyOpen.clear();}
     items.forEach(x=>historyRows.set(x.id,x));
     if(mode!=='poll')$('#historyMore').hidden=items.length<100;
     const sorted=[...historyRows.values()].sort((a,b)=>b.ts-a.ts);
-    historyAfter=sorted[0]?.id||null; historyBefore=sorted.at(-1)?.id||null;
+    historyAfter=mode==='poll'?(pollCursor||historyAfter):(sorted[0]?.id||null); historyBefore=sorted.at(-1)?.id||null;
     if(mode!=='poll'||items.length)renderHistory(sorted);
   }catch(e){if(sequence!==historySequence)return;$('#historyTable').innerHTML=`<div class="error-box">${esc(e.message)}</div>`;}
   if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);
@@ -1531,8 +1541,10 @@ async function loadLogs() {
   if($('#logs').hidden)return;
   const out=$('#logOutput'), source=logSource;
   try{
-    const d=await api(`/api/logs?source=${encodeURIComponent(source)}&after=${logAfter}`);
+    const d=await api(`/api/logs?source=${encodeURIComponent(source)}&after=${logAfter}${logGeneration?`&generation=${encodeURIComponent(logGeneration)}`:''}`);
     if(source!==logSource)return;  // the user switched tabs meanwhile: that tab's own fetch renders
+    if(logGeneration&&d.generation!==logGeneration){out.textContent='';logAfter=0;}
+    logGeneration=d.generation;
     $('#logSources').innerHTML=d.sources.map(x=>`<button type="button" data-logsource="${esc(x.id)}" class="${x.id===logSource?'active':''}" title="${esc(x.id)}">${esc(x.id==='basal-ui'?'basal-ui':shortName(x.id))}${x.state==='gone'?' <span class="chip">gone</span>':x.id.startsWith('job:')&&x.state==='running'?' <span class="chip">running</span>':''}</button>`).join('');
     const atBottom=out.scrollTop+out.clientHeight>=out.scrollHeight-8;
     if(d.lines.length){
@@ -1682,7 +1694,7 @@ function showView(hash, updateHash=false) {
   if(name==='history')loadHistory('reset');
   if(name==='logs'){
     let source=logSource; try{if(arg)source=decodeURIComponent(arg);}catch{}
-    if(source!==logSource){logSource=source;logAfter=0;$('#logOutput').textContent='';}
+    if(source!==logSource){logSource=source;logAfter=0;logGeneration=null;$('#logOutput').textContent='';}
     loadLogs();
   }
 }

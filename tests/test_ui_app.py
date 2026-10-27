@@ -13,6 +13,7 @@ from basal.ui.app import Fleet, Runner, create_app, rss_by_pgid
 from basal.ui.catalog import Variant
 from basal.ui.hardware import Hardware
 from basal.ui.history import History
+from basal.ui.jobs import LogBuffer
 from basal.ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
@@ -658,10 +659,17 @@ def test_logs_route_lists_sources_and_reads_incrementally(tmp_path, instant_star
     with TestClient(app, base_url="http://127.0.0.1") as client:
         client.post("/api/load", json={"id": "mini"})
         logs = client.get("/api/logs").json()
+        assert logs["generation"]
         assert logs["sources"] == [{"id": "basal-ui", "state": "ui"}, {"id": "mini", "state": "ready"}]
         assert "info load requested: mini" in [line["text"] for line in logs["lines"]]
         last = logs["lines"][-1]["seq"]
         assert client.get("/api/logs", params={"after": last}).json()["lines"] == []
+        old_generation = logs["generation"]
+        fleet.logs["basal-ui"] = LogBuffer()
+        fleet.logs["basal-ui"].append("new generation")
+        restarted = client.get("/api/logs", params={"generation": old_generation, "after": last}).json()
+        assert restarted["generation"] != old_generation
+        assert [line["text"] for line in restarted["lines"]] == ["new generation"]
         fleet.runners["mini"].log.append("a child line")
         assert [line["text"] for line in client.get("/api/logs", params={"source": "mini"}).json()["lines"]] == [
             "a child line"]

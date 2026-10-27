@@ -77,10 +77,10 @@ def summary(path, local_dir=None) -> dict:
     return out
 
 
-def shipped_file(local_dir, mode, preset=None) -> Path:
+def shipped_file(local_dir, mode, preset=None, quant=None, layout="canonical", adapter_dir=None) -> Path:
     """The calibration file basal-serve loads for the model in `mode` without --calibration."""
-    kind, quant = MODES[mode][:2]
-    return calibration_file(Path(local_dir), kind, None, quant, preset)
+    kind, default_quant = MODES[mode][:2]
+    return calibration_file(Path(local_dir), kind, None, quant or default_quant, preset, layout, adapter_dir)
 
 
 def listing(model_id, settings_mod, local_dir=None) -> list[dict]:

@@ -1046,7 +1046,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def get_model_card(id: str):
         variant = find_variant(id)
         cache_dir = settings_mod.models_dir()
-        local_dir = catalog.is_downloaded(variant, cache_dir, revision=served_revision(variant))
+        local_dir = catalog.is_downloaded(variant, cache_dir, revision=effective_revision(variant))
         assessment = catalog.assess(variant, hw())
         loaded = next((m.get("entry") for m in fleet.status()["models"] if m["id"] == variant.id), None)
         from huggingface_hub import scan_cache_dir
@@ -1086,7 +1086,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         if local_dir:
             from . import calibration
             try:
-                path = calibration.shipped_file(local_dir, served_mode(variant, assessment))
+                path, _ = resolve_shipped_calibration(variant, local_dir, assessment)
                 shipped_calibration = calibration.summary(path) if path.is_file() else None
             except (OSError, ValueError, KeyError) as exc:
                 shipped_calibration = {"error": str(exc)}
@@ -1332,9 +1332,32 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         """The revision the model is loaded at (load option), None for the default branch."""
         return settings_mod.load_options(variant.id).get("revision")
 
-    def served_mode(variant, assessment):
-        """The mode the model is served in; eager names the default CALIBRATION.json."""
-        return settings_mod.load_options(variant.id).get("mode") or assessment.mode or "eager"
+    def effective_revision(variant):
+        with fleet.lock:
+            runner = fleet.runners.get(variant.id)
+        return (runner.options.get("revision") if runner is not None and runner.status()["state"] == "ready"
+                else served_revision(variant))
+
+    def resolve_shipped_calibration(variant, local_dir, assessment):
+        from . import calibration
+        from basal.prompt import model_layout
+        from basal.server import MODES
+
+        with fleet.lock:
+            runner = fleet.runners.get(variant.id)
+        active = runner is not None and runner.status()["state"] == "ready"
+        saved = settings_mod.load_options(variant.id)
+        options = load_options.validate(runner.options if active else saved, assessment.mode)
+        mode = runner.mode if active else options.get("mode") or assessment.mode or "eager"
+        quant = options.get("quant") or MODES[mode][1]
+        preset, adapter_dir = options.get("vllm_preset"), options.get("adapter")
+        layout = options.get("layout") or model_layout(local_dir)
+        path = calibration.shipped_file(local_dir, mode, preset, quant, layout, adapter_dir)
+        context = {"revision": (runner.options.get("revision") if active else options.get("revision"))
+                   or variant.base_revision or "default", "mode": mode, "quant": quant,
+                   "preset": preset if mode == "vllm" else None, "layout": layout,
+                   "adapter": adapter_dir, "active": active}
+        return path, context
 
     def downloaded(variant):
         local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=served_revision(variant))
@@ -1442,12 +1465,13 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def calibrations_response(variant):
         from . import calibration
 
-        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=served_revision(variant))
+        revision = effective_revision(variant)
+        local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=revision)
         shipped = None
         if local_dir:
-            mode = served_mode(variant, catalog.assess(variant, hw()))
-            path = calibration.shipped_file(local_dir, mode)
-            shipped = {"file": str(path)}
+            assessment = catalog.assess(variant, hw())
+            path, context = resolve_shipped_calibration(variant, local_dir, assessment)
+            shipped = {"file": str(path), "context": context}
             try:
                 shipped.update(calibration.summary(path))
             except (OSError, ValueError) as exc:
@@ -1628,9 +1652,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
     @app.get("/api/history")
     def get_history(model: str | None = None, source: str | None = None, q: str | None = None, limit: int = 100,
-                    before: str | None = None, after: str | None = None):
+                    before: str | None = None, after: str | None = None, order: str = "desc"):
+        if order not in ("asc", "desc"):
+            raise HTTPException(400, "order must be asc or desc")
         items = history.list(model=model or None, source=source or None, q=q or None,
-                             limit=max(1, min(limit, 500)), before=before, after=after)
+                             limit=max(1, min(limit, 500)), before=before, after=after, order=order)
         return {"items": items, "models": history.models()}
 
     @app.get("/api/history/{record_id}")
@@ -1645,7 +1671,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return {"cleared": history.clear()}
 
     @app.get("/api/logs")
-    def get_logs(source: str = "basal-ui", after: int = 0):
+    def get_logs(source: str = "basal-ui", after: int = 0, generation: str | None = None):
         with fleet.lock:
             buffers = dict(fleet.logs)
             runners = dict(fleet.runners)
@@ -1660,7 +1686,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         sources += [{"id": key, "state": "running" if jobs.get(key[4:], {}).get("running") else "done"}
                     for key in job_logs]
         sources += [{"id": key, "state": "gone"} for key in gone]
-        return {"sources": sources, "lines": buffers[source].since(after)}
+        buffer = buffers[source]
+        changed = generation is not None and generation != buffer.generation
+        return {"sources": sources, "generation": buffer.generation,
+                "lines": buffer.since(0 if changed else after)}
 
     return app
 

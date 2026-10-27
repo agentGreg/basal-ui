@@ -29,10 +29,27 @@ def test_list_filters_search_and_pages_newest_first(tmp_path):
     assert [r["id"] for r in history.list(limit=2)] == [ids[3], ids[2]]
     assert [r["id"] for r in history.list(before=ids[2])] == [ids[1], ids[0]]
     assert [r["id"] for r in history.list(after=ids[1])] == [ids[3], ids[2]]
+    assert [r["id"] for r in history.list(after=ids[1], order="asc")] == [ids[2], ids[3]]
     assert history.models() == ["a", "b"]
     first = history.list()[-1]
     assert (first["questions"], first["input_tokens"], first["answers"]) == (
         1, 7, {"q": {"type": "choice", "best": "yes", "confidence": 0.9}})
+
+
+def test_oldest_first_poll_pages_drain_a_burst_with_equal_timestamps(tmp_path):
+    history = History(tmp_path / "h.jsonl", keep=200)
+    records = [record(state=f"s{i}") for i in range(150)]
+    for item in records:
+        item["ts"] = 1
+        history.append(item)
+    cursor, received = records[0]["id"], []
+    while True:
+        page = history.list(after=cursor, limit=100, order="asc")
+        received.extend(page)
+        if len(page) < 100:
+            break
+        cursor = page[-1]["id"]
+    assert [item["id"] for item in received] == [item["id"] for item in records[1:]]
 
 
 def test_media_bytes_are_replaced_by_their_size_and_states_are_previewed():

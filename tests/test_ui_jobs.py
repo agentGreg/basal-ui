@@ -4,6 +4,7 @@ import time
 import pytest
 
 from basal.ui.jobs import Jobs
+from basal.ui.jobs import LogBuffer
 
 
 def wait_done(jobs, kind, timeout=3):
@@ -49,3 +50,12 @@ def test_one_job_per_kind_cancel_error_and_result():
     state = wait_done(jobs, "bench")
     assert (state["phase"], state["error"], state["running"]) == ("error", "bad input", False)
     assert logs["job:bench"].last() == "error: bad input" and ("error", "bench failed: fails: bad input") in events
+
+
+def test_log_buffer_generation_changes_when_sequence_restarts():
+    old = LogBuffer()
+    old.append("old")
+    new = LogBuffer()
+    new.append("new")
+    assert old.generation != new.generation
+    assert [line["seq"] for line in new.since(0)] == [1]

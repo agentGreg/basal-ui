@@ -2,6 +2,7 @@
 its progress in /api/status and its output in the Logs view (source job:<kind>)."""
 import threading
 import time
+import uuid
 from collections import deque
 
 import httpx
@@ -14,6 +15,7 @@ class LogBuffer:
     def __init__(self, maxlen=1000):
         self.lines = deque(maxlen=maxlen)
         self.seq = 0
+        self.generation = uuid.uuid4().hex
         self.lock = threading.Lock()
 
     def append(self, text):

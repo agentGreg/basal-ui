@@ -117,7 +117,7 @@ class History:
             self.records.append(record)
             settings._locked(write)()
 
-    def list(self, model=None, source=None, q=None, limit=100, before=None, after=None) -> list[dict]:
+    def list(self, model=None, source=None, q=None, limit=100, before=None, after=None, order="desc") -> list[dict]:
         with self.lock:
             records = list(self.records)
         ids = [r["id"] for r in records]
@@ -127,7 +127,7 @@ class History:
             records = records[ids.index(after) + 1:] if after in ids else records
         needle = q.lower() if q else None
         out = []
-        for record in reversed(records):
+        for record in records if order == "asc" else reversed(records):
             if model and record.get("model") != model or source and record.get("source") != source:
                 continue
             if needle and needle not in (str(record.get("state_preview", "")) + " " +

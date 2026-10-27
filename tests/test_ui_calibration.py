@@ -107,6 +107,15 @@ def test_calibrate_fits_against_a_temporary_child_lists_and_selects_the_file(tmp
         assert runner.status()["restart_required"] is False
 
 
+def test_shipped_calibration_resolution_uses_preset_layout_and_adapter(tmp_path):
+    model, adapter = tmp_path / "model", tmp_path / "adapter"
+    model.mkdir(exist_ok=True); adapter.mkdir()
+    (model / "basal.json").write_text('{"layout":"qfirst"}')
+    expected = adapter / "CALIBRATION.vllm.custom.qfirst.json"
+    expected.write_text("{}")
+    assert calibration.shipped_file(model, "vllm", "custom", layout="qfirst", adapter_dir=adapter) == expected
+
+
 def test_calibrate_refuses_an_unknown_model_and_a_model_over_the_budget(tmp_path):
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
                   hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
@@ -127,6 +136,41 @@ def make_app(tmp_path, hw=HW):
                   hardware_fn=lambda: hw, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
     return fleet, create_app(catalog_fn=lambda **_: ([MINI], "test"), hardware_fn=lambda: hw, fleet=fleet,
                              stats=fleet.stats, history=fleet.history)
+
+
+def test_shipped_calibration_context_prefers_running_options_to_saved_options(tmp_path, config):
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    (adapter / "adapter_config.json").write_text('{"peft_type":"LORA","r":1,"lora_alpha":1}')
+    (adapter / "adapter_model.safetensors").write_bytes(b"")
+    (config / "basal.json").write_text('{"layout":"canonical"}')
+    adapter_cal = adapter / "CALIBRATION.vllm.deterministic.json"
+    adapter_cal.write_text('{"temperature_per_prim":{"choice":1}}')
+    model_cal = config / "CALIBRATION.qfirst.json"
+    model_cal.write_text('{"temperature_per_prim":{"choice":2}}')
+    settings.set_load_options("mini", {"mode": "vllm", "revision": "saved-rev", "vllm_preset": "deterministic",
+                                        "layout": "canonical", "adapter": str(adapter)})
+    fleet, app = make_app(tmp_path)
+    settings.set_models_dir(str(tmp_path))
+    (config / "config.json").write_text("{}")
+    (config / "README.md").write_text("local model")
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        pending = client.get("/api/calibrations", params={"id": "mini"}).json()["shipped"]
+        assert pending["file"] == str(adapter_cal)
+        assert pending["context"] == {"revision": "saved-rev", "mode": "vllm", "quant": None,
+                                       "preset": "deterministic", "layout": "canonical", "adapter": str(adapter),
+                                       "active": False}
+        runner = Runner(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings)
+        runner.state, runner.model, runner.mode, runner.options = "ready", "mini", "eager", {
+            "mode": "eager", "revision": "active-rev", "layout": "qfirst"}
+        fleet.runners["mini"] = runner
+        active = client.get("/api/calibrations", params={"id": "mini"}).json()["shipped"]
+        assert active["file"] == str(model_cal)
+        assert active["context"]["mode"] == "eager" and active["context"]["adapter"] is None
+        assert active["context"]["revision"] == "active-rev" and active["context"]["layout"] == "qfirst"
+        assert active["context"]["active"] is True
+        card = client.get("/api/models/card", params={"id": "mini"}).json()
+        assert card["shipped_calibration"]["temperature_per_prim"] == {"choice": 2}
 
 
 TASK = {"state": "The parcel arrived broken.", "questions": {"intent": {
