@@ -727,7 +727,7 @@ function setRequest(req) {
 }
 function resultHeadline(name, answer, requestQuestion) {
   const type=answer.type || requestQuestion?.type || 'unknown';
-  if(type==='choice') { const key=answer.choice ?? answer.answer ?? ''; const criteria=requestQuestion?.criteria; const desc=criteria && !Array.isArray(criteria) ? criteria[key] : null; return `${key}${desc?` · ${typeof desc==='string'?desc:JSON.stringify(desc)}`:''}`; }
+  if(type==='choice') { const key=answer.choice ?? answer.answer ?? ''; const criteria=requestQuestion?.criteria; const desc=criteria && !Array.isArray(criteria) ? criteria[key] : null; const text=desc==null?'':typeof desc==='string'?desc:JSON.stringify(desc); return `${key}${text&&text!==String(key)?` · ${text}`:''}`; }
   if(type==='noul') { const p=Number(answer.noul ?? answer.probabilities?.true); return Number.isFinite(p)?t('P(yes) {value}',{value:`${(p*100).toFixed(1)}%`}):t('P(yes) —'); }
   if(type==='score') { const legend=answer.legend; const score=Number(answer.score ?? answer.expected_score); const top=legend&&Number.isFinite(score)?legend[String(Math.round(score))]:null; return `${t('Expected level {value}',{value:Number.isFinite(score)?score.toFixed(2):'—'})}${top?` · ${t('nearest: {value}',{value:top})}`:''}`; }
   return null;
@@ -798,9 +798,10 @@ function resultBanners(entry,u) {
   return html;
 }
 const clamp01=v=>Math.max(0,Math.min(1,Number(v)||0));
-function labelOf(q,k) {
+function labelOf(q,k) {  // an option's description, null when it only repeats its key ("88412": "88412")
   const c=q.labels??q.criteria;
-  return c&&typeof c==='object'&&!Array.isArray(c)&&c[k]!=null?textOf(c[k]):null;
+  const text=c&&typeof c==='object'&&!Array.isArray(c)&&c[k]!=null?textOf(c[k]):null;
+  return text===String(k)?null:text;
 }
 // probability bars, most probable first; `marked` = the keys drawn as chosen (default: the most probable)
 function probBars(probs, q={}, marked=null) {
