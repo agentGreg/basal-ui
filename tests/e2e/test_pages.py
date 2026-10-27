@@ -54,6 +54,49 @@ def test_every_view_renders(page, text_model):
     sync_api.expect(page.locator("#footerState")).to_contain_text("ready")
 
 
+def test_visible_ui_text_meets_wcag_contrast_in_both_themes(page):
+    def low_contrast():
+        return page.evaluate("""() => {
+          const rgb = value => {
+            const m = value.match(/[\\d.]+/g);
+            return m ? m.slice(0,3).map(Number) : null;
+          };
+          const alpha = value => value.startsWith('rgba(') ? Number(value.match(/,\\s*([\\d.]+)\\s*\\)$/)?.[1] ?? 1) : 1;
+          const luminance = c => {
+            const s = c.map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+            return .2126*s[0] + .7152*s[1] + .0722*s[2];
+          };
+          const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
+          const targets = [...document.querySelectorAll('button,.badge,.chip,[role="tab"],.side-nav button,[role="alert"],.banner')];
+          return targets.filter(el => visible(el) && !(el instanceof HTMLButtonElement && el.disabled) && el.textContent.trim()).flatMap(el => {
+            const style = getComputedStyle(el), fg = rgb(style.color);
+            const ancestors=[];for(let node=el;node;node=node.parentElement)ancestors.unshift(node);
+            let bg=[255,255,255], opacity=1;
+            for(const node of ancestors){
+              const computed=getComputedStyle(node), color=computed.backgroundColor, a=alpha(color), c=rgb(color);
+              if(c)bg=c.map((v,i)=>v*a+bg[i]*(1-a));
+              opacity*=Number(computed.opacity);
+            }
+            if (!fg) return [];
+            const displayed=fg.map((v,i)=>v*opacity+bg[i]*(1-opacity));
+            const ratio = (Math.max(luminance(displayed), luminance(bg)) + .05) / (Math.min(luminance(displayed), luminance(bg)) + .05);
+            const size = parseFloat(style.fontSize), bold = parseInt(style.fontWeight, 10) >= 700;
+            const required = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+            return ratio + .01 < required ? [{text: el.textContent.trim().slice(0,60), ratio, required, fg: style.color, bg}] : [];
+          });
+        }""")
+    for theme in ("light", "dark"):
+        page.evaluate("theme => applyTheme(theme)", theme)
+        page.wait_for_timeout(300)
+        for name in VIEWS:
+            view(page, name)
+            assert not low_contrast(), f"{theme} {name}: {low_contrast()}"
+            if name == "models":
+                page.click("#allModelsTab")
+                assert not low_contrast(), f"{theme} models/all: {low_contrast()}"
+    page.evaluate("() => applyTheme('system')")
+
+
 @pytest.mark.parametrize("request_", advanced_requests(), ids=lambda r: r["id"])
 def test_the_playground_builds_sends_and_renders_each_question_type(page, text_model, request_):
     view(page, "playground")
@@ -262,6 +305,7 @@ def test_the_load_options_dialog_lists_the_modes(page, text_model):
     dialog = page.locator("#loadOptions")
     sync_api.expect(dialog).to_be_visible()
     sync_api.expect(page.locator("#optionsApply")).to_have_text("Restart")
+    sync_api.expect(page.locator("#optionsSetupNote")).to_be_hidden()
     sync_api.expect(dialog.locator(f'input[name="optMode"][value="{text_model["mode"]}"]')).to_be_checked()
     assert dialog.locator('input[name="optMode"]').count() == 16
     assert dialog.locator('input[name="optMode"][disabled]').count() >= 1
@@ -287,6 +331,8 @@ def test_models_set_up_without_loading_and_the_model_manager_loads(page, ui, tex
     page.route("**/api/load", lambda route: (loads.append(1), route.fulfill(status=500, body="loaded")))
     page.click(f'#modelsTable .options-model[data-action="save"][data-id="{text_model["id"]}"]')
     sync_api.expect(page.locator("#optionsApply")).to_have_text("Save")
+    sync_api.expect(page.locator("#optionsSetupNote")).to_be_visible()
+    sync_api.expect(page.locator("#optionsSetupNote")).to_contain_text("Media loads choose their mode")
     sync_api.expect(page.locator("#optionsRemember")).to_be_hidden()
     page.fill("#opt-revision", "main")
     page.click("#optionsApply")
@@ -296,6 +342,21 @@ def test_models_set_up_without_loading_and_the_model_manager_loads(page, ui, tex
         assert saved["saved"] and saved["options"]["revision"] == "main" and not loads
     finally:
         ui.put("/api/models/options", {"id": text_model["id"], "options": {}})
+
+
+def test_models_tabs_and_manager_loaded_section(page, text_model):
+    view(page, "manager")
+    positions = page.evaluate("""() => ['statsTable','benchmarks','calibrationBlock','diskModels','modelsDir']
+      .map(id => document.getElementById(id).getBoundingClientRect().top)""")
+    assert positions == sorted(positions)
+    view(page, "models")
+    assert page.locator('#models [role="tab"]').all_text_contents() == ["Suggested", "All models"]
+    sync_api.expect(page.locator("#suggestedTab")).to_have_attribute("aria-selected", "true")
+    page.evaluate("localStorage.setItem('basal-ui.tab', 'loaded')")
+    page.reload()
+    page.wait_for_function("() => typeof statusCache !== 'undefined' && statusCache && modelData.length > 0")
+    view(page, "models")
+    sync_api.expect(page.locator("#suggestedTab")).to_have_attribute("aria-selected", "true")
 
 
 def test_batch_view_runs_a_file_and_lists_the_answers(page, text_model, tmp_path):
@@ -308,6 +369,56 @@ def test_batch_view_runs_a_file_and_lists_the_answers(page, text_model, tmp_path
     sync_api.expect(page.locator("#downloadBatch")).to_be_visible()
     sync_api.expect(page.locator("#batchRows tbody tr")).to_have_count(20)
     sync_api.expect(page.locator("#batchSummary")).to_contain_text("20 items")
+
+
+def test_playground_builder_draft_survives_language_changes_once(page, text_model):
+    view(page, "playground")
+    request = {
+        "model": text_model["id"], "state": "Review this order", "facts": "auto", "lang": "en",
+        "questions": {
+            "decision": {"type": "choice", "instructions": "What next?", "criteria": {"buy": "Buy", "wait": "Wait"}},
+            "risk": {"type": "noul", "instructions": "Is it risky?"},
+        },
+        "media": [{"type": "image", "data": "aGVsbG8="}],
+    }
+    page.evaluate("r => setRequest(r)", request)
+    page.locator('[data-lang-choice="pl"]').click()
+    page.wait_for_function("() => LANG === 'pl' && statusCache && modelData.length > 0")
+    assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
+        text_model["id"], "Review this order", True, "en"
+    ]
+    assert page.evaluate("() => JSON.parse(buildRequest().questions.decision.criteria ? JSON.stringify(buildRequest().questions.decision.criteria) : '{}')") == {
+        "buy": "Buy", "wait": "Wait"
+    }
+    assert page.evaluate("() => selectedMedia.length") == 0
+    sync_api.expect(page.locator("#mediaError")).to_contain_text("dołącz media ponownie")
+    page.locator('[data-lang-choice="en"]').click()
+    page.wait_for_function("() => LANG === 'en' && statusCache && modelData.length > 0")
+    assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
+        text_model["id"], "Review this order", True, "en"
+    ]
+    assert page.evaluate("() => buildRequest().questions.decision.criteria") == {"buy": "Buy", "wait": "Wait"}
+    assert page.evaluate("() => Object.keys(buildRequest().questions)") == ["decision", "risk"]
+    assert page.evaluate("() => selectedMedia.length") == 0
+    page.reload()
+    page.wait_for_function("() => statusCache && modelData.length > 0")
+    sync_api.expect(page.locator("#stateInput")).to_have_value("")
+
+
+def test_playground_edit_json_draft_keeps_invalid_text(page):
+    view(page, "playground")
+    page.check("#editJsonToggle")
+    text = '{"state": "unfinished", "questions": ['
+    page.fill("#requestJson", text)
+    page.locator('[data-lang-choice="pl"]').click()
+    page.wait_for_function("() => LANG === 'pl' && statusCache && modelData.length > 0")
+    sync_api.expect(page.locator("#requestJson")).to_have_value(text)
+    assert page.locator("#editJsonToggle").is_checked()
+    page.reload()
+    page.wait_for_function("() => statusCache && modelData.length > 0")
+    assert not page.locator("#editJsonToggle").is_checked()
+    assert "unfinished" not in page.locator("#requestJson").input_value()
+    sync_api.expect(page.locator("#builder")).to_be_visible()
 
 
 def test_history_and_logs_views(page, ui, text_model):
@@ -403,7 +514,7 @@ def test_the_tool_builder_sets_the_selection_of_several_tools(page):
 
 def test_the_calibration_view_imports_a_file_fitted_elsewhere(page, ui, text_model, tmp_path):
     shipped = ui.get("/api/calibrations", params={"id": text_model["id"]})["shipped"]["file"]
-    view(page, "models")  # the Calibration block (Loaded tab)
+    view(page, "manager")  # Loaded section contains Calibration
     page.select_option("#calibrationModel", text_model["id"])
     page.fill("#calibrationImportPath", shipped)
     sync_api.expect(page.locator("#calibrationFiles table")).to_be_visible()

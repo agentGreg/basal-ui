@@ -39,8 +39,8 @@ function applyTheme(theme) {
   const value=['light','dark','system'].includes(theme)?theme:'system';
   document.documentElement.dataset.theme=value==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):value;
   document.documentElement.classList.toggle('dark',document.documentElement.dataset.theme==='dark');
+  document.querySelectorAll('.side-nav button').forEach(b=>{if(document.documentElement.dataset.theme==='dark')b.style.setProperty('color','#edf0e9','important');else b.style.removeProperty('color');});
   localStorage.setItem('basal-ui.theme',value);
-  document.querySelectorAll('[data-theme-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeChoice===value)));
 }
 document.querySelectorAll('[data-theme-choice]').forEach(b=>b.onclick=()=>applyTheme(b.dataset.themeChoice));
 applyTheme(localStorage.getItem('basal-ui.theme')||'system');
@@ -693,7 +693,7 @@ function setRequest(req) {
        (Object.hasOwn(req,'media')&&!Array.isArray(req.media))||
        media.some(item=>!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).some(k=>!['type','data'].includes(k))||
          !['image','audio'].includes(item.type)||typeof item.data!=='string'||!(/^(?:[A-Za-z0-9+/]+={0,2}|data:[^,]+;base64,[A-Za-z0-9+/]+={0,2})$/).test(item.data))||
-       (Object.hasOwn(req,'detail')&&(!['default','high'].includes(req.detail)||!media.some(item=>item.type==='image')))||
+       (Object.hasOwn(req,'detail')&&(!['default','high'].includes(req.detail)||(media.length>0&&!media.some(item=>item.type==='image'))))||
        (Object.hasOwn(req,'facts')&&req.facts!=='auto')||(Object.hasOwn(req,'lang')&&!['auto','pl','en'].includes(req.lang))||
        (Object.hasOwn(req,'think')&&!['','off','force'].includes(req.think))||(Object.hasOwn(req,'think_text')&&typeof req.think_text!=='boolean')||
        (Object.hasOwn(req,'model')&&![...$('#playgroundModel').options].some(o=>o.value===req.model))||
@@ -724,6 +724,25 @@ function setRequest(req) {
   $('#questions').innerHTML='';
   for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
   syncRequest(true);
+}
+const PLAYGROUND_DRAFT='basal-ui.language-draft';
+window.preparePlaygroundLanguageSwitch=()=>{
+  const hadMedia=selectedMedia.length>0;
+  if($('#editJsonToggle').checked)sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({json:true,text:$('#requestJson').value,hadMedia}));
+  else {
+    try {const request=buildRequest();delete request.media;const model=selectedModel||$('#playgroundModel').value;if(model)request.model=model;else delete request.model;sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({request,hadMedia}));}
+    catch {sessionStorage.removeItem(PLAYGROUND_DRAFT);}
+  }
+};
+function restorePlaygroundLanguageDraft(){
+  const saved=sessionStorage.getItem(PLAYGROUND_DRAFT);if(!saved)return;
+  sessionStorage.removeItem(PLAYGROUND_DRAFT);
+  try{
+    const draft=JSON.parse(saved);
+    if(draft.json){$('#editJsonToggle').checked=true;$('#editJsonArea').hidden=false;$('#builder').hidden=true;$('#requestJson').value=draft.text;}
+    else if(draft.request)setRequest(draft.request);
+    if(draft.hadMedia)showMediaError(t('Media must be attached again after changing language.'));
+  }catch{}
 }
 function resultHeadline(name, answer, requestQuestion) {
   const type=answer.type || requestQuestion?.type || 'unknown';
@@ -1448,7 +1467,7 @@ const OPTION_FIELDS={
 };
 // action: "load" (Model manager), "save" (Models: set up the options of the next load), "restart" (a loaded model)
 const optionsButton=(id,media=false,action='load')=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-action="${action}" title="${t({load:'Load with options',save:'Set up the load options',restart:'Restart with other load options'}[action])}">⚙${t({load:' Options',save:' Setup',restart:''}[action])}</button>`;
-document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>${t('Load options')}</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> ${t('Remember for this model')}</label><button type="button" id="optionsReset">${t('Reset to defaults')}</button><button type="button" id="optionsCancel">${t('Cancel')}</button><button type="button" id="optionsApply" class="primary">${t('Load')}</button></div></dialog>`);
+document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>${t('Load options')}</h3><p id="optionsModel" class="muted"></p><p id="optionsSetupNote" class="muted option-note" hidden>${t('Media loads choose their mode (eager or vLLM) when loading from Model manager.')}</p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> ${t('Remember for this model')}</label><button type="button" id="optionsReset">${t('Reset to defaults')}</button><button type="button" id="optionsCancel">${t('Cancel')}</button><button type="button" id="optionsApply" class="primary">${t('Load')}</button></div></dialog>`);
 $('#optionsModel').insertAdjacentHTML('afterend',`<div id="loadPresetControls" class="controls"><select id="loadPresetSelect" aria-label="${t('Load preset')}"></select><button type="button" id="applyLoadPreset">${t('Apply')}</button><button type="button" id="saveLoadPreset">${t('Save as…')}</button><button type="button" id="deleteLoadPreset">${t('Delete')}</button></div>`);
 $('#saveLoadPreset').onclick=()=>promptPresetName('load');
 $('#applyLoadPreset').onclick=()=>{const v=presetData.load?.[$('#loadPresetSelect').value];if(v)renderOptionsForm({...optionsState.data.defaults,...v});};
@@ -1517,6 +1536,7 @@ async function openLoadOptions(id, media=false, action='load') {
   optionsState={id,media,restart,save,data};
   $('#optionsModel').textContent=`${id}${media?` · ${t('with media')}`:''}${restart?` · ${t('restarts the running model')}`:save?` · ${t('kept for the next load')}`:''}`;
   $('#optionsApply').textContent=restart?t('Restart'):save?t('Save'):t('Load');
+  $('#optionsSetupNote').hidden=!save;
   $('#optionsRemember').closest('label').hidden=save;  // Save always remembers
   setChecked($('#optionsRemember'),data.saved);
   renderOptionsForm(restart&&loaded?{...data.defaults,...loaded.options}:data.options);
@@ -1769,7 +1789,7 @@ function inspectDecision(request) {
   const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:handoff.body},location.origin);
   if(frame.dataset.loaded==='1')send(); else frame.addEventListener('load',send,{once:true});
 }
-const PAGES={backends:['10 / BACKENDS','Backends','Local inference engines, compatibility, setup and explicit verification.'],overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk, and loading them.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
+const PAGES={backends:['10 / BACKENDS','Backends','Local inference engines, compatibility, setup and explicit verification.'],overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Browse suggested and all basal variants.'],manager:['03 / MODEL MANAGER','Model manager','Loaded models, their statistics and benchmarks, models on disk, and the models directory.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
 function showView(hash, updateHash=false) {
   const raw=String(hash||'').replace(/^#/,''), slash=raw.indexOf('/');
   const view=slash<0?raw:raw.slice(0,slash), arg=slash<0?'':raw.slice(slash+1), name=PAGES[view]?view:'overview';
@@ -1792,9 +1812,9 @@ function showView(hash, updateHash=false) {
 const route=()=>{if(location.hash!==shownHash)showView(location.hash);};
 document.querySelectorAll('.side-nav [data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view,true));
 window.addEventListener('hashchange',route); window.addEventListener('popstate',route);
-function selectModelsTab(tab){for(const x of ['loaded','suggested','all']){$(`#${x==='all'?'allModels':x}`).hidden=x!==tab;const b=$(`#${x==='all'?'allModelsTab':x==='suggested'?'suggestedTab':'loadedTab'}`);b.classList.toggle('active',x===tab);b.setAttribute('aria-selected',String(x===tab));}localStorage.setItem('basal-ui.tab',tab);}
-$('#loadedTab').onclick=()=>selectModelsTab('loaded');$('#suggestedTab').onclick=()=>selectModelsTab('suggested');$('#allModelsTab').onclick=()=>selectModelsTab('all');
-selectModelsTab(['loaded','suggested','all'].includes(localStorage.getItem('basal-ui.tab'))?localStorage.getItem('basal-ui.tab'):'loaded');
+function selectModelsTab(tab){for(const x of ['suggested','all']){$(`#${x==='all'?'allModels':x}`).hidden=x!==tab;const b=$(`#${x==='all'?'allModelsTab':'suggestedTab'}`);b.classList.toggle('active',x===tab);b.setAttribute('aria-selected',String(x===tab));}localStorage.setItem('basal-ui.tab',tab);}
+$('#suggestedTab').onclick=()=>selectModelsTab('suggested');$('#allModelsTab').onclick=()=>selectModelsTab('all');
+selectModelsTab(localStorage.getItem('basal-ui.tab')==='all'?'all':'suggested');
 async function loadMemorySettings(){
   try{
     const d=await api('/api/memory'), budget=$('input#memoryBudget');
@@ -1815,4 +1835,4 @@ $('#saveMemory').onclick=async()=>{
 showView(location.hash);
 loadMemorySettings();
 loadPresets();refreshUpdates();
- (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=t('Hardware unavailable: {message}',{message:e.message});}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);})();
+ (async()=>{try{renderHardware(await api('/api/hardware'));}catch(e){$('#deviceName').textContent=t('Hardware unavailable: {message}',{message:e.message});}await Promise.all([loadSettings(),loadModels(),loadExamples(),refreshStatus(),loadServe()]);restorePlaygroundLanguageDraft();})();

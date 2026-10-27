@@ -12,6 +12,7 @@ def test_local_backend_inference_and_browser(ui):
         pytest.skip('No installed backend with a downloaded compatible model')
     backend, model = min(candidates, key=lambda pair: (pair[1]['estimated_memory_bytes'] or float('inf'), pair[0]['id'] != 'mlx'))
     before = ui.get('/api/history'), ui.get('/api/stats'), ui.settings.read_bytes() if ui.settings.exists() else None
+    child_pids_before = set(ui.child_pids())
     token = ui.post('/api/backends/tests', {'backend': backend['id'], 'model': model['id'], 'mode': model['modes'][0]})['id']
     deadline = time.monotonic() + 1950
     while time.monotonic() < deadline:
@@ -21,7 +22,7 @@ def test_local_backend_inference_and_browser(ui):
             break
         time.sleep(.5)
     assert record['status'] == 'passed', (record, ui.get('/api/logs?source=job:backend-test'))
-    assert not ui.child_pids()
+    assert not (set(ui.child_pids()) - child_pids_before)
     assert before == (ui.get('/api/history'), ui.get('/api/stats'), ui.settings.read_bytes() if ui.settings.exists() else None)
 
     playwright = pytest.importorskip('playwright.sync_api')

@@ -794,6 +794,10 @@ const PL = {
   "{size} total": "Łącznie {size}",
   "{status}: {model} · {mode} on {device} · {orders}": "{status}: {model} · {mode} na {device} · {orders}",
   "{used} / {limit} (budget {budget}, keep {reserve} free) · available now {available}": "{used} / {limit} (budżet {budget}, pozostaw {reserve} wolnego) · dostępne teraz {available}",
+  "Media loads choose their mode (eager or vLLM) when loading from Model manager.": "Tryb dla mediów wybiera się podczas ładowania z Menedżera modeli.",
+  "Media must be attached again after changing language.": "Po zmianie języka dołącz media ponownie.",
+  "Browse suggested and all basal variants.": "Przeglądaj polecane i wszystkie warianty basal.",
+  "Loaded models, their statistics and benchmarks, models on disk, and the models directory.": "Załadowane modele, ich statystyki i testy, modele na dysku oraz katalog modeli.",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],
@@ -847,6 +851,7 @@ translateStatic(document.body);
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-lang-choice]');
   if (!b || b.dataset.langChoice === LANG) return;
+  window.preparePlaygroundLanguageSwitch?.();
   localStorage.setItem('basal-ui.lang', b.dataset.langChoice);
   location.reload();  // every view is rendered again in the new language
 });
