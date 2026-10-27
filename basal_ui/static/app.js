@@ -1541,7 +1541,9 @@ async function loadHistory(mode='reset') {
     items.forEach(x=>historyRows.set(x.id,x));
     if(mode!=='poll')$('#historyMore').hidden=items.length<100;
     const sorted=[...historyRows.values()].sort((a,b)=>b.ts-a.ts);
-    historyAfter=mode==='poll'?(pollCursor||historyAfter):(sorted[0]?.id||null); historyBefore=sorted.at(-1)?.id||null;
+    if(mode==='reset'){historyAfter=items[0]?.id||null;historyBefore=items.at(-1)?.id||null;}
+    else if(mode==='more'&&items.length)historyBefore=items.at(-1).id;
+    else if(mode==='poll'){historyAfter=pollCursor||historyAfter;if(!historyBefore)historyBefore=items[0]?.id||null;}
     if(mode!=='poll'||items.length)renderHistory(sorted);
   }catch(e){if(sequence!==historySequence)return;$('#historyTable').innerHTML=`<div class="error-box">${esc(e.message)}</div>`;}
   if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);

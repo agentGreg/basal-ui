@@ -32,6 +32,9 @@ def test_history_poll_drains_more_than_one_oldest_first_page(page):
         if params.get("order") == ["asc"]:
             start = int(params["after"][0][1:]) + 1
             rows = [summary(i) for i in range(start, min(start + 100, 300))]
+        elif "before" in params:
+            end = int(params["before"][0][1:])
+            rows = [summary(i) for i in range(end - 1, max(end - 101, -1), -1)]
         else:
             rows = [summary(i) for i in range(149, 49, -1)]
         route.fulfill(json={"items": rows, "models": ["test"]})
@@ -41,7 +44,10 @@ def test_history_poll_drains_more_than_one_oldest_first_page(page):
     page.wait_for_function("() => document.querySelectorAll('#historyTable tr.history-row').length === 100")
     page.evaluate("() => loadHistory('poll')")
     page.wait_for_function("() => document.querySelectorAll('#historyTable tr.history-row').length === 250")
-    assert page.evaluate("() => historyAfter") == "h299"
+    assert page.evaluate("() => [historyAfter, historyBefore]") == ["h299", "h50"]
+    page.evaluate("() => loadHistory('more')")
+    assert page.locator("#historyTable tr.history-row").count() == 300
+    assert page.evaluate("() => [historyAfter, historyBefore]") == ["h299", "h0"]
     assert [r.get("after", [None])[0] for r in requests if r.get("order") == ["asc"]] == ["h149", "h249"]
 
 
