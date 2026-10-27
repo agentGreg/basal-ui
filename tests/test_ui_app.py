@@ -741,7 +741,7 @@ def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path
         checks.append((variant.id, revision))
         return snapshot if variant.id == community.id else None
     monkeypatch.setattr(catalog, "is_downloaded", is_downloaded)
-    monkeypatch.setattr(calibration, "shipped_file", lambda local_dir, mode: modes.append(mode) or snapshot / "none")
+    monkeypatch.setattr(calibration, "shipped_file", lambda local_dir, mode, *context: modes.append(mode) or snapshot / "none")
     fp8 = {"quantization_config": {"quant_algo": "FP8", "quant_method": "modelopt", "producer": {"version": "0.47.0"}}}
     monkeypatch.setattr(httpx, "get", lambda url, **k: urls.append(url) or (
         httpx.Response(200, json=fp8) if url.endswith("config.json") else httpx.Response(404)))

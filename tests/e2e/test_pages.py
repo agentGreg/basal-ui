@@ -89,6 +89,7 @@ def test_playground_request_names_media_and_history_replay_are_lossless_until_se
     unsupported = {**request, "vendor_extension": {"keep": True}}
     page.evaluate("r => setRequest(r)", unsupported)
     assert page.locator("#editJsonToggle").is_checked()
+    sync_api.expect(page.locator("#mediaError")).to_be_visible()
     assert page.evaluate("() => JSON.parse($('#requestJson').value).vendor_extension") == {"keep": True}
     assert page.evaluate("() => selectedMedia.length") == 0
     for unsupported_value in ({"media": "opaque"}, {"media": [{"type": "image", "data": "aGVsbG8=", "name": "x.png"}]},

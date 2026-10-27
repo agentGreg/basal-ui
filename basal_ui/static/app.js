@@ -377,7 +377,7 @@ function criteriaText(q, type) {
 }
 function parseStructuredText(text) { const trimmed=text.trim(); if(trimmed.startsWith('{')||trimmed.startsWith('[')) { try{return JSON.parse(trimmed);}catch{}} return text; }
 let questionFieldId=0;
-const qField=(label,input,help='',cls='')=>{const id=`question-field-${++questionFieldId}`;return `<div class="qf${cls?` ${cls}`:''}"><label for="${id}">${label}</label>${input.replace(/<(input|textarea|select)\b/,`<$1 id="${id}"`)}${help?`<small class="muted">${help}</small>`:''}</div>`};
+const qField=(label,input,help='',cls='')=>{const id=`question-field-${++questionFieldId}`;return `<div class="qf${cls?` ${cls}`:''}"><label id="${id}-label" for="${id}">${label}</label>${input.replace(/<(input|textarea|select)\b/,`<$1 id="${id}" aria-labelledby="${id}-label"`)}${help?`<small class="muted">${help}</small>`:''}</div>`};
 const qNum=(f,v,attrs='')=>`<input class="input" type="number" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" ${attrs}>`;
 const qText=(f,v,ph='')=>`<input class="input" type="text" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" placeholder="${esc(ph)}">`;
 const qArea=(f,v,ph='',cls='')=>`<textarea class="textarea${cls?` ${cls}`:''}" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
