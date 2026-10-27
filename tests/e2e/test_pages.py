@@ -292,14 +292,25 @@ def test_polish_ui_leaves_no_frontend_text_in_english(page, text_model):
     for name in VIEWS:
         page.click(f'.side-nav [data-view="{name}"]')
         sync_api.expect(page.locator(f'section.view[data-page="{name}"]').first).to_be_visible()
+        if name == "manager":
+            page.evaluate("""() => {
+              statsData.benchmarks = {stub: [{kind:'modes', model:'Remek/basal-2.0-mini',
+                set:'bundled', when:1, modes:[{mode:'eager',dec_s:2}]}]};
+              renderBenchmarkResults();
+            }""")
         page.wait_for_timeout(300)  # views render their lists after their own requests
+        if name == "history":
+            page.evaluate("""() => renderHistory(['mcp','api','playground'].map((source,i) => ({
+              id:'stub'+i,ts:1,model:'Remek/basal-2.0-mini',source,state_preview:'test',
+              answers:{},latency_ms:1,status:'ok'
+            })))""")
         left[name] = page.evaluate(UNTRANSLATED)
         if name == "models":
             for tab in ("#suggestedTab", "#allModelsTab"):
                 page.click(tab)
                 left[f"models {tab}"] = page.evaluate(UNTRANSLATED)
     page.click('.side-nav [data-view="models"]')
-    page.locator(f'#modelsTable .options-model[data-id="{text_model["id"]}"]').click()  # ⚙ Setup dialog
+    page.locator(f'#modelsTable .options-model[data-id="{text_model["id"]}"]').click()
     sync_api.expect(page.locator("#loadOptions")).to_be_visible()
     left["load options"] = page.evaluate(UNTRANSLATED)
     page.click("#optionsCancel")
@@ -308,6 +319,19 @@ def test_polish_ui_leaves_no_frontend_text_in_english(page, text_model):
     left["model card"] = page.evaluate(UNTRANSLATED)
     assert not {k: v for k, v in left.items() if v}, left
     assert page.locator(".side-nav [data-view='manager']").inner_text().strip() == "Menedżer modeli"
+
+def test_model_manager_disk_rows_stack_without_overflow_at_mobile_width(page, text_model):
+    page.set_viewport_size({"width": 390, "height": 844})
+    view(page, "manager")
+    rows = page.locator("#diskModels .disk-row")
+    sync_api.expect(rows.filter(has=page.locator(f'[data-id="{text_model["id"]}"]'))).to_be_visible()
+    for index in range(rows.count()):
+        row = rows.nth(index)
+        assert row.locator(".disk-info").evaluate("(el) => el.getBoundingClientRect().width") > 100
+        assert row.locator(".disk-actions").evaluate("""el => {
+          const row = el.closest('.disk-row'), a = el.getBoundingClientRect(), b = row.getBoundingClientRect();
+          return a.left >= b.left && a.right <= b.right;
+        }""")
 
 
 

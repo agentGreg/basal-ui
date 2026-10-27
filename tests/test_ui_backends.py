@@ -69,6 +69,26 @@ def test_inventory_codes_machine_reasons_and_setup_notes(manager):
     assert mlx['setup']['note'] == backends.BACKEND_TEMPLATES[mlx['setup']['note_code']].format(
         **mlx['setup']['note_params'])
 
+def test_inventory_generated_reasons_have_matching_message_codes(manager, monkeypatch):
+    for probe_result, code in (
+        ({'versions': {}, 'missing': ['torch', 'triton'], 'error': None}, 'backend_reason_missing'),
+        ({'versions': {}, 'missing': [], 'error': None}, 'backend_reason_unverified'),
+    ):
+        monkeypatch.setattr(backends, 'probe', lambda *a: probe_result)
+        manager.cached = None
+        torch = next(b for b in manager.inventory()['backends'] if b['id'] == 'torch')
+        assert torch['reason_code'] == code
+        assert torch['reason'] == backends.BACKEND_TEMPLATES[code].format(**torch['reason_params'])
+
+
+def test_inventory_uses_saved_revision_for_downloaded_model_lookup(manager, monkeypatch):
+    calls = []
+    monkeypatch.setattr(settings, 'load_options', lambda model_id: {'revision': 'pinned-revision'})
+    monkeypatch.setattr(catalog, 'is_downloaded', lambda variant, cache, revision=None: calls.append(
+        (variant.id, revision)) or '/cached')
+    manager.inventory()
+    assert calls and all(revision == 'pinned-revision' for _, revision in calls)
+
 def test_private_test_does_not_change_settings_history_or_stats(manager, tmp_path):
     before = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
     manager.start(request())

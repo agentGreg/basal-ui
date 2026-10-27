@@ -845,6 +845,8 @@ const PL = {
   "code:backend_setup_default": "Polecenia dotyczą środowiska tej aplikacji. Po instalacji uruchom ponownie basal-ui i wybierz Odśwież.",
   "code:backend_setup_separate": "Użyj osobnego środowiska: te pakiety instalują własne zależności PyTorch. Zainstaluj tam ten sam fork Basal z zależnościami UI i uruchamiaj z niego basal-ui. Instalacja nie zmienia tego zestawienia.",
   "code:backend_setup_platform": "Użyj instalatora platformy z dokumentacji, aby dobrać właściwą kompilację PyTorch/ROCm; nie zastępuj działającej wersji GPU ogólnym pakietem.",
+  "code:backend_reason_missing": "Brak: {packages}",
+  "code:backend_reason_unverified": "Kontrole zależności i urządzenia zakończone powodzeniem; wnioskowanie nie zostało zweryfikowane.",
   "code:think_unavailable": "thinking jest dostępne dla basal-2.0 4.5B z basal[vllm] (docs/THINKING.md)",
   "code:think_setup": "thinking jest dostępne dla basal-2.0 4.5B z basal[vllm] (docs/THINKING.md); podaj też Python środowiska z vLLM lub adres działającego serwera think",
   "code:mlx_packed_device": "MLX packed wymaga Apple Silicon z basal[mlx]",

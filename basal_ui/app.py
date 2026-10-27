@@ -1616,13 +1616,16 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         local_dir = catalog.is_downloaded(variant, settings_mod.models_dir(), revision=revision)
         shipped = None
         if local_dir:
-            assessment = catalog.assess(variant, hw())
-            path, context = resolve_shipped_calibration(variant, local_dir, assessment)
-            shipped = {"file": str(path), "context": context}
             try:
-                shipped.update(calibration.summary(path))
-            except (OSError, ValueError) as exc:
-                shipped["error"] = str(exc)
+                assessment = catalog.assess(variant, hw())
+                path, context = resolve_shipped_calibration(variant, local_dir, assessment)
+                shipped = {"file": str(path), "context": context}
+                try:
+                    shipped.update(calibration.summary(path))
+                except (OSError, ValueError) as exc:
+                    shipped["error"] = str(exc)
+            except (OSError, ValueError, KeyError) as exc:
+                shipped = {"error": str(exc)}
         return {"selected": settings_mod.calibration_selection().get(variant.id),
                 "files": calibration.listing(variant.id, settings_mod, local_dir), "shipped": shipped}
 

@@ -86,6 +86,16 @@ def test_the_page_and_its_scripts_are_revalidated_so_an_update_is_never_served_f
         assert "cache-control" not in client.get("/api/examples").headers  # the rule is for the page's files only
 
 
+def test_calibrations_listing_survives_a_stale_saved_adapter_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(catalog, "is_downloaded", lambda *args, **kwargs: tmp_path)
+    settings.set_load_options(MINI.id, {"adapter": str(tmp_path / "missing-adapter")})
+    app, _ = app_for(tmp_path, [MINI])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.get("/api/calibrations", params={"id": MINI.id})
+    assert response.status_code == 200
+    assert response.json()["files"] == []
+    assert "adapter" in response.json()["shipped"]["error"]
+
 def test_model_api_sorting_load_validation_and_decide_requires_a_loaded_model(tmp_path):
     large = Variant("large", "Remek/basal-2.0-4.5B-FP8", "basal-2.0", "4.5B", "FP8", "FP8", None, 100, False)
     app, _ = app_for(tmp_path, [MINI, large])

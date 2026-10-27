@@ -29,6 +29,8 @@ BACKEND_TEMPLATES = {
     "backend_setup_default": "Commands target this app environment. Restart basal-ui after installation, then Refresh.",
     "backend_setup_separate": "Use a separate environment: these packages bring their own PyTorch dependencies. Install this same Basal fork with its UI dependencies there and launch basal-ui from that environment. Installing there does not change this inventory.",
     "backend_setup_platform": "Use the platform-specific installer in the documentation for the correct PyTorch/ROCm build; do not replace a working GPU build with a generic wheel.",
+    "backend_reason_missing": "Missing: {packages}",
+    "backend_reason_unverified": "Dependency/device checks passed; inference is not verified.",
 }
 
 
@@ -212,16 +214,31 @@ class Manager:
                             needed = assessment.est_memory_bytes
                         except ValueError:
                             needed = None
+                        with self.fleet.lock:
+                            runner = self.fleet.runners.get(v.id)
+                        revision = (runner.options.get('revision') if runner is not None
+                                    and runner.status()['state'] == 'ready'
+                                    else self.settings.load_options(v.id).get('revision'))
                         models.append({'id': v.id, 'family': v.family, 'tier': v.tier, 'format': v.label,
                                        'modes': allowed, 'revision': v.base_revision,
-                                       'downloaded': bool(catalog.is_downloaded(v, self.settings.models_dir())),
+                                       'downloaded': bool(catalog.is_downloaded(
+                                           v, self.settings.models_dir(), revision=revision)),
                                        'estimated_memory_bytes': needed,
                                        'mode_estimates': {mode: estimate(v, hw, mode).est_memory_bytes for mode in allowed} if needed else {}})
                     models.sort(key=lambda m: (m['estimated_memory_bytes'] is None, m['estimated_memory_bytes'] or 0, m['id']))
-                reason_text = reason or check['error'] or (
-                    'Missing: ' + ', '.join(check['missing']) if check['missing']
-                    else 'Dependency/device checks passed; inference is not verified.')
-                reason_code, reason_params = _message_fields(reason)
+                if reason:
+                    reason_text = reason
+                    reason_code, reason_params = _message_fields(reason)
+                elif check['error']:
+                    reason_text = check['error']
+                    reason_code, reason_params = _message_fields(reason_text)
+                elif check['missing']:
+                    reason_text = BACKEND_TEMPLATES['backend_reason_missing'].format(
+                        packages=', '.join(check['missing']))
+                    reason_code, reason_params = _message_fields(reason_text)
+                else:
+                    reason_text = BACKEND_TEMPLATES['backend_reason_unverified']
+                    reason_code, reason_params = _message_fields(reason_text)
                 entries.append({'id': key, 'name': name, 'status': status,
                                 'status_code': f'backend_status_{status}', 'status_params': {},
                                 'compatible': reason is None, 'reason': reason_text,
