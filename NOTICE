@@ -30,3 +30,6 @@ Training data attribution (basal-1.0 models):
 basal-1.5 models: released under the Apache License, Version 2.0.
 basal-2.0 models: released under the Apache License, Version 2.0.
 basal-omni-1.0 models: released under the Apache License, Version 2.0.
+
+basal-ui bundles Basecoat 1.1.0 (https://basecoatui.com), MIT licensed.
+The license is in basal/ui/static/vendor/BASECOAT-LICENSE.md.

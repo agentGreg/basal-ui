@@ -38,6 +38,7 @@ function confirmDialog({title,description,confirmLabel='Confirm',destructive=fal
 function applyTheme(theme) {
   const value=['light','dark','system'].includes(theme)?theme:'system';
   document.documentElement.dataset.theme=value==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):value;
+  document.documentElement.classList.toggle('dark',document.documentElement.dataset.theme==='dark');
   localStorage.setItem('basal-ui.theme',value);
   document.querySelectorAll('[data-theme-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeChoice===value)));
 }
@@ -375,12 +376,13 @@ function criteriaText(q, type) {
   return keyedText(criteria, q.option_keys==='hide'&&!Array.isArray(criteria));
 }
 function parseStructuredText(text) { const trimmed=text.trim(); if(trimmed.startsWith('{')||trimmed.startsWith('[')) { try{return JSON.parse(trimmed);}catch{}} return text; }
-const qField=(label,input,help='',cls='')=>`<div class="qf${cls?` ${cls}`:''}"><label>${label}</label>${input}${help?`<small class="muted">${help}</small>`:''}</div>`;
-const qNum=(f,v,attrs='')=>`<input type="number" data-f="${f}" value="${esc(v??'')}" ${attrs}>`;
-const qText=(f,v,ph='')=>`<input type="text" data-f="${f}" value="${esc(v??'')}" placeholder="${esc(ph)}">`;
-const qArea=(f,v,ph='',cls='')=>`<textarea data-f="${f}"${cls?` class="${cls}"`:''} placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
-const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${label}</label>`;
-const qSelect=(f,options,v)=>`<select data-f="${f}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(label)}</option>`).join('')}</select>`;
+let questionFieldId=0;
+const qField=(label,input,help='',cls='')=>{const id=`question-field-${++questionFieldId}`;return `<div class="qf${cls?` ${cls}`:''}"><label for="${id}">${label}</label>${input.replace(/<(input|textarea|select)\b/,`<$1 id="${id}"`)}${help?`<small class="muted">${help}</small>`:''}</div>`};
+const qNum=(f,v,attrs='')=>`<input class="input" type="number" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" ${attrs}>`;
+const qText=(f,v,ph='')=>`<input class="input" type="text" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" value="${esc(v??'')}" placeholder="${esc(ph)}">`;
+const qArea=(f,v,ph='',cls='')=>`<textarea class="textarea${cls?` ${cls}`:''}" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}" placeholder="${esc(ph)}">${esc(v??'')}</textarea>`;
+const qSwitch=(f,v,label,cls='')=>`<label class="qf-switch${cls?` ${cls}`:''}"><input class="switch" type="checkbox" role="switch" data-f="${f}"${v?' checked aria-checked="true"':' aria-checked="false"'}> ${label}</label>`;
+const qSelect=(f,options,v)=>`<select class="select" data-f="${f}" aria-label="${esc(f.replaceAll('_',' '))}">${options.map(([value,label])=>`<option value="${esc(value)}"${String(value)===String(v??'')?' selected':''}>${esc(label)}</option>`).join('')}</select>`;
 // the set options of multi, multi-label classify and multi tool; constraints: fallback and exclusive keys (multi and
 // tool only: classify takes objective, threshold, min and max)
 function setFields(q, constraints=true) {
@@ -396,7 +398,7 @@ function actFields(card, q) {
   const simple=q.costs&&!costRowsOf(q.costs)?q.costs:{wrong:10,defer:1};
   card._costMode=costRowsOf(q.costs)?'matrix':'simple'; card._costRows=costRowsOf(q.costs)||[]; card._costOutcomes=null;
   return qSwitch('yesno',isYesNo(q),'Yes / no outcomes')+qField('Outcomes',qArea('criteria',criteriaText(q,'act'),'key: description, one outcome per line'),'Yes / no: first line describes true, second false.')
-    +`<div class="qf"><label>Costs</label><div class="tabs cost-mode"><button type="button" data-cost-mode="simple">Simple</button><button type="button" data-cost-mode="matrix">Matrix</button></div>`
+    +`<div class="qf"><span class="qf-label">Costs</span><div class="tabs cost-mode"><button type="button" data-cost-mode="simple">Simple</button><button type="button" data-cost-mode="matrix">Matrix</button></div>`
     +`<div class="qf-row cost-simple">${qField('Wrong action',qNum('cost_wrong',simple.wrong,'step="any"'))}${qField('Defer to a person',qNum('cost_defer',simple.defer,'step="any" placeholder="none"'))}</div>`
     +`<div class="cost-matrix"><div class="table-wrap"><table class="cost-table"></table></div><button type="button" class="add-action">Add action</button>${qField('Defer action',qText('defer_action',q.defer_action,'defer or human'),'The action max_error falls back to.')}</div></div>`;
 }
@@ -410,7 +412,7 @@ function renderTypeFields(card, type, q) {
   else if(type==='tool'){
     const extra=q.extra??(q.multi?[]:TOOL_EXTRAS);
     html=qField('Tools (JSON array)',qArea('tools',q.tools?JSON.stringify(q.tools,null,2):'','[{"name": "get_weather", "description": "…", "inputSchema": {"type": "object", "properties": {"city": {"type": "string"}}}}]','json'),'OpenAI function, OpenAI Responses, MCP tools/list or Anthropic definitions.')
-      +`<div class="qf"><label>Other options</label><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${x}</label>`).join('')}</div></div>`
+      +`<div class="qf"><span class="qf-label">Other options</span><div class="controls">${TOOL_EXTRAS.map(x=>`<label><input class="switch" type="checkbox" role="switch" data-extra="${x}"${extra.includes(x)?' checked aria-checked="true"':' aria-checked="false"'}> ${x}</label>`).join('')}</div></div>`
       +`<div class="qf-row">${qField('Rank',qNum('rank',q.rank,'min="1" step="1" placeholder="off"'),'also the k most probable options')}${qField('Description chars',qNum('description_chars',q.description_chars,'min="0" step="1" placeholder="300"'),'0 = no cap')}</div>`+qSwitch('multi',q.multi,'Several tools (multi)')
       +`<div class="multi-tool-only">${setFields(q)}<small class="muted">The other options (answer directly, ask the user, none) are always exclusive.</small></div>`;
   }
@@ -418,8 +420,8 @@ function renderTypeFields(card, type, q) {
   else if(type==='verify')html=qField('Claims',qArea('claims',keyedText(q.claims),'key: claim text, or one claim per line'))+qSwitch('binary',q.binary,'Binary (supported / not supported)');
   else if(type==='compress')html=`<div class="qf-row">${qField('Unit',qSelect('unit',[['sentence','sentence'],['line','line'],['paragraph','paragraph']],q.unit||'sentence'))}${qField('Threshold',qNum('threshold',q.threshold,'min="0" max="1" step="0.05" placeholder="0.5"'))}${qField('Keep ratio',qNum('keep_ratio',q.keep_ratio,'min="0" max="1" step="0.05" placeholder="off"'),'share of the characters kept (overrides threshold)')}${qField('Min keep',qNum('min_keep',q.min_keep,'min="0" step="1" placeholder="1"'))}</div>`;
   else if(type==='extract')html=qField('Schema (JSON)',qArea('schema',q.schema?JSON.stringify(q.schema,null,2):'','{"type": "object", "properties": {"total": {"type": "number"}}}','json'),'string, number, integer, boolean, enum and arrays of enums; nested objects as dotted paths.');
-  const me=q.max_error, preset=me==null||Array.isArray(me)?'':[0.01,0.05].includes(Number(me))?String(Number(me)):'custom';
-  html+=`<div class="qf-row common-fields">${qSwitch('evidence',q.evidence===true,'Evidence spans','evidence-only')}<div class="qf max-error-only"><label>max_error</label><div class="controls">${qSelect('max_error',[['','none'],['0.01','0.01'],['0.05','0.05'],['custom','custom…']],preset)}${qNum('max_error_custom',preset==='custom'?me:'','min="0" max="1" step="0.001"')}</div></div></div><div class="q-error reason wide" hidden></div>`;
+  const me=q.max_error, preset=me==null||Array.isArray(me)?'':[0.01,0.05].includes(Number(me))?String(Number(me)):'custom', maxErrorId=`question-field-${++questionFieldId}`;
+  html+=`<div class="qf-row common-fields">${qSwitch('evidence',q.evidence===true,'Evidence spans','evidence-only')}<div class="qf max-error-only"><label for="${maxErrorId}">max_error</label><div class="controls">${qSelect('max_error',[['','none'],['0.01','0.01'],['0.05','0.05'],['custom','custom…']],preset).replace('<select ',`<select id="${maxErrorId}" `)}${qNum('max_error_custom',preset==='custom'?me:'','min="0" max="1" step="0.001"')}</div></div></div><div class="q-error reason wide" role="alert" hidden></div>`;
   $('.q-fields',card).innerHTML=html;
   $('.q-instructions-input',card).placeholder=['tool',...TASK_TYPES].includes(type)?'optional':'What should the model decide?';
   if(type==='act')renderCostMatrix(card);
@@ -438,7 +440,7 @@ function renderCostMatrix(card, force=false) {
   if(!force&&JSON.stringify(outcomes)===JSON.stringify(card._costOutcomes))return;
   if(!force&&card._costOutcomes)card._costRows=readCostRows(card);  // forced callers set _costRows themselves
   card._costOutcomes=outcomes;
-  table.innerHTML=`<thead><tr><th>Action</th>${outcomes.map(o=>`<th>${esc(o)}</th>`).join('')}<th></th></tr></thead><tbody>${card._costRows.map((row,i)=>`<tr><td><input type="text" class="cost-action" value="${esc(row.action)}"></td>${outcomes.map(o=>`<td><input type="number" step="any" class="cost-cell" data-outcome="${esc(o)}" value="${esc(row.costs[o]??'')}"></td>`).join('')}<td><button type="button" class="remove-action" data-row="${i}">Remove</button></td></tr>`).join('')}</tbody>`;
+  table.innerHTML=`<thead><tr><th>Action</th>${outcomes.map(o=>`<th>${esc(o)}</th>`).join('')}<th></th></tr></thead><tbody>${card._costRows.map((row,i)=>`<tr><td><input class="input cost-action" type="text" aria-label="Action ${i+1}" value="${esc(row.action)}"></td>${outcomes.map(o=>`<td><input class="input cost-cell" type="number" step="any" aria-label="${esc(o)} cost for ${esc(row.action)}" data-outcome="${esc(o)}" value="${esc(row.costs[o]??'')}"></td>`).join('')}<td><button type="button" class="remove-action" data-row="${i}" aria-label="Remove action ${i+1}">Remove</button></td></tr>`).join('')}</tbody>`;
 }
 function setCostMode(card, mode) {
   if(card._costOutcomes)card._costRows=readCostRows(card);
@@ -615,10 +617,10 @@ function syncRequest(force=false, keys=['media','detail']) {
 }
 function addQuestion(name, q={type:'choice',instructions:'',criteria:{}}) {
   if(name===undefined){const names=new Set([...document.querySelectorAll('.q-name')].map(input=>input.value));name='question';for(let i=2;names.has(name);i++)name=`question${i}`;}
-  const card=document.createElement('div'); card.className='question';
+  const card=document.createElement('div'); card.className='question'; const fieldId=`question-card-${++questionFieldId}`;
   const type=QUESTION_TYPES.includes(q.type)?q.type:'choice';
   card._extra=extraOf(q,type); card._type=type;
-  card.innerHTML=`<div class="q-head"><div><label>Name</label><input class="q-name" type="text" value="${esc(name)}"></div><div><label>Type</label><select class="q-type">${QUESTION_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label>Instructions</label><textarea class="q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
+  card.innerHTML=`<div class="q-head"><div><label for="${fieldId}-name">Name</label><input id="${fieldId}-name" class="input q-name" type="text" value="${esc(name)}"></div><div><label for="${fieldId}-type">Type</label><select id="${fieldId}-type" class="select q-type">${QUESTION_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}</select></div><button type="button" class="remove-question">Remove</button></div><div class="q-instructions"><label for="${fieldId}-instructions">Instructions</label><textarea id="${fieldId}-instructions" class="textarea q-instructions-input" placeholder="What should the model decide?">${esc(typeof q.instructions==='string'?q.instructions:q.instructions==null?'':JSON.stringify(q.instructions))}</textarea></div><div class="q-fields"></div>`;
   $('.q-type',card).value=type;
   renderTypeFields(card,type,q); rememberOriginal(card,type,q);
   card.addEventListener('input',e=>{
