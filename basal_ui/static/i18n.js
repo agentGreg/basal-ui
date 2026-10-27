@@ -894,6 +894,8 @@ const PL = {
   "Model": "Model",
   "README": "README",
   "audio": "audio",
+  "api": "API",
+  "playground": "Playground",
   "p95 ms": "p95 ms",
   "Playground": "Playground",
   "MCP": "MCP",

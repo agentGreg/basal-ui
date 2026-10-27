@@ -1346,7 +1346,7 @@ function renderBenchmarkState(bench, ready) {
   benchRunning=running;
 }
 function benchmarkRow(x) {
-  const kind=x.kind||'benchmark', head=`<td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(kind)}</span></td><td title="${esc(x.set)}">${esc(x.set==='bundled'?t('bundled'):shortName(x.set))}${x.items!=null?` (${x.items})`:''}</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td>`;
+  const kind=x.kind||'benchmark', head=`<td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(kind)}</span></td><td title="${esc(t(x.set))}">${esc(x.set==='bundled'?t('bundled'):shortName(x.set))}${x.items!=null?` (${x.items})`:''}</td><td>${esc(new Date(x.when*1000).toLocaleString())}</td>`;
   if(kind==='determinism'){const d=x.determinism||{};return `<tr>${head}<td colspan="7"><span class="badge ${d.identical===d.requests?'fit-fits':'fit-tight'}">${t('identical')} ${esc(d.identical)}/${esc(d.requests)}</span> ${t('max |Δp|')} ${esc(d.max_abs_diff)} · ${t('decision flips')} ${esc(d.decision_flips)} · ${t('concurrency')} ${esc(d.concurrency)}</td></tr>`;}
   if(kind==='modes'){
     const f=(v,d=1)=>v==null||Number.isNaN(Number(v))?'—':Number(v).toFixed(d);
@@ -1357,7 +1357,7 @@ function benchmarkRow(x) {
 }
 function renderBenchmarkResults() {
   const rows=Object.values(statsData.benchmarks||{}).flat().sort((a,b)=>b.when-a.when);
-  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>${t('Model')}</th><th>${t('Kind')}</th><th>${t('Set')}</th><th>${t('When')}</th><th>p50</th><th>p95</th><th>dec/s</th><th>q/s</th><th>tok/s</th><th>${t('Accuracy')}</th><th>${t('Errors')}</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:`<div class="empty">${t('No benchmark results yet.')}</div>`;
+  $('#benchmarkResults').innerHTML=rows.length?`<div class="table-wrap"><table><thead><tr><th>${t('Model')}</th><th>${t('Kind')}</th><th>${t('Set')}</th><th>${t('When')}</th><th>p50</th><th>p95</th><th>${t('dec/s')}</th><th>q/s</th><th>tok/s</th><th>${t('Accuracy')}</th><th>${t('Errors')}</th></tr></thead><tbody>${rows.map(benchmarkRow).join('')}</tbody></table></div>`:`<div class="empty">${t('No benchmark results yet.')}</div>`;
 }
 // Calibration: basal-calibrate on the user's labelled requests (a temporary uncalibrated child of the model; with task
 // questions the engine in basal-ui's process), or a file fitted elsewhere imported
@@ -1672,7 +1672,7 @@ async function loadHistory(mode='reset') {
 }
 function renderHistory(items) {
   const flags=x=>`${x.deferred?` <span class="badge fit-too_large">${t('deferred')}</span>`:''}${x.truncated?` <span class="badge fit-tight">${t('truncated')}</span>`:''}`;
-  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>${t('Time')}</th><th>${t('Model')}</th><th>${t('Source')}</th><th>${t('State')}</th><th>${t('Answers')}</th><th>${t('Latency')}</th><th>${t('Status')}</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(x.source)}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${t('No decisions yet — try the Playground.')}</div>`;
+  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>${t('Time')}</th><th>${t('Model')}</th><th>${t('Source')}</th><th>${t('State')}</th><th>${t('Answers')}</th><th>${t('Latency')}</th><th>${t('Status')}</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(t(x.source))}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${t('No decisions yet — try the Playground.')}</div>`;
   $('#historyTable').querySelectorAll('[data-history]').forEach(row=>{
     row.onclick=()=>act(()=>toggleHistory(row));
     if(historyOpen.has(row.dataset.history))row.after(historyDetailRow(historyOpen.get(row.dataset.history)));
