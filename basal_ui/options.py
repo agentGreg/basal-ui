@@ -203,8 +203,15 @@ def available_modes(v, hw, assessment) -> list[dict]:
             reasons[m] = gdn_refused(m, device=False)
         reasons["fast-exit"] = reasons["mps"] = RECURRENT_REASON
         reasons["mlx"] = reasons["mlx-q8"] = MLX_RECURRENT_REASON
-    return [{"mode": m, "available": reasons[m] is None, "reason": reasons[m], "default": m == assessment.mode}
+    return [{"mode": m, "available": reasons[m] is None, "reason": reasons[m],
+             "reason_code": _availability_message(reasons[m])[0],
+             "reason_params": _availability_message(reasons[m])[1], "default": m == assessment.mode}
             for m in MODE_ORDER]
+
+
+def _availability_message(text):
+    from .catalog import message_fields
+    return message_fields(text, "")
 
 
 def available_media_modes(assessment, hw) -> list[dict]:
@@ -213,8 +220,12 @@ def available_media_modes(assessment, hw) -> list[dict]:
     reason = assessment.media_reason if assessment.media_mode is None else None
     vllm = reason or (None if hw.platform == "cuda" and "vllm" in hw.engines else
                       "vLLM media serving needs an NVIDIA GPU with basal[vllm] (docs/OMNI.md)")
-    return [{"mode": "eager", "available": reason is None, "reason": reason, "default": True},
-            {"mode": "vllm", "available": vllm is None, "reason": vllm, "default": False}]
+    eager = _availability_message(reason)
+    vllm_message = _availability_message(vllm)
+    return [{"mode": "eager", "available": reason is None, "reason": reason,
+             "reason_code": eager[0], "reason_params": eager[1], "default": True},
+            {"mode": "vllm", "available": vllm is None, "reason": vllm,
+             "reason_code": vllm_message[0], "reason_params": vllm_message[1], "default": False}]
 
 
 THINK_REASON = "thinking is available for basal-2.0 4.5B with basal[vllm] (docs/THINKING.md)"

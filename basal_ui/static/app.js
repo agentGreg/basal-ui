@@ -109,10 +109,11 @@ function renderModels(data) {
     for (const m of rows) {
       const classes = `fit-${esc(m.fit || 'unknown')}`;
       const nowClasses = `fit-${esc(m.fit_now || 'unknown')}`;
-      const reason = !m.runnable && m.reason ? `<span class="reason" title="${esc(m.reason)}">${esc(m.reason)}</span>` : '';
+      const reasonText = ts(m.reason, m.reason_code, m.reason_params);
+      const reason = !m.runnable && m.reason ? `<span class="reason" title="${esc(reasonText)}">${esc(reasonText)}</span>` : '';
       const slot = slots.get(m.id);
-      const badges = `${slot?`<span class="badge ${({recommended:'rec',best_quality:'best',multimodal:'omni'})[slot]||''}">${esc(t(slot.replace('_',' ')))}</span>`:''}${m.experimental?`<span class="badge experimental">${t('Experimental')}</span>`:''}`;
-      const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
+      const mediaReasonText = ts(m.media_reason, m.media_reason_code, m.media_reason_params);
+      const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(mediaReasonText || '')}</small>` : '';
       const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
       const downloadButton=downloadControl(m,downloadStatus);
       // Models: download, set up and delete; loading is the Model manager's (renderDiskModels)
@@ -156,8 +157,7 @@ function renderSuggestions(suggestions) {
   $('#suggested').innerHTML = `<div class="suggestion-grid">${suggestions.map(s => {
     const m = models.get(s.id);
     if (!m) return '';
-    const media = s.slot === 'multimodal';
-    const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
+    const why = esc(ts(s.why, s.why_code, s.why_params)).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
     const download=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
     const action=`<div class="controls">${loaded?`<span class="chip">${t('loaded')}</span>`:!m.downloaded?downloadControl(m,download):''}${optionsButton(m.id,false,'save')}${m.downloaded&&!loaded?deleteButton(m.id):''}</div>${m.downloaded&&!loaded?`<a class="dashboard-link" href="#manager">${t('Load in Model manager')}${ARROW}</a>`:''}`;
     return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(t(s.slot.replace('_',' ')))}</div><h3>${familyMark(m.family)}</h3><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)} ${m.community?`<span class="chip">${t('community')}</span>`:''}${m.revision?`<span class="chip">${t('revision {revision}',{revision:esc(m.revision)})}</span>`:''}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} ${t('est. memory')}</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(t(m.fit_now || 'unknown'))}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} ${t('downloaded')}</div>`:''}${action}</article>`;
@@ -1280,7 +1280,7 @@ function renderBenchmarkState(bench, ready) {
   }
   const running=Boolean(bench?.running);
   $('#runBenchmark').disabled=running||!ids.length; $('#cancelBenchmark').hidden=!running;
-  $('#benchmarkProgress').textContent=!bench?(ids.length?'':kind==='modes'?t('Download a model to compare its modes.'):t('Load a model to benchmark it.')):running?`${shortName(bench.model)} · ${bench.label} · ${t(bench.phase)} ${bench.done}/${bench.total}`:bench.phase==='error'?`${t('Failed: {error}',{error:bench.error})}`:bench.phase==='cancelled'?t('Cancelled'):'';
+  $('#benchmarkProgress').textContent=!bench?(ids.length?'':kind==='modes'?t('Download a model to compare its modes.'):t('Load a model to benchmark it.')):running?`${shortName(bench.model)} · ${bench.label} · ${ts(bench.phase,bench.phase_code,bench.phase_params)} ${bench.done}/${bench.total}`:bench.phase==='error'?`${t('Failed: {error}',{error:bench.error})}`:bench.phase==='cancelled'?t('Cancelled'):'';
   if(benchRunning&&!running)loadStats();
   benchRunning=running;
 }
@@ -1347,7 +1347,7 @@ function allThresholds(f) {
 function renderCalibrationState(job) {
   const running=Boolean(job?.running);
   $('#cancelCalibration').hidden=!running; $('#runCalibration').disabled=running||!$('#calibrationModel').value;
-  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${job.phase}…`:job.phase==='error'?`${t('Failed: {error}',{error:job.error})}`:job.phase==='cancelled'?t('Cancelled'):['done','done_with_warnings'].includes(job.phase)?`${job.phase==='done_with_warnings'?t('Completed with warnings'):t('Completed (see report for certification)')}: ${shortName(job.result?.file||'')}${job.result?.warnings?.length?' · '+job.result.warnings.join(' · '):''}`:'';
+  $('#calibrationProgress').textContent=!job?'':running?`${shortName(job.model)} · ${ts(job.phase,job.phase_code,job.phase_params)}…`:job.phase==='error'?`${t('Failed: {error}',{error:job.error})}`:job.phase==='cancelled'?t('Cancelled'):['done','done_with_warnings'].includes(job.phase)?`${job.phase==='done_with_warnings'?t('Completed with warnings'):t('Completed (see report for certification)')}: ${shortName(job.result?.file||'')}${job.result?.warnings?.length?' · '+job.result.warnings.join(' · '):''}`:'';
   if(calibrationRunning&&!running)loadCalibrations();
   if(!running&&job?.result?.report_only&&calibrationReportSeen!==job.started){calibrationReportSeen=job.started;$('#reportText').textContent=job.result.report||'';$('#reportDialog').showModal();}
   calibrationRunning=running;
@@ -1488,7 +1488,7 @@ function optionInput(key, value) {
 function renderOptionsForm(values) {
   const d=optionsState.data, list=optionsState.media?d.media_modes:d.modes, defaultMode=list.find(m=>m.default)?.mode;
   const mode=list.some(m=>m.mode===values.mode)?values.mode:defaultMode;
-  const modes=`<div class="option-modes">${list.map(m=>`<label class="option-mode${m.available?'':' unavailable'}" title="${esc(m.reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?` <span class="chip">${t('default')}</span>`:''}</span>${m.reason?`<small>${esc(m.reason)}</small>`:''}</label>`).join('')}</div>${optionsState.media?`<p class="muted">${t('With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].')}</p>`:''}`;
+  const modes=`<div class="option-modes">${list.map(m=>{const reason=ts(m.reason,m.reason_code,m.reason_params);return `<label class="option-mode${m.available?'':' unavailable'}" title="${esc(reason||'')}"><input type="radio" name="optMode" value="${esc(m.mode)}"${m.mode===mode?' checked':''}${m.available?'':' disabled'}> <span>${esc(m.mode)}${m.default?` <span class="chip">${t('default')}</span>`:''}</span>${reason?`<small>${esc(reason)}</small>`:''}</label>`;}).join('')}</div>${optionsState.media?`<p class="muted">${t('With media (--media on) the model is served with --mode eager, or with --mode vllm on an NVIDIA GPU with basal[vllm].')}</p>`:''}`;
   const experimental='<p class="muted option-note" id="optExperimentalNote"></p>';
   $('#optionsForm').innerHTML=OPTION_SECTIONS.map(([title,keys])=>`<fieldset class="option-section"><legend>${esc(t(title))}</legend>${title==='Engine'?modes:''}<div class="option-grid">${keys.map(k=>`<div class="opt-field" data-opt="${k}"${OPTION_FIELDS[k].modes?` data-modes="${OPTION_FIELDS[k].modes.join(' ')}"`:''}>${optionInput(k,values[k])}</div>`).join('')}</div>${title==='Experimental'?experimental:title==='Caching'?`<p class="muted">${t('State cache reuses the longest cached prefix of growing or edited states, then computes the changed suffix. Its GB budget consumes GPU memory alongside weights and graphs; reduce it if memory is tight. No cache-hit counters are reported.')}</p>`:title==='Kernels (CUDA graph engine)'?`<p class="muted">${t('auto uses compact rows where supported. default uses padded graphs; fine captures more shapes and takes longer to start. compact needs supported attention kernels and more GPU memory (about 6 GB extra on measured RTX 3090 runs). Unsupported combinations show the engine’s refusal in the model row and Logs.')}</p>`:title==='Engine'?'<p class="muted" id="optPackedNote"></p>':''}</fieldset>`).join('');
   $('#optionsForm').querySelectorAll('input[type=range]').forEach(r=>r.oninput=()=>{$(`#${r.id}-out`).textContent=`${r.value}%`;});

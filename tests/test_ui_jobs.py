@@ -52,6 +52,19 @@ def test_one_job_per_kind_cancel_error_and_result():
     assert logs["job:bench"].last() == "error: bad input" and ("error", "bench failed: fails: bad input") in events
 
 
+
+def test_job_phase_codes_preserve_english_phase_and_capture_parameters():
+    from basal.ui.jobs import Job, PHASE_TEMPLATES, phase_fields
+
+    assert phase_fields("restoring model/example") == ("phase_restoring", {"model": "model/example"})
+    job = Job("backend-test", "m", "label", LogBuffer())
+    job.progress("checking selected models")
+    state = job.state()
+    assert state["phase"] == "checking selected models"
+    assert state["phase_code"] == "phase_checking"
+    assert state["phase_params"] == {}
+    assert PHASE_TEMPLATES[state["phase_code"]].format(**state["phase_params"]) == state["phase"]
+
 def test_log_buffer_generation_changes_when_sequence_restarts():
     old = LogBuffer()
     old.append("old")

@@ -1,6 +1,7 @@
 """Background jobs of basal-ui (benchmark, calibration, batch, ...): one running job per kind, each in its own thread,
 its progress in /api/status and its output in the Logs view (source job:<kind>)."""
 import threading
+import re
 import time
 import uuid
 from collections import deque
@@ -36,6 +37,27 @@ class LogBuffer:
             return "\n".join(line["text"] for line in self.lines)
 
 
+PHASE_TEMPLATES = {
+    "phase_starting": "starting", "phase_running": "running", "phase_checking": "checking selected models",
+    "phase_unloading": "unloading selected models", "phase_starting_model": "starting model",
+    "phase_testing_inference": "testing inference", "phase_restoring": "restoring {model}",
+    "phase_calibrating_engine": "calibrating (engine in basal-ui's process)",
+    "phase_calibrating": "calibrating", "phase_loading_model": "loading model",
+    "phase_done": "done", "phase_done_warnings": "done_with_warnings",
+    "phase_cancelled": "cancelled", "phase_error": "error",
+}
+
+
+def phase_fields(phase):
+    for code, template in PHASE_TEMPLATES.items():
+        keys = re.findall(r"\{(\w+)\}", template)
+        pattern = re.escape(template)
+        for key in keys:
+            pattern = pattern.replace(re.escape("{" + key + "}"), f"(?P<{key}>.*?)", 1)
+        match = re.fullmatch(pattern, phase)
+        if match:
+            return code, match.groupdict()
+    return None, None
 class Cancelled(Exception):
     """A job's target stops early: Job.cancel was set."""
 
@@ -64,7 +86,9 @@ class Job:
 
     def state(self) -> dict:
         with self.lock:
+            code, params = phase_fields(self.phase)
             return {"kind": self.kind, "model": self.model, "label": self.label, "phase": self.phase,
+                    "phase_code": code, "phase_params": params,
                     "done": self.done, "total": self.total, "error": self.error, "running": self.running,
                     "started": self.started, "result": self.result}
 

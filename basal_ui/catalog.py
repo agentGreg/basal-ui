@@ -29,6 +29,65 @@ GIB = 1024**3
 # 4.5B 14.4-15.2 GB for 9.51, basal-omni-1.0-mini 18.9 for 15.9; H100, RTX 4060 Ti 16 GB, RTX 4090)
 GRAPH_ENGINE_MODES = ("fast", "fast-nocompile", "fast-exit", "fp8", "nvfp4")
 GRAPH_ENGINE_OVERHEAD = 4 * GIB
+ASSESSMENT_TEMPLATES = {
+    "cuda_graph_gpu": "needs an NVIDIA GPU (the CUDA graph engine)",
+    "cuda_graph_port": "the CUDA graph engine reads bf16 or FP8 weights, not {port}",
+    "cuda_graph_capability": "the CUDA graph engine needs compute capability 8.0+ (Ampere or newer)",
+    "fp8_hardware": "FP8 checkpoints need an NVIDIA GPU with compute capability 8.9+ (Ada, Hopper, Blackwell).",
+    "fp8_vllm": "This FP8 checkpoint is served with vLLM: install basal[vllm] (own environment).",
+    "nvfp4_hardware": "NVFP4 checkpoints need a Blackwell GPU (compute capability 10.0+).",
+    "nvfp4_vllm": "NVFP4 checkpoints are served with vLLM: install basal[vllm] (own environment).",
+    "mlx_hardware": "MLX ports run on Apple Silicon only.",
+    "mlx_dependency": "MLX ports need mlx and mlx-lm: install basal[mlx].",
+    "gguf_base": "this GGUF conversion ships no tokenizer or calibration and its model card names no base model",
+    "gguf_dependency": "GGUF files need llama-cpp-python: install basal[gguf].",
+    "cuda_capability": "The basal engine needs an NVIDIA GPU with compute capability 8.0+ (Ampere or newer); on this GPU use a GGUF file with basal[gguf].",
+    "omni_apple_dependency": "basal-omni on Apple Silicon needs mlx and mlx-lm: install basal[mlx].",
+    "omni_hardware": "basal-omni needs an NVIDIA GPU or Apple Silicon.",
+    "media_absent": "this checkpoint has no image or audio encoder",
+    "media_dependency": "images and audio need pillow, soundfile, scipy and torchvision: install basal[media]",
+    "suggest_recommended": "{tier} in {label}: needs about {estimate} of {memory}",
+    "suggest_packed": "{base}; about 1.5x faster with --mlx-packed (Load options)",
+    "suggest_best": "the largest tier that fits now: needs about {estimate}",
+    "suggest_fastest": "the smallest tier: needs about {estimate}",
+    "suggest_lightest": "{tier}: the smallest basal model, text on a CPU or a small GPU; needs about {estimate}, served with --mode {mode}",
+    "suggest_multimodal": "{kinds}, served with --mode {mode}",
+}
+
+
+def _message(code: str, **params) -> dict:
+    return {"text": ASSESSMENT_TEMPLATES[code].format(**params), "code": code, "params": params}
+
+
+def _coded(code: str | None, **params) -> tuple[str | None, str | None, dict]:
+    if code is None:
+        return None, None, {}
+    return ASSESSMENT_TEMPLATES[code].format(**params), code, params
+def _text(code: str, **params) -> str:
+    return ASSESSMENT_TEMPLATES[code].format(**params)
+
+def _message_fields(text: str | None, codes: tuple[str, ...]) -> tuple[str | None, dict | None]:
+    if text is None:
+        return None, None
+    for code in codes:
+        template = ASSESSMENT_TEMPLATES[code]
+        keys = re.findall(r"\{(\w+)\}", template)
+        pattern = re.escape(template)
+        for key in keys:
+            pattern = pattern.replace(re.escape("{" + key + "}"), f"(?P<{key}>.*?)", 1)
+        match = re.fullmatch(pattern, text)
+        if match:
+            return code, match.groupdict()
+    return None, None
+
+def message_fields(text: str | None, prefix: str) -> tuple[str | None, dict | None]:
+    return _message_fields(text, tuple(code for code in ASSESSMENT_TEMPLATES if code.startswith(prefix)))
+
+
+def _suggestion(slot: str, model_id: str, code: str, **params) -> dict:
+    text, code, params = _coded(code, **params)
+    return {"slot": slot, "id": model_id, "why": text, "why_code": code, "why_params": params}
+
 # The basal-omni checkpoints that carry image / audio encoders (docs/OMNI.md); basal-omni-1.1-max is Gemma 4 Unified
 # without them, and the quantised ports drop them.
 MEDIA_KINDS = {
@@ -77,6 +136,10 @@ class Assessment:
     fit_now: str
     media_mode: str | None
     media_reason: str | None
+    reason_code: str | None = None
+    reason_params: dict | None = None
+    media_reason_code: str | None = None
+    media_reason_params: dict | None = None
 
 
 def parse_repo(repo_id: str) -> tuple[str, str, str] | None:
@@ -241,59 +304,56 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
     cap = hw.cuda_capability or (0, 0)
     if v.port == "FP8":
         if hw.platform != "cuda" or cap < (8, 9):
-            return None, "FP8 checkpoints need an NVIDIA GPU with compute capability 8.9+ (Ada, Hopper, Blackwell)."
+            return None, _text("fp8_hardware")
         if v.family == CURRENT_TEXT_FAMILY:  # loaded as stored by the basal engine
             return "fast", None
-        if "vllm" not in hw.engines:  # the older ModelOpt FP8 ports and basal-omni's are checked with vLLM
-            return None, "This FP8 checkpoint is served with vLLM: install basal[vllm] (own environment)."
+        if "vllm" not in hw.engines:
+            return None, _text("fp8_vllm")
         return "vllm", None
     if v.port == "NVFP4":
         if hw.platform != "cuda" or cap < (10, 0):
-            return None, "NVFP4 checkpoints need a Blackwell GPU (compute capability 10.0+)."
+            return None, _text("nvfp4_hardware")
         if "vllm" not in hw.engines:
-            return None, "NVFP4 checkpoints are served with vLLM: install basal[vllm] (own environment)."
+            return None, _text("nvfp4_vllm")
         return "vllm", None
     if v.port.startswith("MLX"):
         if hw.platform != "apple":
-            return None, "MLX ports run on Apple Silicon only."
+            return None, _text("mlx_hardware")
         if "mlx" not in hw.engines:
-            return None, "MLX ports need mlx and mlx-lm: install basal[mlx]."
+            return None, _text("mlx_dependency")
         return "mlx", None
     if v.port == "GGUF":
         if v.gguf_file and v.weights_only and v.base_repo is None:
-            return None, "this GGUF conversion ships no tokenizer or calibration and its model card names no base model"
+            return None, _text("gguf_base")
         if "gguf" not in hw.engines:
-            return None, "GGUF files need llama-cpp-python: install basal[gguf]."
+            return None, _text("gguf_dependency")
         return "gguf", None
-    # bf16 weights
-    if v.recurrent:  # basal-serve's default: fast where the Qwen3.5 port passed its gate (Hopper with fla), else
-        # eager (CUDA, Apple via torch's default device mps, CPU)
-        fast = hw.platform == "cuda" and (hw.cuda_capability or (0, 0))[0] == 9 and "fla" in hw.engines
+    if v.recurrent:  # basal-serve defaults to fast on Hopper with fla, eager elsewhere
+        fast = hw.platform == "cuda" and cap[0] == 9 and "fla" in hw.engines
         return ("fast" if fast else "eager"), None
     if hw.platform == "cuda":
-        if hw.cuda_capability and hw.cuda_capability < (8, 0) and not v.experimental:
-            return None, "The basal engine needs an NVIDIA GPU with compute capability 8.0+ (Ampere or newer); " \
-                        "on this GPU use a GGUF file with basal[gguf]."
+        if hw.cuda_capability and cap < (8, 0) and not v.experimental:
+            return None, _text("cuda_capability")
         return ("eager" if v.experimental and not omni_fast(hw) else "fast"), None
     if hw.platform == "apple":
         if "mlx" in hw.engines:
             return "mlx", None
         if v.experimental:
-            return None, "basal-omni on Apple Silicon needs mlx and mlx-lm: install basal[mlx]."
+            return None, _text("omni_apple_dependency")
         return "mps", None
     if "tpu" in hw.engines and not v.experimental:
         return "tpu", None
     if v.experimental:
-        return None, "basal-omni needs an NVIDIA GPU or Apple Silicon."
+        return None, _text("omni_hardware")
     return "eager", None
 
 
 def _media_mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
     """("eager", None) when this machine can serve the variant with --media on, else (None, why not)."""
     if not v.media:
-        return None, "this checkpoint has no image or audio encoder"
+        return None, _text("media_absent")
     if "media" not in hw.engines:
-        return None, "images and audio need pillow, soundfile, scipy and torchvision: install basal[media]"
+        return None, _text("media_dependency")
     return "eager", None
 
 
@@ -368,31 +428,32 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
         if recommended:
             memory = (f"{_gb(hw.available_bytes)} available" if hw.available_bytes is not None
                       else f"a {_gb(hw.memory_bytes)} budget")
-            why = (f"{recommended.variant.tier} in {recommended.variant.label}: needs about "
-                   f"{_gb(recommended.est_memory_bytes)} of {memory}")
             v = recommended.variant
+            params = {"tier": v.tier, "label": v.label, "estimate": _gb(recommended.est_memory_bytes),
+                      "memory": memory}
+            code = "suggest_recommended"
             if (hw.platform == "apple" and "mlx" in hw.engines and v.family in ("basal-1.0", "basal-1.5", "basal-2.0")
                     and (v.port == "bf16" or v.port.startswith("MLX"))):
-                why += "; about 1.5x faster with --mlx-packed (Load options)"
-            suggestions.append({"slot": "recommended", "id": v.id, "why": why})
+                code = "suggest_packed"
+                params = {"base": ASSESSMENT_TEMPLATES["suggest_recommended"].format(**params)}
+            suggestions.append(_suggestion("recommended", v.id, code, **params))
         if best and best is not recommended:
-            suggestions.append({"slot": "best_quality", "id": best.variant.id,
-                                "why": f"the largest tier that fits now: needs about {_gb(best.est_memory_bytes)}"})
+            suggestions.append(_suggestion("best_quality", best.variant.id, "suggest_best",
+                                           estimate=_gb(best.est_memory_bytes)))
         if fastest and fastest not in (recommended, best):
-            suggestions.append({"slot": "fastest", "id": fastest.variant.id,
-                                "why": f"the smallest tier: needs about {_gb(fastest.est_memory_bytes)}"})
+            suggestions.append(_suggestion("fastest", fastest.variant.id, "suggest_fastest",
+                                           estimate=_gb(fastest.est_memory_bytes)))
     light = [a for a in fitting if a.runnable and a.variant.recurrent]
     if light:
         pick = (next((a for a in light if a.variant.label == preferred_format(hw)), None)
                 or next((a for a in light if a.variant.port == "bf16"), light[0]))
-        suggestions.append({"slot": "lightest", "id": pick.variant.id,
-                            "why": f"{pick.variant.tier}: the smallest basal model, text on a CPU or a small GPU; "
-                                   f"needs about {_gb(pick.est_memory_bytes)}, served with --mode {pick.mode}"})
+        suggestions.append(_suggestion("lightest", pick.variant.id, "suggest_lightest",
+                                       tier=pick.variant.tier, estimate=_gb(pick.est_memory_bytes), mode=pick.mode))
     multimodal = largest([a for a in fitting if a.media_mode is not None])
     if multimodal:
         kinds = " and ".join({"image": "images"}.get(kind, kind) for kind in multimodal.variant.media)
-        suggestions.append({"slot": "multimodal", "id": multimodal.variant.id,
-                            "why": f"{kinds}, served with --mode {multimodal.media_mode}"})
+        suggestions.append(_suggestion("multimodal", multimodal.variant.id, "suggest_multimodal",
+                                       kinds=kinds, mode=multimodal.media_mode))
     return suggestions
 
 

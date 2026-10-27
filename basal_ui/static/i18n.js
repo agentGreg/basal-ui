@@ -798,6 +798,42 @@ const PL = {
   "Media must be attached again after changing language.": "Po zmianie języka dołącz media ponownie.",
   "Browse suggested and all basal variants.": "Przeglądaj polecane i wszystkie warianty basal.",
   "Loaded models, their statistics and benchmarks, models on disk, and the models directory.": "Załadowane modele, ich statystyki i testy, modele na dysku oraz katalog modeli.",
+  "code:cuda_graph_gpu": "wymagana karta NVIDIA (silnik grafów CUDA)",
+  "code:cuda_graph_port": "silnik grafów CUDA obsługuje wagi bf16 lub FP8, nie {port}",
+  "code:cuda_graph_capability": "silnik grafów CUDA wymaga compute capability 8.0+ (Ampere lub nowszej)",
+  "code:fp8_hardware": "Checkpoint FP8 wymaga karty NVIDIA z compute capability 8.9+ (Ada, Hopper lub Blackwell).",
+  "code:fp8_vllm": "Ten checkpoint FP8 jest obsługiwany przez vLLM: zainstaluj basal[vllm] (osobne środowisko).",
+  "code:nvfp4_hardware": "Checkpoint NVFP4 wymaga karty Blackwell (compute capability 10.0+).",
+  "code:nvfp4_vllm": "Checkpoint NVFP4 jest obsługiwany przez vLLM: zainstaluj basal[vllm] (osobne środowisko).",
+  "code:mlx_hardware": "Porty MLX działają tylko na Apple Silicon.",
+  "code:mlx_dependency": "Porty MLX wymagają mlx i mlx-lm: zainstaluj basal[mlx].",
+  "code:gguf_base": "ta konwersja GGUF nie zawiera tokenizera ani kalibracji, a karta modelu nie wskazuje modelu bazowego",
+  "code:gguf_dependency": "Pliki GGUF wymagają llama-cpp-python: zainstaluj basal[gguf].",
+  "code:cuda_capability": "Silnik basal wymaga karty NVIDIA z compute capability 8.0+ (Ampere lub nowszej); na tej karcie użyj pliku GGUF z basal[gguf].",
+  "code:omni_apple_dependency": "basal-omni na Apple Silicon wymaga mlx i mlx-lm: zainstaluj basal[mlx].",
+  "code:omni_hardware": "basal-omni wymaga karty NVIDIA lub Apple Silicon.",
+  "code:media_absent": "ten checkpoint nie ma enkodera obrazu ani audio",
+  "code:media_dependency": "obrazy i audio wymagają pillow, soundfile, scipy i torchvision: zainstaluj basal[media]",
+  "code:suggest_recommended": "{tier} w formacie {label}: potrzeba około {estimate} z {memory}",
+  "code:suggest_packed": "{base}; około 1,5 raza szybciej z --mlx-packed (Opcje ładowania)",
+  "code:suggest_best": "największy poziom mieszczący się teraz: potrzeba około {estimate}",
+  "code:suggest_fastest": "najmniejszy poziom: potrzeba około {estimate}",
+  "code:suggest_lightest": "{tier}: najmniejszy model basal, tekst na CPU lub małej karcie GPU; potrzeba około {estimate}, obsługa przez --mode {mode}",
+  "code:suggest_multimodal": "{kinds}, obsługa przez --mode {mode}",
+  "code:phase_starting": "uruchamianie",
+  "code:phase_running": "w trakcie",
+  "code:phase_checking": "sprawdzanie wybranych modeli",
+  "code:phase_unloading": "zwalnianie wybranych modeli",
+  "code:phase_starting_model": "uruchamianie modelu",
+  "code:phase_testing_inference": "testowanie wnioskowania",
+  "code:phase_restoring": "przywracanie {model}",
+  "code:phase_calibrating_engine": "kalibracja (silnik w procesie basal-ui)",
+  "code:phase_calibrating": "kalibracja",
+  "code:phase_loading_model": "ładowanie modelu",
+  "code:phase_done": "gotowe",
+  "code:phase_done_warnings": "gotowe z ostrzeżeniami",
+  "code:phase_cancelled": "anulowano",
+  "code:phase_error": "błąd",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],
@@ -820,6 +856,10 @@ function fill(text, vars) {
 }
 function t(text, vars) {
   return fill(LANG === 'pl' && Object.hasOwn(PL, text) ? PL[text] : text, vars);
+}
+function ts(text, code, params) {
+  const translated = LANG === 'pl' && PL[`code:${code}`];
+  return fill(translated || text, params);
 }
 function plForm(n) {  // Polish: 1 model, 2-4 modele (not 12-14), 5+ modeli
   const a = Math.abs(n) % 100, b = a % 10;

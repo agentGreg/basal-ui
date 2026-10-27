@@ -1125,8 +1125,12 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return {"source": source, "suggestions": catalog.suggest(assessed, current_hw),
                 "models_dir": str(Path(cache_dir).resolve()), "models": [
             {**{k: getattr(a.variant, k) for k in fields}, "runnable": a.runnable, "reason": a.reason,
+             "reason_code": catalog.message_fields(a.reason, "")[0],
+             "reason_params": catalog.message_fields(a.reason, "")[1],
              "mode": a.mode, "est_memory_bytes": a.est_memory_bytes, "fit": a.fit, "fit_now": a.fit_now,
              "media": list(a.variant.media), "media_mode": a.media_mode, "media_reason": a.media_reason,
+             "media_reason_code": catalog.message_fields(a.media_reason, "")[0],
+             "media_reason_params": catalog.message_fields(a.media_reason, "")[1],
              "downloaded": on_disk[a.variant.id] is not None, "downloaded_bytes": on_disk[a.variant.id],
              "revision": revisions.get(a.variant.id)}
             for a in assessed]}
@@ -1208,7 +1212,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 "quantisation": catalog.quantisation(variant, basal_json, config_json),
                 "shipped_calibration": shipped_calibration, "readme": readme,
                 "assessment": {"mode": assessment.mode, "runnable": assessment.runnable,
-                               "reason": assessment.reason, "est_memory_bytes": assessment.est_memory_bytes,
+                               "reason": assessment.reason,
+                               "reason_code": catalog.message_fields(assessment.reason, "")[0],
+                               "reason_params": catalog.message_fields(assessment.reason, "")[1],
+                               "est_memory_bytes": assessment.est_memory_bytes,
                                "fit": assessment.fit, "fit_now": assessment.fit_now},
                 "modes": load_options.available_modes(variant, hw(), assessment), "loaded": loaded}
 

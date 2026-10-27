@@ -89,6 +89,20 @@ def test_model_api_sorting_load_validation_and_decide_requires_a_loaded_model(tm
         assert client.post("/api/decide", json={"model": "mini", "state": "x", "questions": {}}).status_code == 404
 
 
+def test_model_api_includes_reason_and_suggestion_codes(tmp_path):
+    fp8 = Variant("fp8", "Remek/basal-2.0-4.5B-FP8", "basal-2.0", "4.5B", "FP8", "FP8", None, 100, False)
+    app, _ = app_for(tmp_path, [MINI, fp8])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        payload = client.get("/api/models").json()
+    unavailable = next(model for model in payload["models"] if model["id"] == "fp8")
+    assert unavailable["reason_code"] == "fp8_hardware"
+    assert unavailable["reason_params"] == {}
+    assert unavailable["reason"] == catalog.ASSESSMENT_TEMPLATES[unavailable["reason_code"]].format(
+        **unavailable["reason_params"])
+    for card in payload["suggestions"]:
+        assert card["why"] == catalog.ASSESSMENT_TEMPLATES[card["why_code"]].format(**card["why_params"])
+
+
 def test_load_with_media_requires_engine_and_echoes_status(tmp_path, monkeypatch, instant_start):
     app, _ = app_for(tmp_path, [OMNI])
     with TestClient(app, base_url="http://127.0.0.1") as client:

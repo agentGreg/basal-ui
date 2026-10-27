@@ -1,4 +1,5 @@
 import math
+import re
 from pathlib import Path
 
 import pytest
@@ -159,8 +160,31 @@ def test_suggestions_by_hardware_and_available_memory():
     media_hw = hw("cuda", "H100", (9, 0), frozenset({"cuda", "media"}), 80 * 1024**3, 70 * 1024**3)
     media_cards = choices(media_hw, [omni])
     assert media_cards == [{"slot": "multimodal", "id": omni,
-                            "why": "images and audio, served with --mode eager"}]
+                            "why": "images and audio, served with --mode eager", "why_code": "suggest_multimodal",
+                            "why_params": {"kinds": "images and audio", "mode": "eager"}}]
 
+
+
+def test_suggestion_codes_reproduce_english_text_and_match_template_params():
+    apple = hw("apple", "M4 Max", None, frozenset({"mlx"}), 24 * 1024**3, 6 * 1024**3)
+    repos = ["Remek/basal-2.0-mini-MLX-8bit", "Remek/basal-2.0-4.5B-MLX-8bit"]
+    cards = suggest([assess(variant(repo), apple) for repo in repos], apple)
+    assert cards[0]["why_code"] == "suggest_packed"
+    assert cards[0]["why"] == catalog.ASSESSMENT_TEMPLATES[cards[0]["why_code"]].format(
+        **cards[0]["why_params"])
+    assert cards[0]["why_params"] == {"base": "mini in MLX 8-bit: needs about 3.7 GB of 6.4 GB available"}
+    for card in cards:
+        template = catalog.ASSESSMENT_TEMPLATES[card["why_code"]]
+        assert set(card["why_params"]) == set(re.findall(r"\{(\w+)\}", template))
+        assert card["why"] == template.format(**card["why_params"])
+
+
+def test_catalog_templates_have_matching_polish_placeholders():
+    source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
+    translated = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))
+    for code, template in catalog.ASSESSMENT_TEMPLATES.items():
+        assert code in translated
+        assert set(re.findall(r"\{(\w+)\}", template)) == set(re.findall(r"\{(\w+)\}", translated[code]))
 
 def test_pico_is_recurrent_and_follows_basal_serve_default_modes():
     pico = variant("Remek/basal-omni-pico", size=1_700_000_000)
