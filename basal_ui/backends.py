@@ -10,12 +10,22 @@ import time
 import re
 from concurrent.futures import ThreadPoolExecutor
 import httpx
+from . import catalog, hardware, options
+from .jobs import Cancelled
 
 BACKEND_TEMPLATES = {
     "backend_mlx_device": "This Basal integration supports MLX on Apple Silicon.",
     "backend_cuda_linux": "This Basal integration requires NVIDIA CUDA on Linux.",
     "backend_strix": "Requires AMD Strix Halo with a compatible ROCm PyTorch installation.",
     "backend_tpu": "No accessible TPU detected; requires a TPU host and JAX/libtpu.",
+    "backend_status_installed": "Installed",
+    "backend_status_not_installed": "Not installed",
+    "backend_status_needs_attention": "Needs attention",
+    "backend_status_unavailable": "Unavailable on this machine",
+    "backend_test_status_starting": "starting",
+    "backend_test_status_passed": "passed",
+    "backend_test_status_cancelled": "cancelled",
+    "backend_test_status_error": "error",
     "backend_setup_default": "Commands target this app environment. Restart basal-ui after installation, then Refresh.",
     "backend_setup_separate": "Use a separate environment: these packages bring their own PyTorch dependencies. Install this same Basal fork with its UI dependencies there and launch basal-ui from that environment. Installing there does not change this inventory.",
     "backend_setup_platform": "Use the platform-specific installer in the documentation for the correct PyTorch/ROCm build; do not replace a working GPU build with a generic wheel.",
@@ -35,8 +45,6 @@ def _message_fields(text):
             return code, match.groupdict()
     return None, None
 
-from . import catalog, hardware, options
-from .jobs import Cancelled
 
 # Names describe engines, not checkpoint formats or quantizations.
 BACKENDS = {
@@ -214,8 +222,10 @@ class Manager:
                     'Missing: ' + ', '.join(check['missing']) if check['missing']
                     else 'Dependency/device checks passed; inference is not verified.')
                 reason_code, reason_params = _message_fields(reason)
-                entries.append({'id': key, 'name': name, 'status': status, 'compatible': reason is None,
-                                'reason': reason_text, 'reason_code': reason_code, 'reason_params': reason_params,
+                entries.append({'id': key, 'name': name, 'status': status,
+                                'status_code': f'backend_status_{status}', 'status_params': {},
+                                'compatible': reason is None, 'reason': reason_text,
+                                'reason_code': reason_code, 'reason_params': reason_params,
                                 'versions': check['versions'], 'modes': modes, 'models': models,
                                 'setup': setup(key, hw), 'documentation': docs})
             entries.sort(key=lambda e: (not e['compatible'], e['name']))
@@ -228,6 +238,7 @@ class Manager:
 
     def records(self):
         return [{k: v for k, v in record.items() if k != 'snapshots'} | {
+            'status_code': f"backend_test_status_{record['status']}", 'status_params': {},
             'stopped_models': [{'id': s['variant'].id, 'mode': s['mode'], 'error': s.get('restore_error')}
                                for s in record['snapshots']]} for record in self.tests.values()]
 

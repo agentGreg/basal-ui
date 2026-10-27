@@ -43,6 +43,7 @@ PHASE_TEMPLATES = {
     "phase_testing_inference": "testing inference", "phase_restoring": "restoring {model}",
     "phase_calibrating_engine": "calibrating (engine in basal-ui's process)",
     "phase_calibrating": "calibrating", "phase_loading_model": "loading model",
+    "phase_warm_up": "warm-up", "phase_sequential": "sequential", "phase_concurrent": "concurrent",
     "phase_done": "done", "phase_done_warnings": "done_with_warnings",
     "phase_cancelled": "cancelled", "phase_error": "error",
 }

@@ -53,7 +53,9 @@ def test_inventory_missing_packages_still_shows_compatible_models(manager, monke
     data = manager.inventory()
     torch = next(b for b in data['backends'] if b['id'] == 'torch')
     assert torch['status'] == 'not_installed' and torch['models']
-    assert next(b for b in data['backends'] if b['id'] == 'mlx')['status'] == 'unavailable'
+    assert torch['status_code'] == 'backend_status_not_installed' and torch['status_params'] == {}
+    mlx = next(b for b in data['backends'] if b['id'] == 'mlx')
+    assert mlx['status'] == 'unavailable' and mlx['status_code'] == 'backend_status_unavailable'
     assert 'basal[sglang]' not in backends.setup('sglang', manager.current_hardware())['command']
 
 
@@ -72,6 +74,7 @@ def test_private_test_does_not_change_settings_history_or_stats(manager, tmp_pat
     manager.start(request())
     assert finish(manager).phase == 'done'
     assert manager.records()[0]['status'] == 'passed'
+    assert manager.records()[0]['status_code'] == 'backend_test_status_passed'
     assert not manager.fleet.temporary and not manager.fleet.reserved
     assert before == {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
 

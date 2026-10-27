@@ -286,11 +286,11 @@ def list_variants(refresh: bool = False, cache_dir: Path | None = None) -> tuple
 
 def _cuda_graph(v: Variant, hw: Hardware) -> str | None:
     if hw.platform != "cuda":
-        return "needs an NVIDIA GPU (the CUDA graph engine)"
+        return _text("cuda_graph_gpu")
     if v.port not in ("bf16", "FP8"):
-        return f"the CUDA graph engine reads bf16 or FP8 weights, not {v.port}"
+        return _text("cuda_graph_port", port=v.port)
     if hw.cuda_capability and hw.cuda_capability < (8, 0):
-        return "the CUDA graph engine needs compute capability 8.0+ (Ampere or newer)"
+        return _text("cuda_graph_capability")
     return None
 
 

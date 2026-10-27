@@ -1,4 +1,5 @@
 import time
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -131,6 +132,35 @@ def test_available_modes_follow_the_hardware_and_the_variant():
     assert reasons["fast-exit"] == "exit heads ship with basal-1.0" and "TPU" in reasons["tpu"]
     assert [m["mode"] for m in options.available_modes(BF16, CUDA, catalog.assess(BF16, CUDA)) if m["default"]] == ["fast"]
 
+def test_availability_messages_return_reproducible_codes_and_params():
+
+    recurrent = Variant("pico", "Remek/basal-omni-pico", "basal-omni", "pico", "bf16", "bf16", None, 100, True,
+                        recurrent=True)
+    media_variant = Variant("omni", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None,
+                            100, True, media=("image", "audio"))
+    apple = Hardware("apple", "M4", 32 * 1024**3, None, None, frozenset({"mlx"}))
+    apple_no_mlx = Hardware("apple", "M4", 32 * 1024**3, None, None, frozenset())
+    old_cuda = Hardware("cuda", "old NVIDIA", 8 * 1024**3, None, (7, 5), frozenset({"cuda"}))
+    no_vllm = Hardware("cuda", "NVIDIA H100", 80 * 1024**3, None, (9, 0), frozenset({"cuda"}))
+    blackwell = Hardware("cuda", "NVIDIA B200", 192 * 1024**3, None, (10, 0), frozenset({"cuda", "vllm"}))
+    scenarios = (
+        (BF16, CPU), (BF16, CUDA), (BF16, no_vllm), (BF16, apple), (BF16, apple_no_mlx),
+        (BF16, old_cuda), (GGUF, CPU), (recurrent, CUDA), (media_variant, CUDA),
+    )
+    templates = {**catalog.ASSESSMENT_TEMPLATES, **options.OPTION_TEMPLATES}
+    outputs = []
+    for variant, hw in scenarios:
+        outputs.extend(options.available_modes(variant, hw, catalog.assess(variant, hw)))
+        if variant.media:
+            outputs.extend(options.available_media_modes(catalog.assess(variant, hw), hw))
+    outputs.extend(options.available_modes(BF16, blackwell, catalog.assess(BF16, blackwell)))
+    for row in outputs:
+        if row["reason"] is None:
+            assert row["reason_code"] is row["reason_params"] is None
+            continue
+        template = templates[row["reason_code"]]
+        assert row["reason"] == template.format(**row["reason_params"])
+        assert set(row["reason_params"]) == set(re.findall(r"\{(\w+)\}", template))
 
 def test_cuda_graph_modes_require_ampere_or_newer():
     sm75 = Hardware("cuda", "old NVIDIA", 8 * 1024**3, None, (7, 5), frozenset({"cuda"}))

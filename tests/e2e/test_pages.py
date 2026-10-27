@@ -180,6 +180,70 @@ def test_playground_request_names_media_and_history_replay_are_lossless_until_se
     assert not decide_calls
 
 
+def test_server_messages_translate_in_polish_and_remain_english(page):
+    page.evaluate("localStorage.setItem('basal-ui.lang', 'pl')")
+    page.reload()
+    page.wait_for_function("() => typeof statusCache !== 'undefined' && modelData.length > 0")
+    fixture = page.evaluate("""async () => {
+      const data = await fetch('/api/models').then(r => r.json());
+      if (!data.models.some(m => !m.runnable && m.reason_code)) {
+        const source = data.models.find(m => m.runnable);
+        data.models.push({...source, id: `${source.id}:e2e-unavailable`, runnable: false,
+          reason: 'needs an NVIDIA GPU (the CUDA graph engine)', reason_code: 'cuda_graph_gpu',
+          reason_params: {}});
+      }
+      renderModels(data);
+      return {data, unavailable: data.models.find(m => !m.runnable && m.reason_code),
+              suggestion: data.suggestions.find(s => s.why_code)};
+    }""")
+    unavailable, suggestion = fixture["unavailable"], fixture["suggestion"]
+    assert unavailable and suggestion
+    page.click('.side-nav [data-view="models"]')
+    page.click("#allModelsTab")
+    page.check("#notRunnableToggle")
+    translated_reason = page.evaluate("m => ts(m.reason, m.reason_code, m.reason_params)", unavailable)
+    assert translated_reason != unavailable["reason"]
+    reason = page.locator("#modelsTable .reason").filter(has_text=translated_reason)
+    sync_api.expect(reason.first).to_be_visible()
+    sync_api.expect(reason.first).to_have_text(translated_reason)
+
+    page.click("#suggestedTab")
+    translated_why = page.evaluate("s => ts(s.why, s.why_code, s.why_params)", suggestion)
+    assert translated_why != suggestion["why"]
+    sync_api.expect(page.locator("#suggested .why").filter(has_text=translated_why).first).to_be_visible()
+
+    options_target = page.evaluate("""async () => {
+      for (const m of modelData.filter(x => x.runnable)) {
+        const data = await fetch(`/api/models/options?id=${encodeURIComponent(m.id)}`).then(r => r.json());
+        const mode = data.modes.find(x => x.reason_code);
+        if (mode) return {id: m.id, mode, text: ts(mode.reason, mode.reason_code, mode.reason_params)};
+      }
+      return null;
+    }""")
+    assert options_target
+    page.click("#allModelsTab")
+    page.locator(f'#modelsTable .options-model[data-id="{options_target["id"]}"]').click()
+    sync_api.expect(page.locator("#loadOptions")).to_be_visible()
+    sync_api.expect(page.locator("#loadOptions .option-mode.unavailable small")
+                    .filter(has_text=options_target["text"]).first).to_be_visible()
+    assert options_target["text"] != options_target["mode"]["reason"]
+
+    page.evaluate("localStorage.setItem('basal-ui.lang', 'en')")
+    page.reload()
+    page.wait_for_function("() => typeof statusCache !== 'undefined' && modelData.length > 0")
+    page.evaluate("data => renderModels(data)", fixture["data"])
+    page.click('.side-nav [data-view="models"]')
+    page.click("#allModelsTab")
+    page.check("#notRunnableToggle")
+    sync_api.expect(page.locator("#modelsTable .reason").filter(has_text=unavailable["reason"]).first).to_be_visible()
+    page.click("#suggestedTab")
+    sync_api.expect(page.locator("#suggested .why").filter(has_text=suggestion["why"]).first).to_be_visible()
+    page.click("#allModelsTab")
+    page.locator(f'#modelsTable .options-model[data-id="{options_target["id"]}"]').click()
+    sync_api.expect(page.locator("#loadOptions .option-mode.unavailable small")
+                    .filter(has_text=options_target["mode"]["reason"]).first).to_be_visible()
+
+
 RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
           "questions": {"category": {"type": "classify", "option_keys": "show",
                                      "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}]},

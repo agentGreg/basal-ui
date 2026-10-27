@@ -15,11 +15,6 @@ from basal.server import MODES, lean_arg, lean_tree, refuse_layout_caches, valid
 from .catalog import _cuda_graph
 
 # basal-omni-pico and other Qwen3.5 models (Variant.recurrent), basal-serve 2.4 (engine.recurrent_refused, gdn_graph)
-RECURRENT_REASON = ("recurrent-state layers (Gated DeltaNet, Qwen3.5): fast-exit and mps keep attention keys and values "
-                    "only and would answer wrongly; basal-serve refuses them. Use fast (CUDA), eager, vllm or gguf")
-MLX_RECURRENT_REASON = "MLX is not checked on recurrent-state models (Qwen3.5): use eager"
-FLA_REASON = ("the CUDA graph engine runs Qwen3.5's Gated DeltaNet layers with flash-linear-attention: pip install "
-              "flash-linear-attention (or serve with --mode eager)")
 
 DEFAULTS = {
     "mode": None, "quant": None, "revision": None, "attn": "auto", "gemma_attn": "auto", "deterministic": False, "orders": None,
@@ -175,27 +170,26 @@ def available_modes(v, hw, assessment) -> list[dict]:
     mlx_port = v.port.startswith("MLX") or v.port == "bf16"
     reasons = {
         "fast": graph, "fast-nocompile": graph,
-        "fast-exit": graph or (None if v.family == "basal-1.0" else "exit heads ship with basal-1.0"),
+        "fast-exit": graph or (None if v.family == "basal-1.0" else OPTION_TEMPLATES["mode_exit_heads"]),
         "fp8": graph or fp8_unavailable(hw),
-        "nvfp4": graph or (None if cap >= (10, 0) else "NVFP4 needs a Blackwell GPU (capability 10.0+)"),
-        "eager": None if v.port == "bf16" else f"the eager engine reads bf16 weights, not {v.port}",
-        "vllm": ("install basal[vllm] (own environment, docs/INSTALL.md)" if "vllm" not in hw.engines
-                 else None if hw.platform == "cuda" else "vLLM needs an NVIDIA GPU"),
-        "sglang": ("install sglang[srt] in its own environment (docs/INSTALL.md)" if "sglang" not in hw.engines
-                   else None if hw.platform == "cuda" else "SGLang needs an NVIDIA GPU"),
-        "mlx": ("MLX runs on Apple Silicon only" if hw.platform != "apple" else
-                "install basal[mlx]" if "mlx" not in hw.engines else
-                None if mlx_port else f"MLX reads MLX ports or bf16 weights, not {v.port}"),
-        "mps": None if v.port == "bf16" else f"mps reads bf16 weights, not {v.port}",
-        "gguf": ("install basal[gguf] (llama-cpp-python)" if "gguf" not in hw.engines
-                 else None if v.port == "GGUF" else "needs a GGUF variant"),
-        "strix": (None if "strix" in hw.engines else
-                  "needs AMD Strix Halo with ROCm PyTorch (docs/benchmarks/STRIX_HALO.md)"),
-        "tpu": None if "tpu" in hw.engines else "needs a TPU VM with basal[tpu]",
+        "nvfp4": graph or (None if cap >= (10, 0) else OPTION_TEMPLATES["mode_nvfp4_blackwell"]),
+        "eager": None if v.port == "bf16" else OPTION_TEMPLATES["mode_eager_format"].format(port=v.port),
+        "vllm": (OPTION_TEMPLATES["mode_vllm_install"] if "vllm" not in hw.engines
+                 else None if hw.platform == "cuda" else OPTION_TEMPLATES["mode_vllm_hardware"]),
+        "sglang": (OPTION_TEMPLATES["mode_sglang_install"] if "sglang" not in hw.engines
+                   else None if hw.platform == "cuda" else OPTION_TEMPLATES["mode_sglang_hardware"]),
+        "mlx": (OPTION_TEMPLATES["mode_mlx_device"] if hw.platform != "apple" else
+                OPTION_TEMPLATES["mode_mlx_install"] if "mlx" not in hw.engines else
+                None if mlx_port else OPTION_TEMPLATES["mode_mlx_format"].format(port=v.port)),
+        "mps": None if v.port == "bf16" else OPTION_TEMPLATES["mode_mps_format"].format(port=v.port),
+        "gguf": (OPTION_TEMPLATES["mode_gguf_install"] if "gguf" not in hw.engines
+                 else None if v.port == "GGUF" else OPTION_TEMPLATES["mode_gguf_variant"]),
+        "strix": None if "strix" in hw.engines else OPTION_TEMPLATES["mode_strix"],
+        "tpu": None if "tpu" in hw.engines else OPTION_TEMPLATES["mode_tpu"],
         "ollama": None, "llamacpp": None,  # external services: their URL fields are required then
     }
     reasons["mlx-q8"] = reasons["mlx"] or (None if v.port in ("bf16", "MLX") else
-                                           f"{v.port} weights are quantised already (mlx-q8 quantises at load)")
+                                           OPTION_TEMPLATES["mode_mlx_q8"].format(port=v.port))
     if v.recurrent:
         for m in ("fast", "fast-nocompile"):
             reasons[m] = reasons[m] or (None if "fla" in hw.engines else FLA_REASON)
@@ -210,8 +204,7 @@ def available_modes(v, hw, assessment) -> list[dict]:
 
 
 def _availability_message(text):
-    from .catalog import message_fields
-    return message_fields(text, "")
+    return option_message_fields(text)
 
 
 def available_media_modes(assessment, hw) -> list[dict]:
@@ -219,7 +212,7 @@ def available_media_modes(assessment, hw) -> list[dict]:
     basal[vllm] (basal-serve refuses the checkpoints vLLM reads differently, basal-omni-1.1-max)."""
     reason = assessment.media_reason if assessment.media_mode is None else None
     vllm = reason or (None if hw.platform == "cuda" and "vllm" in hw.engines else
-                      "vLLM media serving needs an NVIDIA GPU with basal[vllm] (docs/OMNI.md)")
+                      OPTION_TEMPLATES["mode_vllm_media"])
     eager = _availability_message(reason)
     vllm_message = _availability_message(vllm)
     return [{"mode": "eager", "available": reason is None, "reason": reason,
@@ -234,14 +227,51 @@ OPTION_TEMPLATES = {
     "mlx_packed_device": "MLX packed needs Apple Silicon with basal[mlx]",
     "mlx_packed_format": "MLX packed needs a Llama basal-1.x or basal-2.0 model in bf16 or MLX format",
     "mlx_packed_mode": "--mlx-packed needs --mode mlx or mlx-q8 without media",
+    "mode_exit_heads": "exit heads ship with basal-1.0",
+    "mode_nvfp4_blackwell": "NVFP4 needs a Blackwell GPU (capability 10.0+)",
+    "mode_eager_format": "the eager engine reads bf16 weights, not {port}",
+    "mode_vllm_install": "install basal[vllm] (own environment, docs/INSTALL.md)",
+    "mode_vllm_hardware": "vLLM needs an NVIDIA GPU",
+    "mode_sglang_install": "install sglang[srt] in its own environment (docs/INSTALL.md)",
+    "mode_sglang_hardware": "SGLang needs an NVIDIA GPU",
+    "mode_mlx_device": "MLX runs on Apple Silicon only",
+    "mode_mlx_install": "install basal[mlx]",
+    "mode_mlx_format": "MLX reads MLX ports or bf16 weights, not {port}",
+    "mode_mps_format": "mps reads bf16 weights, not {port}",
+    "mode_gguf_install": "install basal[gguf] (llama-cpp-python)",
+    "mode_gguf_variant": "needs a GGUF variant",
+    "mode_strix": "needs AMD Strix Halo with ROCm PyTorch (docs/benchmarks/STRIX_HALO.md)",
+    "mode_tpu": "needs a TPU VM with basal[tpu]",
+    "mode_mlx_q8": "{port} weights are quantised already (mlx-q8 quantises at load)",
+    "mode_fp8_hardware": "FP8 matrix multiplies need compute capability 8.9+ (Ada, Hopper, Blackwell); use fast (bf16) on this GPU",
+    "mode_vllm_media": "vLLM media serving needs an NVIDIA GPU with basal[vllm] (docs/OMNI.md)",
+    "reason_recurrent": "recurrent-state layers (Gated DeltaNet, Qwen3.5): fast-exit and mps keep attention keys and values only and would answer wrongly; basal-serve refuses them. Use fast (CUDA), eager, vllm or gguf",
+    "reason_mlx_recurrent": "MLX is not checked on recurrent-state models (Qwen3.5): use eager",
+    "reason_fla": "the CUDA graph engine runs Qwen3.5's Gated DeltaNet layers with flash-linear-attention: pip install flash-linear-attention (or serve with --mode eager)",
+    "reason_long_lane": "--long-lane is not available for Qwen3.5 (Gated DeltaNet) models",
+    "reason_gdn_quant": "--mode {quant} is not available for Qwen3.5 (Gated DeltaNet) models: the CUDA graph engine serves them in bf16 (--mode fast); --mode vllm runs their FP8 checkpoints",
 }
+RECURRENT_REASON = OPTION_TEMPLATES["reason_recurrent"]
+MLX_RECURRENT_REASON = OPTION_TEMPLATES["reason_mlx_recurrent"]
+FLA_REASON = OPTION_TEMPLATES["reason_fla"]
 THINK_REASON = OPTION_TEMPLATES["think_unavailable"]
 
 
 def option_message_fields(text):
+    if text is None:
+        return None, None
+    from .catalog import message_fields
+    code, params = message_fields(text, "")
+    if code is not None:
+        return code, params
     for code, template in OPTION_TEMPLATES.items():
-        if text == template:
-            return code, {}
+        keys = re.findall(r"\{(\w+)\}", template)
+        pattern = re.escape(template)
+        for key in keys:
+            pattern = pattern.replace(re.escape("{" + key + "}"), f"(?P<{key}>.*?)", 1)
+        match = re.fullmatch(pattern, text)
+        if match:
+            return code, match.groupdict()
     return None, None
 
 
@@ -268,7 +298,7 @@ def fp8_unavailable(hw):
     """Why fp8 cannot run here, None when it can: basal-serve ≥ 2.3.2 stops --mode fp8 / --quant fp8 before loading
     below compute capability 8.9 (engine.fp8_refused)."""
     if hw.platform == "cuda" and (hw.cuda_capability or (0, 0)) < (8, 9):
-        return "FP8 matrix multiplies need compute capability 8.9+ (Ada, Hopper, Blackwell); use fast (bf16) on this GPU"
+        return OPTION_TEMPLATES["mode_fp8_hardware"]
     return None
 
 
