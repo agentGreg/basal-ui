@@ -888,6 +888,14 @@ def test_overview_shows_the_inference_in_flight_and_idle_otherwise(page, text_mo
     sync_api.expect(page.locator(f'#loadedModels .model-row:has-text("{text_model["id"]}") .status-dot.active')).to_have_count(1)
     sync_api.expect(page.locator("#footerState")).to_contain_text("1 answering")
     assert "active" in page.locator("#footerDot").get_attribute("class")
+    # basal-serve's counters not read yet (zeros) while basal-ui waits on requests: the requests are what is shown
+    page.evaluate("""m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
+      x.inflight = [{source: 'playground', seconds: 0.5}, {source: 'playground', seconds: 0.2}];
+      x.health = {reachable: true, running: 0, queued: 0}; s.jobs = {}; renderStatus(s); clearTimeout(pollTimer); }""",
+                  text_model["id"])
+    sync_api.expect(rows).to_have_count(1)
+    sync_api.expect(rows.first).to_contain_text("2 requests · Playground 2 · longest 0.5 s")
+    assert "running" not in rows.first.inner_text()
     page.evaluate("""m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
       x.inflight = []; x.health = {reachable: true, running: 0, queued: 0}; s.jobs = {}; renderStatus(s); clearTimeout(pollTimer); }""",
                   text_model["id"])

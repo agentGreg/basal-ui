@@ -1210,7 +1210,8 @@ function renderInference(s) {
   const rows=(s.models||[]).filter(answering).map(m=>{
     const h=m.health||{}, inflight=m.inflight||[], bySource={};
     inflight.forEach(x=>{bySource[x.source]=(bySource[x.source]||0)+1;});
-    const counts=h.running!=null&&h.queued!=null?t('{running} running · {queued} queued',{running:h.running,queued:h.queued}):tp(inflight.length,'{n} request','{n} requests');
+    // basal-serve's counters are read once a second: zeros next to requests in flight would only be out of date
+    const counts=h.running>0||h.queued>0?t('{running} running · {queued} queued',{running:h.running??0,queued:h.queued??0}):tp(inflight.length,'{n} request','{n} requests');
     const sources=Object.entries(bySource).map(([k,n])=>`${t(INFERENCE_SOURCES[k]||k)} ${n}`).join(' · ');
     const longest=inflight.length?t('longest {seconds} s',{seconds:inflight[0].seconds.toFixed(1)}):'';
     return `<div class="inference-row"><span class="status-dot ready active"></span><strong>${esc(m.id)}</strong><span class="muted">${esc([counts,sources,longest].filter(Boolean).join(' · '))}</span></div>`;
