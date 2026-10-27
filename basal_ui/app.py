@@ -918,6 +918,13 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def revalidate_static(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):  # like index.html: an updated basal-ui must not run cached scripts
+            response.headers["Cache-Control"] = "no-cache"  # the ETag keeps an unchanged file a 304
+        return response
+
     @app.get("/")
     def index():
         # revalidate on every load: a cached copy from an older basal-ui would talk to the new API

@@ -74,6 +74,18 @@ def test_examples_include_a_full_request_of_every_advanced_type(tmp_path):
     assert {"multi", "act", "tool", "classify", "verify", "compress", "extract"} <= types
 
 
+def test_the_page_and_its_scripts_are_revalidated_so_an_update_is_never_served_from_cache(tmp_path):
+    app, _ = app_for(tmp_path, [])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        for path in ("/", "/static/app.js", "/static/app.css", "/static/i18n.js"):
+            response = client.get(path)
+            assert response.status_code == 200 and response.headers["cache-control"] == "no-cache", path
+        etag = client.get("/static/app.js").headers["etag"]
+        again = client.get("/static/app.js", headers={"If-None-Match": etag})
+        assert again.status_code == 304 and again.headers["cache-control"] == "no-cache"  # unchanged: no download
+        assert "cache-control" not in client.get("/api/examples").headers  # the rule is for the page's files only
+
+
 def test_model_api_sorting_load_validation_and_decide_requires_a_loaded_model(tmp_path):
     large = Variant("large", "Remek/basal-2.0-4.5B-FP8", "basal-2.0", "4.5B", "FP8", "FP8", None, 100, False)
     app, _ = app_for(tmp_path, [MINI, large])
