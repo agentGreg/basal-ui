@@ -1368,6 +1368,7 @@ $('#calCompare').onchange=()=>$('#calComparePath').hidden=$('#calCompare').value
 $('#calibrationInput').value=localStorage.getItem('basal-ui.calibrationInput')||'';
 $('#calibrationInput').oninput=()=>localStorage.setItem('basal-ui.calibrationInput',$('#calibrationInput').value);
 document.querySelectorAll('#calibrationBlock input[type=checkbox]').forEach(i=>{i.setAttribute('role','switch');setChecked(i,i.checked);});
+document.body.append($('#reportDialog'));  // a modal inside a hidden view would block the page without showing
 $('#reportClose').onclick=()=>$('#reportDialog').close();
 let calibrationRunning=false, calibrationSignature='', calibrationReportSeen=null;
 function renderCalibrationModels() {

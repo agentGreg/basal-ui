@@ -748,6 +748,36 @@ def test_alt_digit_opens_the_nth_page_by_key_code(page):
     sync_api.expect(page.locator("#pageTitle")).to_have_text("Model manager")
 
 
+CENTRED = """sel => {  // where an open modal dialog sits in the viewport
+  const d = document.querySelector(sel), r = d.getBoundingClientRect();
+  return {open: d.open, shown: r.width > 0 && r.height > 0,
+          inside: r.left >= 0 && r.top >= 0 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5,
+          dx: Math.round((r.left + r.right) / 2 - innerWidth / 2), dy: Math.round((r.top + r.bottom) / 2 - innerHeight / 2)};
+}"""
+DIALOGS = {  # every modal of basal-ui and how it opens (without waiting on the user)
+    "#confirmDialog": "() => { void confirmDialog({title: 'Delete?', description: 'x', confirmLabel: 'Delete'}); }",
+    "#modelCardDialog": "id => openModelCard(id)",
+    "#loadOptions": "id => openLoadOptions(id, false, 'save')",
+    "#shortcutsDialog": "() => $('#shortcutsDialog').showModal()",
+    "#presetNameDialog": "() => $('#presetNameDialog').showModal()",
+    "#reportDialog": "() => { $('#reportText').textContent = 'report'; $('#reportDialog').showModal(); }",
+    "#backendTestDialog": "() => $('#backendTestDialog').showModal()",
+    "#mediaLightbox": "() => $('#mediaLightbox').showModal()",
+}
+
+
+@pytest.mark.parametrize("size", [(1440, 900), (390, 844)], ids=["desktop", "phone"])
+def test_every_modal_opens_centred_in_the_viewport_from_any_view(page, text_model, size):
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    view(page, "overview")  # the calibration report lives in Model manager: it must show from any view
+    for selector, open_it in DIALOGS.items():
+        page.evaluate(open_it, text_model["id"])
+        page.wait_for_function("s => document.querySelector(s).open", arg=selector)
+        page.wait_for_timeout(250)  # the model card and load options fade in
+        assert page.evaluate(CENTRED, selector) == {"open": True, "shown": True, "inside": True, "dx": 0, "dy": 0}, selector
+        page.evaluate("s => document.querySelector(s).close()", selector)
+
+
 DIALOG_LAYOUT = """([dialog, body, header, footer]) => {
   const d = document.querySelector(dialog), b = document.querySelector(body), r = d.getBoundingClientRect();
   const top = document.querySelector(header).getBoundingClientRect(), bottom = document.querySelector(footer).getBoundingClientRect();
