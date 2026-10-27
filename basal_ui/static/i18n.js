@@ -893,8 +893,20 @@ const PL = {
   "README": "README",
   "audio": "audio",
   "p95 ms": "p95 ms",
+  "Playground": "Playground",
+  "MCP": "MCP",
+  // Overview: inference now
+  "INFERENCE": "WNIOSKOWANIE",
+  "Idle": "Bezczynny",
+  "Idle · last decision {ago} ago": "Bezczynny · ostatnia decyzja {ago} temu",
+  "{running} running · {queued} queued": "{running} w toku · {queued} w kolejce",
+  "longest {seconds} s": "najdłuższe {seconds} s",
+  "{n} answering": "{n} odpowiada",
+  "Benchmark": "Benchmark",
+  "Backend test": "Test backendu",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
+  "{n} request": ["{n} żądanie", "{n} żądania", "{n} żądań"],
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],
   "View matching models ({n})": ["Pokaż pasujący model ({n})", "Pokaż pasujące modele ({n})", "Pokaż pasujących modeli ({n})"],
   "{n} API keys": ["{n} klucz API", "{n} klucze API", "{n} kluczy API"],

@@ -201,7 +201,7 @@ class Runner:
                 self.state = "error"
                 self.error = f"basal-serve exited ({self.process.returncode}): {self.log.last() or ''}"
                 self.event("error", f"{self.model}: {self.error}")
-            if self.state == "ready" and self.base_url and not self.health_polling and time.monotonic() - self.health_checked >= 5:
+            if self.state == "ready" and self.base_url and not self.health_polling and time.monotonic() - self.health_checked >= 1:
                 self.health_checked, self.health_polling = time.monotonic(), True
                 threading.Thread(target=self._poll_health, args=(self.gen, self.base_url), daemon=True).start()
             restart_required = (self.state == "ready" and self.serve_snapshot is not None and not self.temporary
@@ -441,6 +441,7 @@ class Fleet:
         self.jobs = Jobs(self.logs, self.event)
         self.draining: set[str] = set()
         self.leases: dict[Runner, int] = {}
+        self.inflight: dict[object, tuple[str, str, float]] = {}  # each request being answered: (model, source, start)
         self.stopping = False
         self.temporary: dict[str, Runner] = {}  # private children of jobs (basal-calibrate's uncalibrated server)
         self.reserved: dict[str, int] = {}  # memory of models a job loads into basal-ui's own process
@@ -632,8 +633,13 @@ class Fleet:
         for runner in runners:
             runner.rss_bytes = rss.get(runner.pid) if runner.pid else None
             models.append(runner.status())
+        now = time.monotonic()
         with self.lock:
             memory = self._memory(sum(m["rss_bytes"] or 0 for m in models))
+            inflight = list(self.inflight.values())
+        for m in models:  # what basal-ui is waiting on (Playground, API server, MCP, benchmark), oldest first
+            m["inflight"] = [{"source": source, "seconds": round(now - t0, 1)}
+                             for model, source, t0 in sorted(inflight, key=lambda x: x[2]) if model == m["id"]]
         return {"models": models, "downloads": self.downloads.status(), "memory": memory, "jobs": self.jobs.states()}
 
     def _rss(self):
@@ -734,8 +740,19 @@ class Fleet:
             lease.__exit__(None, None, None)
             raise
 
+    @contextmanager
+    def answering(self, model_id, source):
+        token = object()
+        with self.lock:
+            self.inflight[token] = (model_id, source, time.monotonic())
+        try:
+            yield
+        finally:
+            with self.lock:
+                self.inflight.pop(token, None)
+
     def decide(self, model_id, body, path="/v1/systemone", source="playground"):
-        with self.lease(model_id) as runner:
+        with self.lease(model_id) as runner, self.answering(model_id, source):
             t0 = time.perf_counter()
             try:
                 response = runner.decide(body, path)
@@ -748,7 +765,7 @@ class Fleet:
             return response
 
     async def adecide(self, model_id, body, path="/v1/systemone", source="api", client=None):
-        with self.lease(model_id) as runner:
+        with self.lease(model_id) as runner, self.answering(model_id, source):
             t0 = time.perf_counter()
             try:
                 response = await runner.adecide(client, body, path)

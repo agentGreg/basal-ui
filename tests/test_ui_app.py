@@ -692,6 +692,46 @@ def test_benchmark_decisions_leave_statistics_and_history_untouched(tmp_path, mo
     assert [(r["source"], r["answers"]["q"]["best"]) for r in fleet.history.list()] == [("playground", "true")]
 
 
+def test_status_lists_the_requests_being_answered_per_model_until_each_returns_or_fails(tmp_path, monkeypatch,
+                                                                                        instant_start):
+    release, entered = threading.Event(), threading.Semaphore(0)
+    response = httpx.Response(200, json={"answers": {}})
+
+    def decide(self, body, path="/v1/systemone"):
+        entered.release()
+        release.wait(5)
+        if body.get("fail"):
+            raise httpx.ConnectError("child gone")
+        return response
+    monkeypatch.setattr(Runner, "decide", decide)
+    fleet = make_fleet(tmp_path)
+    for variant in (MINI, SMALL):
+        fleet.load(SimpleNamespace(variant=variant, mode="eager", est_memory_bytes=None))
+    wait_for(lambda: sorted(fleet.loaded_ids()) == ["mini", "small"])
+    inflight = lambda: {m["id"]: [x["source"] for x in m["inflight"]] for m in fleet.status()["models"]}  # noqa: E731
+    assert inflight() == {"mini": [], "small": []}  # idle
+
+    def call(model, source, fail=False):
+        try:
+            fleet.decide(model, {"state": "x", "fail": fail}, source=source)
+        except httpx.HTTPError:
+            pass
+    threads = [threading.Thread(target=call, args=args) for args in
+               (("mini", "playground"), ("mini", "api"), ("small", "mcp", True))]
+    for th in threads:
+        th.start()
+        entered.acquire(timeout=5)  # in this order: the oldest request is listed first
+        time.sleep(0.01)
+    assert inflight() == {"mini": ["playground", "api"], "small": ["mcp"]}
+    seconds = [x["seconds"] for x in fleet.status()["models"][0]["inflight"]]
+    assert seconds[0] >= seconds[1] >= 0
+    release.set()
+    for th in threads:
+        th.join(5)
+    assert inflight() == {"mini": [], "small": []}  # answered and failed requests both leave the list
+
+
+
 def test_logs_route_lists_sources_and_reads_incrementally(tmp_path, instant_start):
     app, fleet = app_for(tmp_path, [MINI])
     with TestClient(app, base_url="http://127.0.0.1") as client:

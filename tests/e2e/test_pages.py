@@ -861,6 +861,71 @@ def test_result_views_drop_descriptions_that_only_repeat_the_key(page):
     assert "4 · [4]" not in page.locator("#results").inner_text()
 
 
+ANSWERING = """([model, batch]) => {  // the status of this basal-ui with requests and a batch in flight (no polling)
+  const s = structuredClone(statusCache), m = s.models.find(x => x.id === model);
+  m.inflight = [{source: 'playground', seconds: 2.4}, {source: 'api', seconds: 0.3}];
+  m.health = {reachable: true, running: 2, queued: 1};
+  s.jobs = batch ? {batch: {kind: 'batch', running: true, model, phase: 'running', phase_code: 'phase_running',
+                            phase_params: {}, done: 3, total: 10}} : {};
+  renderStatus(s); clearTimeout(pollTimer);
+}"""
+
+
+def test_overview_shows_the_inference_in_flight_and_idle_otherwise(page, text_model):
+    view(page, "overview")
+    rows = page.locator("#inferenceNow .inference-row")
+    sync_api.expect(rows).to_have_count(1)
+    sync_api.expect(rows.first).to_contain_text("Idle")
+    assert page.locator("#inferenceNow .status-dot.active").count() == 0
+    page.evaluate(ANSWERING, [text_model["id"], True])
+    sync_api.expect(rows).to_have_count(2)
+    sync_api.expect(rows.nth(0)).to_contain_text(text_model["id"])
+    sync_api.expect(rows.nth(0)).to_contain_text("2 running · 1 queued · Playground 1 · API server 1 · longest 2.4 s")
+    sync_api.expect(rows.nth(1)).to_contain_text("Batch")
+    sync_api.expect(rows.nth(1)).to_contain_text("3 / 10")
+    assert rows.nth(1).locator(".progress span").get_attribute("style") == "width:30%"
+    assert page.locator("#inferenceNow .status-dot.active").count() == 2
+    sync_api.expect(page.locator(f'#loadedModels .model-row:has-text("{text_model["id"]}") .status-dot.active')).to_have_count(1)
+    sync_api.expect(page.locator("#footerState")).to_contain_text("1 answering")
+    assert "active" in page.locator("#footerDot").get_attribute("class")
+    page.evaluate("""m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
+      x.inflight = []; x.health = {reachable: true, running: 0, queued: 0}; s.jobs = {}; renderStatus(s); clearTimeout(pollTimer); }""",
+                  text_model["id"])
+    sync_api.expect(rows).to_have_count(1)
+    sync_api.expect(rows.first).to_contain_text("Idle")
+    assert page.locator(".status-dot.active").count() == 0
+    assert "answering" not in page.locator("#footerState").inner_text()
+
+
+def test_overview_inference_after_a_decision_and_in_polish(page, ui, text_model):
+    ui.decide(text_model["id"], CHOICE)
+    view(page, "overview")
+    sync_api.expect(page.locator("#inferenceNow")).to_contain_text("last decision")  # the idle line says when
+    assert page.evaluate("() => !$('#overview').hidden")
+    page.evaluate("localStorage.setItem('basal-ui.lang', 'pl')")
+    page.reload()
+    page.wait_for_function("() => typeof statusCache !== 'undefined' && statusCache?.models?.length > 0")
+    page.evaluate(ANSWERING, [text_model["id"], True])
+    rows = page.locator("#inferenceNow .inference-row")
+    sync_api.expect(rows.nth(0)).to_contain_text("2 w toku · 1 w kolejce · Playground 1 · Serwer API 1 · najdłuższe 2.4 s")
+    sync_api.expect(page.locator("#inference .section-index")).to_have_text("WNIOSKOWANIE")
+
+
+def test_a_running_batch_shows_on_the_overview(page, ui, text_model, tmp_path):
+    many = tmp_path / "many.jsonl"
+    many.write_text((EXAMPLES / "questions.jsonl").read_text() * 50)
+    ui.post("/api/batch", {"id": text_model["id"], "input": str(many), "output": str(tmp_path / "out.jsonl"),
+                           "concurrency": 1})
+    try:
+        view(page, "overview")
+        row = page.locator("#inferenceNow .inference-row", has_text="Batch")
+        sync_api.expect(row).to_be_visible(timeout=10_000)
+        sync_api.expect(row).to_contain_text(" / 1000")  # done / total of the real job
+    finally:
+        ui.delete("/api/batch")
+        ui.wait_job("batch")
+
+
 def test_usage_line_includes_branches_and_lane(page):
     page.evaluate("""() => renderResults(
       {answers: {q: {type: 'choice', choice: 'yes'}},

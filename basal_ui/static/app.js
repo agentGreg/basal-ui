@@ -1175,21 +1175,24 @@ function renderStatus(s) {
   if(!ready.some(m=>m.id===selectedModel)&&ready.length)selectedModel=ready[0].id;
   if(selectedModel)localStorage.setItem('basal-ui.model',selectedModel);
   const busy=models.some(m=>['starting','downloading'].includes(m.state));
-  $('#footerState').textContent=ready.length?`${ready.length} ${t('ready')}${busy?` · ${t('loading…')}`:''}`:busy?t('loading…'):t('idle');
-  $('#footerDot').className=`status-dot${ready.length?' ready':models.some(m=>m.state==='error')?' error':''}`;
+  const live=models.filter(answering).length;
+  $('#footerState').textContent=ready.length?`${ready.length} ${t('ready')}${live?` · ${t('{n} answering',{n:live})}`:''}${busy?` · ${t('loading…')}`:''}`:busy?t('loading…'):t('idle');
+  $('#footerDot').className=`status-dot${ready.length?' ready':models.some(m=>m.state==='error')?' error':''}${live?' active':''}`;
   $('#footerModel').textContent=models.map(m=>shortName(m.id)).join(', ')||t('No model loaded');
   $('#footerModel').title=models.map(m=>m.id).join(', ')||t('No model loaded');
   $('#footerUrl').textContent=s.serving?.url||''; $('#footerUrl').hidden=!s.serving?.url;
   $('#footerUnload').hidden=!models.length; $('#footerUnload').textContent=models.length>1?t('Unload all'):t('Unload');
   renderMemoryBar(s.memory||{},models);
   renderLoadedRows(models);
+  renderInference(s);
   renderPlaygroundModels(ready);
   renderBenchmarkState(s.jobs?.benchmark,ready); renderCalibrationState(s.jobs?.calibrate); renderBatchState(s.jobs?.batch,ready);
   renderInspectState(s.inspect,s.jobs?.inspect);
   if(serveData)renderServeStatus(s);
   loadStats();
   const jobsRunning=Object.values(s.jobs||{}).some(j=>j.running);
-  clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,busy||repos.size||jobsRunning?1000:5000);
+  // every second while anything is answered and while the Overview (which shows it live) is open
+  clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,busy||repos.size||jobsRunning||models.some(answering)||!$('#overview').hidden?1000:5000);
 }
 function renderMemoryBar(memory, models) {
   const budget=Number(memory.budget_bytes)||0, reserve=Number(memory.reserve_bytes)||0, limit=Math.max(1,budget-reserve);
@@ -1197,6 +1200,29 @@ function renderMemoryBar(memory, models) {
   const used=sizes.reduce((sum,x)=>sum+x.bytes,0);
   const segments=sizes.map(({m,bytes})=>`<span title="${esc(m.id)} · ${gb(bytes)}${m.rss_bytes?' '+t('resident'):' '+t('estimated')}" style="width:${Math.min(100,bytes/limit*100)}%"></span>`).join('');
   $('#memoryBar').innerHTML=budget?`<div class="memory-head"><span>${t('Memory')}</span><span>${t('{used} / {limit} (budget {budget}, keep {reserve} free) · available now {available}',{used:gb(used),limit:gb(limit),budget:gb(budget),reserve:gb(reserve),available:gb(memory.available_bytes)})}</span></div><div class="progress memory-progress${memory.over?' over':''}">${segments}</div>`:'';
+}
+// a loaded model answering now: requests basal-ui waits on (inflight) or its basal-serve's running / queued counters
+const answering=m=>m.state==='ready'&&((m.inflight||[]).length>0||m.health?.running>0||m.health?.queued>0);
+const INFERENCE_SOURCES={playground:'Playground',api:'API server',mcp:'MCP',benchmark:'Benchmark'};
+const INFERENCE_JOBS={batch:'Batch',benchmark:'Benchmark',calibrate:'Calibration','backend-test':'Backend test'};
+const ago=seconds=>seconds<60?`${Math.max(1,Math.round(seconds))} s`:seconds<3600?`${Math.round(seconds/60)} min`:`${Math.round(seconds/3600)} h`;
+function renderInference(s) {
+  const rows=(s.models||[]).filter(answering).map(m=>{
+    const h=m.health||{}, inflight=m.inflight||[], bySource={};
+    inflight.forEach(x=>{bySource[x.source]=(bySource[x.source]||0)+1;});
+    const counts=h.running!=null&&h.queued!=null?t('{running} running · {queued} queued',{running:h.running,queued:h.queued}):tp(inflight.length,'{n} request','{n} requests');
+    const sources=Object.entries(bySource).map(([k,n])=>`${t(INFERENCE_SOURCES[k]||k)} ${n}`).join(' · ');
+    const longest=inflight.length?t('longest {seconds} s',{seconds:inflight[0].seconds.toFixed(1)}):'';
+    return `<div class="inference-row"><span class="status-dot ready active"></span><strong>${esc(m.id)}</strong><span class="muted">${esc([counts,sources,longest].filter(Boolean).join(' · '))}</span></div>`;
+  });
+  for(const [kind,j] of Object.entries(s.jobs||{})){
+    if(!j.running||!INFERENCE_JOBS[kind])continue;
+    const share=j.total?Math.min(100,j.done/j.total*100):null;
+    rows.push(`<div class="inference-row"><span class="status-dot ready active"></span><strong>${esc(t(INFERENCE_JOBS[kind]))}</strong><span class="muted">${esc([j.model,ts(j.phase,j.phase_code,j.phase_params),j.total?`${j.done} / ${j.total}`:''].filter(Boolean).join(' · '))}</span>${share==null?'':`<div class="progress"><span style="width:${share}%"></span></div>`}</div>`);
+  }
+  const last=Math.max(0,...Object.values(statsData.models||{}).map(x=>Number(x.last_used)||0));
+  const idle=last?t('Idle · last decision {ago} ago',{ago:ago(Date.now()/1000-last)}):t('Idle');
+  $('#inferenceNow').innerHTML=rows.length?rows.join(''):`<div class="inference-row idle"><span class="status-dot"></span><span class="muted">${esc(idle)}</span></div>`;
 }
 function renderLoadedRows(models) {
   $('#loadedModels').innerHTML=models.length?models.map(m=>{
@@ -1207,7 +1233,7 @@ function renderLoadedRows(models) {
     const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
     const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>${t('Restart')}</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,'restart'):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">${t('Logs')}</a><button type="button" data-unload="${esc(m.id)}">${t('Unload')}</button>`;
     const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="${t('load option')}">${esc(v===true?k:v===false?t('no {option}',{option:k}):`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
-    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(t(m.state))}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button><span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${stats?t('{estimated} estimated → {resident} resident · {requests} · avg prob {prob}',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes),requests:tp(stats.requests,'{n} requests','{n} requests'),prob:pct(stats.avg_best_prob)}):t('{estimated} estimated → {resident} resident',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes)})}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
+    return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}${answering(m)?' active':''}"></span><span class="state-pill">${esc(t(m.state))}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="${t('Model information')}">ⓘ</button><span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${stats?t('{estimated} estimated → {resident} resident · {requests} · avg prob {prob}',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes),requests:tp(stats.requests,'{n} requests','{n} requests'),prob:pct(stats.avg_best_prob)}):t('{estimated} estimated → {resident} resident',{estimated:m.est_memory_bytes==null?t('unknown'):gb(m.est_memory_bytes),resident:m.rss_bytes==null?'—':gb(m.rss_bytes)})}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
   }).join(''):`<div class="empty">${t('No model loaded · {link}',{link:`<a href="#manager">${t('Load a model')}</a>`})}</div>`;
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
