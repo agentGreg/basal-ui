@@ -322,7 +322,7 @@ $('#presetNameSave').onclick=()=>act(async()=>{
 $('#examples').addEventListener('change',e=>{
   const val=e.target.value;
   if(val.startsWith('preset:')){const name=val.slice(7),request=presetData.request?.[name];if(request)setRequest(request);return;}
-  const item=examples[Number(val)];if(item?.request)setRequest(item.request);else if(item)setRequest({state:item.state,questions:item.questions});
+  const item=examples[Number(val)];if(item?.request){const request={...item.request};delete request.id;delete request.gold;setRequest(request);}else if(item)setRequest({state:item.state,questions:item.questions});
 });
 async function deletePreset(kind,name) {
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind,name,value:null})});
