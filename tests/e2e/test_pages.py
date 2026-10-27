@@ -766,6 +766,17 @@ def test_model_card_dialog_renders_api_card_data(page):
     sync_api.expect(page.locator("#modelCardDialog")).to_contain_text("A model README.")
 
 
+def test_result_views_drop_descriptions_that_only_repeat_the_key(page):
+    criteria = {"88412": "88412", "4": "[4] Payment status", "7": "[7]", "9": "[9]x", "none": "Nie podano numeru"}
+    page.evaluate("""c => renderResults({answers: {q: {type: 'choice', choice: '4', confidence: 0.6,
+      probabilities: {'4': 0.6, '88412': 0.2, '7': 0.1, '9': 0.05, none: 0.05}}}},
+      {questions: {q: {type: 'choice', criteria: c}}})""", criteria)
+    sync_api.expect(page.locator("#results .answer .headline")).to_have_text("4 · Payment status")
+    bars = page.locator("#results .prob > span").all_inner_texts()
+    assert bars == ["4 · Payment status", "88412", "7", "9 · [9]x", "none · Nie podano numeru"]
+    assert "4 · [4]" not in page.locator("#results").inner_text()
+
+
 def test_usage_line_includes_branches_and_lane(page):
     page.evaluate("""() => renderResults(
       {answers: {q: {type: 'choice', choice: 'yes'}},
