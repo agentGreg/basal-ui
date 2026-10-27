@@ -740,10 +740,12 @@ window.preparePlaygroundLanguageSwitch=()=>{
   const request={state,questions:{},...requestOptionFields(),detail:$('#mediaDetail').value||'default'};
   const names=cards.map(card=>$('.q-name',card).value);
   const controls=cards.map(card=>[...card.querySelectorAll('input,select,textarea')].map(el=>el.type==='checkbox'?{checked:el.checked}:{value:el.value}));
+  const costModes=cards.map(card=>card._costMode);
+  const costRows=cards.map(card=>card._costMode==='matrix'?readCostRows(card):null);
   cards.forEach((card,i)=>{request.questions[`__language_draft_${i}`]=parseQuestionCard(card)[1];});
   const model=selectedModel||$('#playgroundModel').value;
   if(model)request.model=model;
-  sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({request,hadMedia,names,controls}));
+  sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({request,hadMedia,names,controls,costModes,costRows}));
 };
 function restorePlaygroundLanguageDraft(){
   const saved=sessionStorage.getItem(PLAYGROUND_DRAFT);if(!saved)return;
@@ -755,6 +757,12 @@ function restorePlaygroundLanguageDraft(){
       setRequest(draft.request);
       const cards=[...document.querySelectorAll('#questions .question')];
       cards.forEach((card,i)=>{
+        if(draft.costModes?.[i]==='matrix'&&$('.q-type',card).value==='act'){
+          card._costMode='matrix';
+          card._costRows=draft.costRows?.[i]||[];
+          card._costOutcomes=null;
+          renderCostMatrix(card,true);
+        }
         const controls=[...card.querySelectorAll('input,select,textarea')];
         (draft.controls?.[i]||[]).forEach((value,j)=>{
           const el=controls[j];if(!el)return;

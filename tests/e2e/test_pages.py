@@ -584,6 +584,23 @@ def test_playground_incomplete_builder_draft_survives_language_switch_once(page,
     assert not page.locator("#mediaError").is_visible()
 
 
+def test_playground_language_draft_preserves_blank_act_matrix_rows(page):
+    view(page, "playground")
+    page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('decision', {type:'act', criteria:{buy:'Buy', wait:'Wait'}, costs:{wrong:10}}); }")
+    page.locator('.question [data-cost-mode="matrix"]').click()
+    page.locator(".question .cost-action").nth(0).fill("")
+    page.locator(".question .cost-action").nth(1).fill("custom")
+    page.locator(".question tbody tr").nth(1).locator(".cost-cell").nth(0).fill("17")
+    page.locator(".question tbody tr").nth(1).locator(".cost-cell").nth(1).fill("23")
+
+    page.locator('[data-lang-choice="pl"]').click()
+    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    assert page.locator(".question .cost-action").evaluate_all("(els) => els.map(el => el.value)") == ["", "custom"]
+    assert page.locator(".question tbody tr").evaluate_all("(rows) => rows.map(row => [...row.querySelectorAll('.cost-cell')].map(cell => cell.value))") == [
+        ["0", "10"], ["17", "23"]
+    ]
+
+
 
 def test_history_and_logs_views(page, ui, text_model):
     ui.decide(text_model["id"], CHOICE)
