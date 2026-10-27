@@ -903,6 +903,9 @@ ANSWERING = """([model, batch]) => {  // the status of this basal-ui with reques
 
 def test_overview_shows_the_inference_in_flight_and_idle_otherwise(page, text_model):
     view(page, "overview")
+    order = page.evaluate("""() => ['#hardware', '#inference', '#status', '#overview > .dashboard-grid']
+      .map(s => document.querySelector(s).getBoundingClientRect().top)""")
+    assert order == sorted(order) and len(set(order)) == 4  # Hardware, then Inference, Loaded models, the summaries
     rows = page.locator("#inferenceNow .inference-row")
     sync_api.expect(rows).to_have_count(1)
     sync_api.expect(rows.first).to_contain_text("Idle")
