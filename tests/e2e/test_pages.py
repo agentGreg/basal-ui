@@ -748,6 +748,46 @@ def test_alt_digit_opens_the_nth_page_by_key_code(page):
     sync_api.expect(page.locator("#pageTitle")).to_have_text("Model manager")
 
 
+DIALOG_LAYOUT = """([dialog, body, header, footer]) => {
+  const d = document.querySelector(dialog), b = document.querySelector(body), r = d.getBoundingClientRect();
+  const top = document.querySelector(header).getBoundingClientRect(), bottom = document.querySelector(footer).getBoundingClientRect();
+  const before = [top.top, bottom.bottom]; b.scrollTop = b.scrollHeight;
+  const after = [document.querySelector(header).getBoundingClientRect().top, document.querySelector(footer).getBoundingClientRect().bottom];
+  return {inViewport: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth,
+          centred: Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 2, dialogScrolls: d.scrollHeight > d.clientHeight + 1,
+          bodyScrolls: b.scrollHeight > b.clientHeight && b.scrollTop > 0, fixedEnds: before.every((v, i) => Math.abs(v - after[i]) < 1),
+          footerShown: bottom.bottom <= innerHeight};
+}"""
+
+
+@pytest.mark.parametrize("size", [(1440, 900), (390, 844)], ids=["desktop", "phone"])
+def test_options_dialog_keeps_its_header_and_actions_while_the_options_scroll(page, text_model, size):
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
+    sync_api.expect(page.locator("#loadOptions")).to_be_visible()
+    layout = page.evaluate(DIALOG_LAYOUT, ["#loadOptions", "#optionsForm", "#loadOptions > h3", "#loadOptions .dialog-actions"])
+    assert layout == {"inViewport": True, "centred": True, "dialogScrolls": False, "bodyScrolls": True,
+                      "fixedEnds": True, "footerShown": True}
+    switches = [s.bounding_box() for s in page.locator("#optionsForm input[type=checkbox]:visible").all()]
+    assert switches and all(s["height"] < 32 for s in switches)  # the compact field sizing leaves the switches alone
+    page.click("#optionsCancel")
+    page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
+    assert page.evaluate("() => $('#optionsForm').scrollTop") == 0  # a reopened dialog starts at the top
+
+
+def test_model_card_keeps_its_header_while_the_card_scrolls(page, text_model):
+    page.set_viewport_size({"width": 1440, "height": 700})
+    page.evaluate("id => openModelCard(id)", text_model["id"])
+    sync_api.expect(page.locator("#modelCardDialog")).to_be_visible()
+    layout = page.evaluate(DIALOG_LAYOUT, ["#modelCardDialog", "#modelCardBody", ".model-card-head", ".model-card-head"])
+    assert layout["inViewport"] and layout["centred"] and not layout["dialogScrolls"]
+    assert layout["bodyScrolls"] and layout["fixedEnds"]
+    title = page.locator("#modelCardTitle").inner_text()
+    assert title.count("·") == 2 and title.split(" · ")[0] == text_model["family"]  # family · tier · format, once
+    facts = page.locator(".model-card-facts dt").all_inner_texts()
+    assert not {"Family", "Tier", "Port"} & set(facts)
+
+
 def test_model_card_dialog_renders_api_card_data(page):
     page.evaluate("""() => {
       api = async () => ({
