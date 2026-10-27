@@ -30,7 +30,7 @@ def page(browser, ui, text_model):
 def test_all_views_fit_responsive_widths_and_question_controls_stay_named(page, tmp_path):
     views = ("overview", "models", "manager", "playground", "batch", "inspect", "api", "history", "logs")
     page.wait_for_function("document.querySelector('#apiSummary').textContent !== 'Loading…'")
-    page.screenshot(path=str(tmp_path / "basal-1440-overview.png"), full_page=True)
+    page.screenshot(path=str(tmp_path / "basal-1440-overview.png"), full_page=True, animations="disabled")
     page.locator('.side-nav [data-view="playground"]').click()
     assert page.locator(".playground-head").evaluate("e => getComputedStyle(e).flexDirection") == "row"
     assert page.locator(".playground-head").evaluate("e => parseFloat(getComputedStyle(e).marginBottom) >= 12")
@@ -70,4 +70,4 @@ def test_all_views_fit_responsive_widths_and_question_controls_stay_named(page, 
       (input.id && document.querySelector(`label[for=\\\"${input.id}\\\"]`)) ||
       input.closest('label'))""")
     page.locator('[data-theme-choice="light"]').click()
-    page.screenshot(path=str(tmp_path / "basal-390-playground.png"), full_page=True)
+    page.screenshot(path=str(tmp_path / "basal-390-playground.png"), full_page=True, animations="disabled")

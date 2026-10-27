@@ -586,7 +586,7 @@ function setPlaygroundExperimental(model) {
   select.hidden=!levels.length;
 }
 function buildRequest() {
-  const questions={}, names=new Set();
+  const questions=Object.create(null), names=new Set();
   for(const card of document.querySelectorAll('.question')) {
     const input=$('.q-name',card), name=input.value, duplicate=names.has(name), invalid=!name.trim()||duplicate;
     input.setCustomValidity(!name.trim()?'Enter a question name.':duplicate?'Question names must be unique.':'');

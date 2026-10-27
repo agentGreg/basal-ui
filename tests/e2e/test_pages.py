@@ -81,6 +81,9 @@ def test_playground_request_names_media_and_history_replay_are_lossless_until_se
     page.evaluate("() => { addQuestion(); addQuestion(); }")
     assert page.evaluate("() => [...document.querySelectorAll('.q-name')].slice(-2).map(x => x.value)") == ["question2", "question3"]
 
+    page.evaluate("() => { document.querySelector('.q-name').value = '__proto__'; }")
+    assert page.evaluate("() => Object.hasOwn(buildRequest().questions, '__proto__')")
+
     request = {"model": text_model["id"], "state": "inspect", "questions": {"q": {"type": "choice", "instructions": "Choose",
                "criteria": {"a": None, "b": None}}}, "media": [{"type": "image", "data": "aGVsbG8="}], "detail": "high"}
     page.evaluate("r => setRequest(r)", request)
