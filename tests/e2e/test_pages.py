@@ -765,6 +765,8 @@ def test_options_dialog_keeps_its_header_and_actions_while_the_options_scroll(pa
     page.set_viewport_size({"width": size[0], "height": size[1]})
     page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
     sync_api.expect(page.locator("#loadOptions")).to_be_visible()
+    page.evaluate("() => document.querySelectorAll('#optionsForm details').forEach(d => { d.open = true; })")  # all expanded
+    page.wait_for_timeout(500)  # Basecoat animates a <details> opening
     layout = page.evaluate(DIALOG_LAYOUT, ["#loadOptions", "#optionsForm", "#loadOptions > h3", "#loadOptions .dialog-actions"])
     assert layout == {"inViewport": True, "centred": True, "dialogScrolls": False, "bodyScrolls": True,
                       "fixedEnds": True, "footerShown": True}
@@ -779,6 +781,8 @@ def test_model_card_keeps_its_header_while_the_card_scrolls(page, text_model):
     page.set_viewport_size({"width": 1440, "height": 700})
     page.evaluate("id => openModelCard(id)", text_model["id"])
     sync_api.expect(page.locator("#modelCardDialog")).to_be_visible()
+    page.evaluate("() => document.querySelectorAll('#modelCardBody details').forEach(d => { d.open = true; })")
+    page.wait_for_timeout(500)  # Basecoat animates a <details> opening
     layout = page.evaluate(DIALOG_LAYOUT, ["#modelCardDialog", "#modelCardBody", ".model-card-head", ".model-card-head"])
     assert layout["inViewport"] and layout["centred"] and not layout["dialogScrolls"]
     assert layout["bodyScrolls"] and layout["fixedEnds"]
@@ -786,6 +790,46 @@ def test_model_card_keeps_its_header_while_the_card_scrolls(page, text_model):
     assert title.count("·") == 2 and title.split(" · ")[0] == text_model["family"]  # family · tier · format, once
     facts = page.locator(".model-card-facts dt").all_inner_texts()
     assert not {"Family", "Tier", "Port"} & set(facts)
+
+OPEN_SECTIONS = "() => [...document.querySelectorAll('#optionsForm details.option-section')].filter(d => d.open).map(d => d.dataset.section)"
+
+
+def test_options_sections_collapse_open_on_changes_and_remember_the_users_choice(page, text_model):
+    page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
+    sync_api.expect(page.locator("#loadOptions")).to_be_visible()
+    sections = page.evaluate("() => [...document.querySelectorAll('#optionsForm details.option-section')].map(d => d.dataset.section)")
+    assert len(sections) >= 6 and "Batching" in sections
+    assert page.evaluate(OPEN_SECTIONS) == ["Engine"]  # defaults: only the engine is open
+    batch = page.locator('#optionsForm details[data-section="Batching"]')
+    sync_api.expect(batch.locator("#opt-max_batch")).to_be_hidden()
+    # a saved non-default value opens its section
+    page.evaluate("() => renderOptionsForm({...optionsState.data.defaults, max_batch: 8})")
+    assert page.evaluate(OPEN_SECTIONS) == ["Engine", "Batching"]
+    # a collapsed section still saves what it holds
+    page.evaluate("() => { $('#opt-max_batch').value = '12'; }")
+    batch.locator("summary").click()  # collapse it
+    sync_api.expect(batch.locator("#opt-max_batch")).to_be_hidden()
+    assert page.evaluate("() => collectOptions().max_batch") == 12
+    # the user's toggles are kept for the next dialog (also for another model), the defaults are not
+    page.locator('#optionsForm details[data-section="Engine"] > summary').click()
+    page.locator('#optionsForm details[data-section="Caching"] > summary').press("Enter")
+    page.click("#optionsCancel")
+    page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
+    assert page.evaluate(OPEN_SECTIONS) == ["Caching"]
+    page.click("#optionsCancel")
+
+
+def test_model_card_long_blocks_start_collapsed(page, text_model):
+    page.evaluate("id => openModelCard(id)", text_model["id"])
+    sync_api.expect(page.locator("#modelCardDialog")).to_be_visible()
+    blocks = page.locator("#modelCardBody details")
+    assert blocks.count() >= 1
+    assert page.evaluate("() => [...document.querySelectorAll('#modelCardBody details')].every(d => !d.open)")
+    sync_api.expect(blocks.first.locator("pre")).to_be_hidden()
+    blocks.first.locator("summary").click()
+    sync_api.expect(blocks.first.locator("pre")).to_be_visible()
+    sync_api.expect(page.locator("#modelCardBody .model-card-facts")).to_be_visible()  # the facts stay in view
+
 
 
 def test_model_card_dialog_renders_api_card_data(page):
