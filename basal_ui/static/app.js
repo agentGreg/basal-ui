@@ -730,11 +730,20 @@ function setRequest(req) {
 const PLAYGROUND_DRAFT='basal-ui.language-draft';
 window.preparePlaygroundLanguageSwitch=()=>{
   const hadMedia=selectedMedia.length>0;
-  if($('#editJsonToggle').checked)sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({json:true,text:$('#requestJson').value,hadMedia}));
-  else {
-    try {const request=buildRequest();delete request.media;const model=selectedModel||$('#playgroundModel').value;if(model)request.model=model;else delete request.model;sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({request,hadMedia}));}
-    catch {sessionStorage.removeItem(PLAYGROUND_DRAFT);}
+  if($('#editJsonToggle').checked){
+    sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({json:true,text:$('#requestJson').value,hadMedia}));
+    return;
   }
+  const cards=[...document.querySelectorAll('#questions .question')];
+  const stateInput=$('#stateInput'), state=stateInput._requestState&&stateInput.value===stateInput._requestState.text
+    ?stateInput._requestState.value:parseStructuredText(stateInput.value);
+  const request={state,questions:{},...requestOptionFields(),detail:$('#mediaDetail').value||'default'};
+  const names=cards.map(card=>$('.q-name',card).value);
+  const controls=cards.map(card=>[...card.querySelectorAll('input,select,textarea')].map(el=>el.type==='checkbox'?{checked:el.checked}:{value:el.value}));
+  cards.forEach((card,i)=>{request.questions[`__language_draft_${i}`]=parseQuestionCard(card)[1];});
+  const model=selectedModel||$('#playgroundModel').value;
+  if(model)request.model=model;
+  sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({request,hadMedia,names,controls}));
 };
 function restorePlaygroundLanguageDraft(){
   const saved=sessionStorage.getItem(PLAYGROUND_DRAFT);if(!saved)return;
@@ -742,7 +751,20 @@ function restorePlaygroundLanguageDraft(){
   try{
     const draft=JSON.parse(saved);
     if(draft.json){$('#editJsonToggle').checked=true;$('#editJsonArea').hidden=false;$('#builder').hidden=true;$('#requestJson').value=draft.text;}
-    else if(draft.request)setRequest(draft.request);
+    else if(draft.request){
+      setRequest(draft.request);
+      const cards=[...document.querySelectorAll('#questions .question')];
+      cards.forEach((card,i)=>{
+        const controls=[...card.querySelectorAll('input,select,textarea')];
+        (draft.controls?.[i]||[]).forEach((value,j)=>{
+          const el=controls[j];if(!el)return;
+          if('checked' in value)el.checked=value.checked;else el.value=value.value;
+        });
+        $('.q-name',card).value=draft.names?.[i]??$('.q-name',card).value;
+        updateCardVisibility(card);
+      });
+      syncRequest(true);
+    }
     if(draft.hadMedia)showMediaError(t('Media must be attached again after changing language.'));
   }catch{}
 }

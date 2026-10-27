@@ -511,7 +511,7 @@ def test_playground_builder_draft_survives_language_changes_once(page, text_mode
     }
     page.evaluate("r => setRequest(r)", request)
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && statusCache && modelData.length > 0")
+    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
     assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
         text_model["id"], "Review this order", True, "en"
     ]
@@ -521,7 +521,7 @@ def test_playground_builder_draft_survives_language_changes_once(page, text_mode
     assert page.evaluate("() => selectedMedia.length") == 0
     sync_api.expect(page.locator("#mediaError")).to_contain_text("dołącz media ponownie")
     page.locator('[data-lang-choice="en"]').click()
-    page.wait_for_function("() => LANG === 'en' && statusCache && modelData.length > 0")
+    page.wait_for_function("() => LANG === 'en' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
     assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
         text_model["id"], "Review this order", True, "en"
     ]
@@ -539,7 +539,7 @@ def test_playground_edit_json_draft_keeps_invalid_text(page):
     text = '{"state": "unfinished", "questions": ['
     page.fill("#requestJson", text)
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && statusCache && modelData.length > 0")
+    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
     sync_api.expect(page.locator("#requestJson")).to_have_value(text)
     assert page.locator("#editJsonToggle").is_checked()
     page.reload()
@@ -547,6 +547,39 @@ def test_playground_edit_json_draft_keeps_invalid_text(page):
     assert not page.locator("#editJsonToggle").is_checked()
     assert "unfinished" not in page.locator("#requestJson").input_value()
     sync_api.expect(page.locator("#builder")).to_be_visible()
+
+
+@pytest.mark.parametrize("draft_case", ["blank-name", "duplicate-names", "invalid-tools", "invalid-schema"])
+def test_playground_incomplete_builder_draft_survives_language_switch_once(page, draft_case):
+    view(page, "playground")
+    if draft_case == "blank-name":
+        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('first', {type:'choice', criteria:{yes:'Yes'}}); $('.q-name').value = ''; }")
+    elif draft_case == "duplicate-names":
+        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('same', {type:'choice', criteria:{yes:'Yes'}}); addQuestion('same', {type:'noul'}); }")
+    elif draft_case == "invalid-tools":
+        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('tools', {type:'tool', tools:[{name:'lookup'}]}); }")
+        page.fill('.question [data-f="tools"]', '{"unfinished":')
+    else:
+        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('schema', {type:'extract', schema:{type:'object', properties:{}}}); }")
+        page.fill('.question [data-f="schema"]', '{"unfinished":')
+
+    page.locator('[data-lang-choice="pl"]').click()
+    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    if draft_case == "blank-name":
+        sync_api.expect(page.locator(".question .q-name")).to_have_value("")
+    elif draft_case == "duplicate-names":
+        assert page.locator(".question .q-name").evaluate_all("(els) => els.map(el => el.value)") == ["same", "same"]
+    elif draft_case == "invalid-tools":
+        sync_api.expect(page.locator('.question [data-f="tools"]')).to_have_value('{"unfinished":')
+    else:
+        sync_api.expect(page.locator('.question [data-f="schema"]')).to_have_value('{"unfinished":')
+
+    page.reload()
+    page.wait_for_function("() => statusCache && modelData.length > 0")
+    sync_api.expect(page.locator("#stateInput")).to_have_value("")
+    assert page.locator(".question .q-name").evaluate_all("(els) => els.map(el => el.value)") == ["question"]
+    assert not page.locator("#mediaError").is_visible()
+
 
 
 def test_history_and_logs_views(page, ui, text_model):
