@@ -276,6 +276,28 @@ def test_the_load_options_dialog_lists_the_modes(page, text_model):
     sync_api.expect(dialog).to_be_hidden()
 
 
+def test_models_set_up_without_loading_and_the_model_manager_loads(page, ui, text_model):
+    view(page, "manager")  # the fixture loaded the model: its row on disk offers Unload
+    row = page.locator("#diskModels .disk-row", has=page.locator(f'[data-id="{text_model["id"]}"]'))
+    sync_api.expect(row.locator(".unload-model")).to_be_visible()
+    view(page, "models")
+    page.click("#allModelsTab")
+    assert page.locator("#models .load-model").count() == 0  # Models downloads, sets up and deletes
+    loads = []
+    page.route("**/api/load", lambda route: (loads.append(1), route.fulfill(status=500, body="loaded")))
+    page.click(f'#modelsTable .options-model[data-action="save"][data-id="{text_model["id"]}"]')
+    sync_api.expect(page.locator("#optionsApply")).to_have_text("Save")
+    sync_api.expect(page.locator("#optionsRemember")).to_be_hidden()
+    page.fill("#opt-revision", "main")
+    page.click("#optionsApply")
+    sync_api.expect(page.locator("#loadOptions")).to_be_hidden()
+    try:
+        saved = ui.get("/api/models/options", params={"id": text_model["id"]})
+        assert saved["saved"] and saved["options"]["revision"] == "main" and not loads
+    finally:
+        ui.put("/api/models/options", {"id": text_model["id"], "options": {}})
+
+
 def test_batch_view_runs_a_file_and_lists_the_answers(page, text_model, tmp_path):
     view(page, "batch")
     page.select_option("#batchModel", text_model["id"])

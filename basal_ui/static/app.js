@@ -96,8 +96,6 @@ function renderModels(data) {
   renderSuggestions(suggestions);
   const overviewSuggestion=$('#overviewSuggested'), firstSuggestion=$('#suggested .suggestion-card');
   overviewSuggestion.replaceChildren(firstSuggestion?firstSuggestion.cloneNode(true):Object.assign(document.createElement('p'),{className:'muted',textContent:'No suggested model fits right now.'}));
-  const overviewLoad=$('.suggestion-load',overviewSuggestion);
-  if(overviewLoad)overviewLoad.addEventListener('click',()=>loadModel(overviewLoad.dataset.id,overviewLoad.dataset.media==='true'));
   const slots = new Map(suggestions.map(s => [s.id, s.slot]));
   const older = $('#olderToggle').checked, showBad = $('#notRunnableToggle').checked, downloadedOnly = $('#downloadedToggle').checked;
   const list = modelData.filter(m => (!backendModelFilter||backendModelFilter.ids.has(m.id)) && (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
@@ -105,7 +103,7 @@ function renderModels(data) {
   const groups = new Map(); for (const m of list) { if (!groups.has(m.family)) groups.set(m.family, []); groups.get(m.family).push(m); }
   if (!list.length) { $('#modelsTable').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
   let html = '';
-  const tableHead='<table class="model-variants"><colgroup><col style="width:24%"><col style="width:14%"><col style="width:9%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:22%"></colgroup><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th>Action</th></tr></thead><tbody>';
+  const tableHead='<table class="model-variants"><colgroup><col style="width:20%"><col style="width:13%"><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:9%"><col style="width:30%"></colgroup><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th>Action</th></tr></thead><tbody>';
   for (const [family, rows] of groups) {
     html += `<section class="model-family-group"><div class="disk-group-heading"><h4>${esc(family)}</h4><span class="muted">${rows.length} ${rows.length===1?'variant':'variants'}</span></div><div class="table-wrap">${tableHead}`;
     for (const m of rows) {
@@ -117,19 +115,29 @@ function renderModels(data) {
       const mediaReason = !m.media_mode && (m.media || []).length ? `<small class="muted">${esc(m.media_reason || '')}</small>` : '';
       const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
       const downloadButton=downloadControl(m,downloadStatus);
-      const mediaButton = (m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '') + optionsButton(m.id);
-      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="model-tier"><span class="model-name">${esc(m.tier)}</span>${badges?`<div class="model-badges">${badges}</div>`:''}${reason}${mediaReason}</td><td class="model-format">${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}${m.downloaded?`<small class="model-downloaded muted">On disk${m.downloaded_bytes==null?'':` · ${gb(m.downloaded_bytes)}`}</small>`:''}</td><td class="model-size">${gb(m.weights_bytes)}</td><td class="model-size">${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td><div class="model-actions"><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button>${loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadButton:m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>${mediaButton}`:''}</div></td></tr>`;
+      // Models: download, set up and delete; loading is the Model manager's (renderDiskModels)
+      const actions=`${!m.downloaded?downloadButton:''}${m.runnable?optionsButton(m.id,false,'save'):''}${loaded?'<span class="chip">loaded</span>':m.downloaded?deleteButton(m.id):''}`;
+      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="model-tier"><span class="model-name">${esc(m.tier)}</span>${badges?`<div class="model-badges">${badges}</div>`:''}${reason}${mediaReason}</td><td class="model-format">${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}${m.downloaded?`<small class="model-downloaded muted">On disk${m.downloaded_bytes==null?'':` · ${gb(m.downloaded_bytes)}`}</small>`:''}</td><td class="model-size">${gb(m.weights_bytes)}</td><td class="model-size">${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td><div class="model-actions"><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button>${actions}</div></td></tr>`;
     }
     html += '</tbody></table></div></section>';
   }
   $('#modelsTable').innerHTML = html;
-  document.querySelectorAll('.load-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id)));
-  document.querySelectorAll('.load-media-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id, true)));
-  bindModelButtons('#modelsTable');
 }
-function bindModelButtons(scope) {
-  document.querySelectorAll(`${scope} .download-model`).forEach(b=>b.addEventListener('click',()=>act(async()=>{await api('/api/download',{method:'POST',body:JSON.stringify({id:b.dataset.id})});await refreshStatus();})));
-  document.querySelectorAll(`${scope} .unload-model`).forEach(b=>b.addEventListener('click',()=>act(()=>unloadOne(b.dataset.id))));
+const deleteButton=id=>`<button type="button" class="delete-model" data-id="${esc(id)}">Delete</button>`;
+// the model buttons of every list (Models, Model manager, the Overview's copy of a suggestion card), bound once
+document.addEventListener('click',e=>{
+  const b=e.target.closest('.download-model,.unload-model,.delete-model,.load-model');
+  if(!b||b.disabled)return;
+  const id=b.dataset.id;
+  if(b.classList.contains('download-model'))act(async()=>{await api('/api/download',{method:'POST',body:JSON.stringify({id})});await refreshStatus();});
+  else if(b.classList.contains('unload-model'))act(()=>unloadOne(id));
+  else if(b.classList.contains('delete-model'))act(()=>deleteModel(id));
+  else loadModel(id,b.dataset.media==='true');
+});
+async function deleteModel(id) {
+  const model=modelData.find(m=>m.id===id);
+  if(!model||!await confirmDialog({title:'Delete model from disk?',description:`${model.family} ${model.tier} (${model.label}) will be removed from disk.`,confirmLabel:'Delete',destructive:true}))return;
+  await api('/api/models/delete',{method:'POST',body:JSON.stringify({id})}); toast('Model deleted'); await loadModels();
 }
 // "basal-2.0" / "basal-omni-1.0" written the way basal.si5.pl writes the family names
 function familyMark(family) {
@@ -151,11 +159,9 @@ function renderSuggestions(suggestions) {
     const media = s.slot === 'multimodal';
     const why = esc(s.why).replace(/(--[a-z][\w-]*(?: [a-z][\w.-]*)?)/g, '<code>$1</code>');
     const download=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
-    const action=loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadControl(m,download):`<div class="controls"><button class="suggestion-load" data-id="${esc(m.id)}" data-media="${media}">${media?'Load with media':'Load'}${ARROW}</button>${optionsButton(m.id,media)}</div>`;
+    const action=`<div class="controls">${loaded?'<span class="chip">loaded</span>':!m.downloaded?downloadControl(m,download):''}${optionsButton(m.id,false,'save')}${m.downloaded&&!loaded?deleteButton(m.id):''}</div>${m.downloaded&&!loaded?`<a class="dashboard-link" href="#manager">Load in Model manager${ARROW}</a>`:''}`;
     return `<article class="suggestion-card${media?' omni':''}"><div class="eyebrow">${esc(s.slot.replace('_',' '))}</div><h3>${familyMark(m.family)}</h3><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button><div class="suggestion-tier">${esc(m.tier)} · ${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}</div><div><span class="suggestion-meta">${gb(m.weights_bytes)} → ${gb(m.est_memory_bytes)} est. memory</span></div><div><span class="badge fit-${esc(m.fit_now || 'unknown')}">${esc(m.fit_now || 'unknown')}</span></div><p class="why">${why}</p>${m.downloaded?`<div class="suggestion-downloaded">✓ ${gb(m.downloaded_bytes)} downloaded</div>`:''}${action}</article>`;
   }).join('')}</div>`;
-  document.querySelectorAll('.suggestion-load').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id,b.dataset.media==='true')));
-  bindModelButtons('#suggested');
 }
 document.addEventListener('click',e=>{const b=e.target.closest('.model-card-open');if(b)act(()=>openModelCard(b.dataset.id));});
 async function openModelCard(id) {
@@ -179,18 +185,20 @@ function renderDiskModels() {
   }
   $('#diskModels').innerHTML=rows.length?[...groups].sort(([a],[b])=>familyOrder(b)-familyOrder(a)||a.localeCompare(b)).map(([type,models])=>{
     const bytes=models.reduce((sum,m)=>sum+(Number(m.downloaded_bytes)||0),0);
-    return `<section class="disk-group"><div class="disk-group-heading"><h4>${esc(type)}</h4><span class="muted">${models.length} ${models.length===1?'model':'models'} · ${gb(bytes)}</span></div>${models.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?'<span class="chip">community</span>':''}<span class="muted">${gb(m.downloaded_bytes)}</span></div><button type="button" class="delete-model" data-id="${esc(m.id)}">Delete</button></div>`).join('')}</section>`;
+    return `<section class="disk-group"><div class="disk-group-heading"><h4>${esc(type)}</h4><span class="muted">${models.length} ${models.length===1?'model':'models'} · ${gb(bytes)}</span></div>${models.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?'<span class="chip">community</span>':''}<span class="muted">${gb(m.downloaded_bytes)}</span><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button></div><div class="disk-actions">${diskActions(m)}</div></div>`).join('')}</section>`;
   }).join(''):'<div class="empty">Nothing downloaded yet</div>';
   $('#diskTotal').textContent = `Total: ${gb(total)} in ${rows.length} ${rows.length === 1 ? 'model' : 'models'}`;
   $('#diskSummary').textContent=`${rows.length} ${rows.length===1?'model':'models'} on disk`;
   $('#diskSummaryMeta').textContent=`${gb(total)} total`;
-  document.querySelectorAll('.delete-model').forEach(button => button.addEventListener('click', async () => {
-    const model = rows.find(m => m.id === button.dataset.id);
-    if (!model || !await confirmDialog({title:'Delete model from disk?',description:`${model.family} ${model.tier} (${model.label}) will be removed from disk.`,confirmLabel:'Delete',destructive:true})) return;
-    $('#modelsDirError').textContent = '';
-    try { await api('/api/models/delete', {method:'POST', body:JSON.stringify({id:model.id})}); toast('Model deleted'); await loadModels(); }
-    catch (e) { $('#modelsDirError').textContent = e.message; toast(e.message,'error'); }
-  }));
+}
+// Model manager: load (text or media, or with options) and unload the models on disk
+function diskActions(m) {
+  const loaded=statusCache?.models?.find(x=>x.id===m.id);
+  if(loaded)return `<span class="chip">${esc(loaded.state==='ready'?'loaded':loaded.state)}</span><button type="button" class="unload-model" data-id="${esc(m.id)}">Unload</button>`;
+  if(!m.runnable)return `<span class="reason" title="${esc(m.reason||'')}">${esc(m.reason||'not runnable here')}</span>`;
+  const media=m.media_mode?`<button type="button" class="load-model load-media-model" data-id="${esc(m.id)}" data-media="true" title="${esc(mediaTitle(m.media||[]))}">Load with media</button>`:'';
+  const noMedia=!m.media_mode&&(m.media||[]).length?`<small class="muted">${esc(m.media_reason||'')}</small>`:'';
+  return `<button type="button" class="load-model primary" data-id="${esc(m.id)}">Load</button>${media}${optionsButton(m.id)}${noMedia}`;
 }
 async function loadSettings() {
   try {
@@ -1141,10 +1149,10 @@ function renderLoadedRows(models) {
     const variant=modelData.find(x=>x.id===m.id), chips=`${m.mode?`<span class="chip">${esc(m.mode)}</span>`:''}${variant?.community?'<span class="chip">community</span>':''}${(m.media||[]).map(x=>`<span class="chip media">${esc(x)}</span>`).join('')}${['prompt_format','layout','orders','vllm_preset','adapter'].filter(k=>m.entry?.[k]!=null).map(k=>`<span class="chip">${esc(k)} ${esc(m.entry[k])}</span>`).join('')}${uncalibrated(m.entry)?'<span class="badge fit-tight" title="temperature_per_prim is {}: the probabilities are the raw model outputs">uncalibrated</span>':''}${m.restart_required?'<span class="badge fit-tight">Restart to apply</span>':''}`;
     const health=m.health, load=health?.reachable===false?'unreachable':health?.reachable!==true?'load unavailable':health.running==null||health.queued==null?'load counters unavailable':health.running===0&&health.queued===0?'idle':`${health.running} running · ${health.queued} queued`;
     const warning=m.entry?.calibration_warning?`<div class="reason wide">${esc(m.entry.calibration_warning)}</div>`:'';
-    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,true):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
+    const actions=`<button type="button" data-restart="${esc(m.id)}"${['ready','error'].includes(m.state)?'':' disabled'}>Restart</button>${['ready','error'].includes(m.state)?optionsButton(m.id,m.media_requested,'restart'):''}<a class="dashboard-link" href="#logs/${esc(encodeURIComponent(m.id))}">Logs</a><button type="button" data-unload="${esc(m.id)}">Unload</button>`;
     const optionChips=Object.entries(m.options||{}).filter(([k])=>k!=='mode').map(([k,v])=>`<span class="chip" title="load option">${esc(v===true?k:v===false?`no ${k}`:`${k} ${Array.isArray(v)?v.join('–'):v}`)}</span>`).join('');
     return `<div class="model-row"><div class="model-row-main"><span class="status-dot${m.state==='ready'?' ready':m.state==='error'?' error':''}"></span><span class="state-pill">${esc(m.state)}</span><strong>${esc(m.id)}</strong>${chips}${optionChips}<button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button><span class="chip model-load">${esc(load)}</span></div><div class="muted model-row-meta">${m.est_memory_bytes==null?'unknown':gb(m.est_memory_bytes)} estimated → ${m.rss_bytes==null?'—':gb(m.rss_bytes)} resident${stats?` · ${stats.requests} requests · avg prob ${pct(stats.avg_best_prob)}`:''}</div>${progress}${warning}${m.error?`<div class="reason">${esc(m.error)}</div>`:''}<div class="model-row-actions">${actions}</div></div>`;
-  }).join(''):'<div class="empty">No model loaded · <a href="#models">Load a model</a></div>';
+  }).join(''):'<div class="empty">No model loaded · <a href="#manager">Load a model</a></div>';
   $('#loadedModels').querySelectorAll('[data-restart]').forEach(b=>b.onclick=()=>act(()=>restartOne(b.dataset.restart)));
   $('#loadedModels').querySelectorAll('[data-unload]').forEach(b=>b.onclick=()=>act(()=>unloadOne(b.dataset.unload)));
 }
@@ -1435,7 +1443,8 @@ const OPTION_FIELDS={
   think_log:{label:'vLLM log file',kind:'text',placeholder:'basal-think-vllm.log',think:true},
   early_exit:{label:'Early exit (default policy)',kind:'select',values:['off','0.999','0.995','0.99','0.98']},
 };
-const optionsButton=(id,media=false,restart=false)=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-restart="${restart}" title="${restart?'Restart with other load options':'Load with options'}">⚙${restart?'':' Options'}</button>`;
+// action: "load" (Model manager), "save" (Models: set up the options of the next load), "restart" (a loaded model)
+const optionsButton=(id,media=false,action='load')=>`<button type="button" class="options-model" data-id="${esc(id)}" data-media="${media}" data-action="${action}" title="${{load:'Load with options',save:'Set up the load options',restart:'Restart with other load options'}[action]}">⚙${{load:' Options',save:' Setup',restart:''}[action]}</button>`;
 document.body.insertAdjacentHTML('beforeend',`<dialog id="loadOptions" class="confirm-dialog options-dialog"><h3>Load options</h3><p id="optionsModel" class="muted"></p><div id="optionsForm"></div><div id="optionsError" class="error-box" hidden></div><div class="dialog-actions"><label><input type="checkbox" role="switch" id="optionsRemember"> Remember for this model</label><button type="button" id="optionsReset">Reset to defaults</button><button type="button" id="optionsCancel">Cancel</button><button type="button" id="optionsApply" class="primary">Load</button></div></dialog>`);
 $('#optionsModel').insertAdjacentHTML('afterend','<div id="loadPresetControls" class="controls"><select id="loadPresetSelect" aria-label="Load preset"></select><button type="button" id="applyLoadPreset">Apply</button><button type="button" id="saveLoadPreset">Save as…</button><button type="button" id="deleteLoadPreset">Delete</button></div>');
 $('#saveLoadPreset').onclick=()=>promptPresetName('load');
@@ -1499,12 +1508,13 @@ function collectOptions() {
   }
   return Object.fromEntries(Object.entries(out).filter(([k,v])=>JSON.stringify(v)!==JSON.stringify(d.defaults[k])));
 }
-async function openLoadOptions(id, media=false, restart=false) {
+async function openLoadOptions(id, media=false, action='load') {
   const data=await api(`/api/models/options?id=${encodeURIComponent(id)}`);
-  const loaded=(statusCache?.models||[]).find(m=>m.id===id);
-  optionsState={id,media,restart,data};
-  $('#optionsModel').textContent=`${id}${media?' · with media':''}${restart?' · restarts the running model':''}`;
-  $('#optionsApply').textContent=restart?'Restart':'Load';
+  const loaded=(statusCache?.models||[]).find(m=>m.id===id), restart=action==='restart', save=action==='save';
+  optionsState={id,media,restart,save,data};
+  $('#optionsModel').textContent=`${id}${media?' · with media':''}${restart?' · restarts the running model':save?' · kept for the next load':''}`;
+  $('#optionsApply').textContent=restart?'Restart':save?'Save':'Load';
+  $('#optionsRemember').closest('label').hidden=save;  // Save always remembers
   setChecked($('#optionsRemember'),data.saved);
   renderOptionsForm(restart&&loaded?{...data.defaults,...loaded.options}:data.options);
   $('#optionsError').hidden=true;
@@ -1513,14 +1523,15 @@ async function openLoadOptions(id, media=false, restart=false) {
   $('#deleteLoadPreset').disabled=true;
   $('#loadOptions').showModal();
 }
-document.addEventListener('click',e=>{const b=e.target.closest('.options-model');if(b)act(()=>openLoadOptions(b.dataset.id,b.dataset.media==='true',b.dataset.restart==='true'));});
+document.addEventListener('click',e=>{const b=e.target.closest('.options-model');if(b)act(()=>openLoadOptions(b.dataset.id,b.dataset.media==='true',b.dataset.action));});
 $('#optionsCancel').onclick=()=>$('#loadOptions').close();
 $('#optionsReset').onclick=()=>renderOptionsForm(optionsState.data.defaults);
 $('#optionsApply').onclick=async()=>{
-  const {id,media,restart,data}=optionsState, options=collectOptions(), remember=$('#optionsRemember').checked;
+  const {id,media,restart,save,data}=optionsState, options=collectOptions(), remember=save||$('#optionsRemember').checked;
   $('#optionsApply').disabled=true;
   try{
     if(remember||data.saved)await api('/api/models/options',{method:'PUT',body:JSON.stringify({id,options:remember?options:{}})});
+    if(save){$('#loadOptions').close();toast(`Load options saved for ${shortName(id)}`);await loadModels();return;}
     if(restart)await api('/api/restart',{method:'POST',body:JSON.stringify({id,options})});
     else{statusSequence++;clearSelectedMedia();await api('/api/load',{method:'POST',body:JSON.stringify({id,...(media?{media:true}:{}),options})});}
     $('#loadOptions').close(); toast(restart?`Restarting ${shortName(id)}`:'Model load started'); await refreshStatus();
