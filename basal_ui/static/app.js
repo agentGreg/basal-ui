@@ -1580,6 +1580,7 @@ async function openLoadOptions(id, media=false, action='load') {
   $('#loadPresetSelect').value='';
   $('#deleteLoadPreset').disabled=true;
   $('#loadOptions').showModal();
+  $('#optionsForm').scrollTop=0;  // the dialog is reused: another model's options start at the top
 }
 document.addEventListener('click',e=>{const b=e.target.closest('.options-model');if(b)act(()=>openLoadOptions(b.dataset.id,b.dataset.media==='true',b.dataset.action));});
 $('#optionsCancel').onclick=()=>$('#loadOptions').close();
