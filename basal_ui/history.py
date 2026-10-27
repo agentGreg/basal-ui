@@ -65,6 +65,41 @@ def _summary(record: dict) -> dict:
     return {k: v for k, v in record.items() if k not in ("request", "response")}
 
 
+def replay_fields(request: dict) -> dict:
+    """Build a Playground request from a recorded native or Decisions API request."""
+    import re
+
+    from ..compat import decision_body
+
+    def redacted(value, media=False):
+        if isinstance(value, dict):
+            media = media or value.get("type") in ("input_image", "input_audio")
+            return any((media and k in ("data", "image_url", "audio_url") and isinstance(v, str) and
+                        re.fullmatch(r"<\d+ bytes>", v)) or redacted(v, media or k in ("media", "images", "audio"))
+                       for k, v in value.items())
+        if isinstance(value, list):
+            return any(redacted(v, media) for v in value)
+        return False
+
+    if not isinstance(request, dict):
+        return {"replay_request": None, "replay_error": "This recorded request is not a JSON object and cannot be replayed."}
+    if redacted(request):
+        return {"replay_request": None,
+                "replay_error": "History removed the original media attachments. Add them again before sending this request."}
+    try:
+        if "input" in request:
+            replay, _, _ = decision_body(request)
+            if request.get("model") is not None:
+                replay["model"] = request["model"]
+        else:
+            replay = request
+        return {"replay_request": replay, "replay_error": None}
+    except (TypeError, ValueError) as exc:
+        detail = exc.args[0] if exc.args else exc
+        message = detail[1] if isinstance(detail, tuple) and len(detail) > 1 else str(detail)
+        return {"replay_request": None, "replay_error": f"This recorded request cannot be replayed: {message}"}
+
+
 class History:
     """Appends go to the file under the settings lock; a rotation rewrites the file from its own last `keep` lines,
     so a second basal-ui process on the same settings file loses nothing (its records are in the file, not in this

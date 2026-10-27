@@ -34,7 +34,7 @@ from fastapi.staticfiles import StaticFiles
 from . import catalog, hardware, settings
 from . import options as load_options
 from .gateway import Gateway
-from .history import History, make_record
+from .history import History, make_record, replay_fields
 from .jobs import Jobs, LogBuffer
 from .stats import Stats
 
@@ -1664,7 +1664,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         record = history.get(record_id)
         if record is None:
             raise HTTPException(404, f"unknown history record {record_id!r}")
-        return record
+        return {**record, **replay_fields(record.get("request", {}))}
 
     @app.delete("/api/history")
     def clear_history():

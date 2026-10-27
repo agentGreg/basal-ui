@@ -312,7 +312,9 @@ function promptPresetName(target) {
 }
 $('#presetNameSave').onclick=()=>act(async()=>{
   const name=$('#presetName').value.trim(); if(!name)return;
-  const value=presetTarget==='load'?collectOptions():$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest();
+  let value;
+  try { value=presetTarget==='load'?collectOptions():$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
+  catch(e) { toast(e.message,'error');$('.q-name:invalid')?.reportValidity();return; }
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind:presetTarget,name,value})});
   $('#presetNameDialog').close(); renderLoadPresets();renderRequestPresets();toast('Preset saved');
 });
@@ -582,7 +584,15 @@ function setPlaygroundExperimental(model) {
   select.hidden=!levels.length;
 }
 function buildRequest() {
-  const questions={}; for(const card of document.querySelectorAll('.question')) { const [name,q]=parseQuestionCard(card); questions[name]=q; }
+  const questions={}, names=new Set();
+  for(const card of document.querySelectorAll('.question')) {
+    const input=$('.q-name',card), name=input.value, duplicate=names.has(name), invalid=!name.trim()||duplicate;
+    input.setCustomValidity(!name.trim()?'Enter a question name.':duplicate?'Question names must be unique.':'');
+    if(invalid)input.setAttribute('aria-invalid','true');else input.removeAttribute('aria-invalid');
+    names.add(name);
+    const [,q]=parseQuestionCard(card);if(!invalid)questions[name]=q;
+  }
+  if([...document.querySelectorAll('.q-name')].some(input=>!input.checkValidity()))throw new Error('Question names must be non-blank and unique.');
   const stateInput=$('#stateInput'), state=stateInput._requestState;
   return {state:state!==undefined&&stateInput.value===state.text?state.value:parseStructuredText(stateInput.value),questions,...requestOptionFields(),...mediaRequestFields()};
 }
@@ -599,10 +609,12 @@ function syncRequest(force=false, keys=['media','detail']) {
     textarea.value = JSON.stringify(request, null, 2);
     showMediaError();
   } else if (force || !$('#editJsonToggle').checked) {
-    textarea.value = JSON.stringify(buildRequest(), null, 2);
+    try { textarea.value = JSON.stringify(buildRequest(), null, 2); }
+    catch (e) { showMediaError(e.message); }
   }
 }
-function addQuestion(name='question', q={type:'choice',instructions:'',criteria:{}}) {
+function addQuestion(name, q={type:'choice',instructions:'',criteria:{}}) {
+  if(name===undefined){const names=new Set([...document.querySelectorAll('.q-name')].map(input=>input.value));name='question';for(let i=2;names.has(name);i++)name=`question${i}`;}
   const card=document.createElement('div'); card.className='question';
   const type=QUESTION_TYPES.includes(q.type)?q.type:'choice';
   card._extra=extraOf(q,type); card._type=type;
@@ -634,15 +646,54 @@ function addQuestion(name='question', q={type:'choice',instructions:'',criteria:
   $('#questions').append(card); syncRequest();
 }
 function setRequest(req) {
+  mediaSelection++;
+  selectedMedia.forEach(item=>URL.revokeObjectURL(item.url));selectedMedia=[];$('#mediaInput').value='';renderSelectedMedia();
+  const preserveJson=()=>{
+    $('#editJsonToggle').checked=true;$('#editJsonArea').hidden=false;$('#builder').hidden=true;
+    $('#requestJson').value=JSON.stringify(req,null,2);
+    showMediaError('This request contains fields or values the Playground builder cannot edit. It remains in Edit JSON mode.');
+  };
+  if(!req||typeof req!=='object'||Array.isArray(req)||!Object.hasOwn(req,'state')||req.state==null||
+     !Object.hasOwn(req,'questions')||!req.questions||typeof req.questions!=='object'||Array.isArray(req.questions)){preserveJson();return;}
+  const known=new Set(['state','questions','facts','lang','think','think_text','early_exit','media','detail','model']);
+  const media=Array.isArray(req.media)?req.media:[];
+  let restored=[];
+  try {
+    if(Object.keys(req).some(key=>!known.has(key))||
+       Object.values(req.questions).some(q=>!q||typeof q!=='object'||Array.isArray(q)||!QUESTION_TYPES.includes(q.type))||
+       (Object.hasOwn(req,'media')&&!Array.isArray(req.media))||
+       media.some(item=>!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).some(k=>!['type','data'].includes(k))||
+         !['image','audio'].includes(item.type)||typeof item.data!=='string'||!(/^(?:[A-Za-z0-9+/]+={0,2}|data:[^,]+;base64,[A-Za-z0-9+/]+={0,2})$/).test(item.data))||
+       (Object.hasOwn(req,'detail')&&(!['default','high'].includes(req.detail)||!media.some(item=>item.type==='image')))||
+       (Object.hasOwn(req,'facts')&&req.facts!=='auto')||(Object.hasOwn(req,'lang')&&!['auto','pl','en'].includes(req.lang))||
+       (Object.hasOwn(req,'think')&&!['','off','force'].includes(req.think))||(Object.hasOwn(req,'think_text')&&typeof req.think_text!=='boolean')||
+       (Object.hasOwn(req,'model')&&![...$('#playgroundModel').options].some(o=>o.value===req.model))||
+       (Object.hasOwn(req,'early_exit')&&!([...$('#earlyExitSelect').options].some(o=>o.value===req.early_exit))))throw new Error();
+    for(const item of media){
+      const match=item.data.match(/^data:([^;]+);base64,(.*)$/),mime=match?.[1]|| (item.type==='image'?'image/png':'audio/wav'),data=match?.[2]||item.data;
+      const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0)),file=new File([bytes],`replay.${item.type==='image'?'png':'wav'}`,{type:mime});
+      restored.push({kind:item.type,data,file,url:URL.createObjectURL(file)});
+    }
+  } catch {
+    restored.forEach(item=>URL.revokeObjectURL(item.url));
+    preserveJson();
+    return;
+  }
+  selectedMedia=restored;renderSelectedMedia();
+  $('#editJsonToggle').checked=false;$('#editJsonArea').hidden=true;$('#builder').hidden=false;showMediaError();
+  if(req.model&&[...$('#playgroundModel').options].some(o=>o.value===req.model)){
+    selectedModel=req.model;localStorage.setItem('basal-ui.model',selectedModel);$('#playgroundModel').value=selectedModel;
+    const model=readyModels().find(m=>m.id===selectedModel);setPlaygroundMedia(model?.media||[]);setPlaygroundExperimental(model);
+  }
   const stateInput=$('#stateInput');
   stateInput.value=typeof req.state==='string'?req.state:JSON.stringify(req.state??'',null,2);
   stateInput._requestState={text:stateInput.value,value:structuredClone(req.state??'')};
   setChecked($('#factsToggle'),req.facts==='auto'); $('#langSelect').value=['pl','en'].includes(req.lang)?req.lang:'auto';
   $('#thinkSelect').value=['off','force'].includes(req.think)?req.think:''; setChecked($('#thinkTextToggle'),req.think_text===true);
   if([...$('#earlyExitSelect').options].some(o=>o.value===req.early_exit))$('#earlyExitSelect').value=req.early_exit; else $('#earlyExitSelect').value='';
+  $('#mediaDetail').value=req.detail||'default';
   $('#questions').innerHTML='';
   for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
-  if(!Object.keys(req.questions||{}).length) addQuestion();
   syncRequest(true);
 }
 function resultHeadline(name, answer, requestQuestion) {
@@ -826,11 +877,11 @@ function renderResults(data, request) {
 function showDecideError(message) { $('#decideError').textContent=message; $('#decideError').hidden=false; }
 async function sendDecision() {
   $('#decideError').hidden=true; $('#results').innerHTML='';
-  let request;
-  try { request=$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
-  catch(e) { showDecideError(`Invalid JSON: ${e.message}`); return; }
+  let request;const jsonMode=$('#editJsonToggle').checked;
+  try { request=jsonMode?JSON.parse($('#requestJson').value):buildRequest(); }
+  catch(e) { showDecideError(jsonMode?`Invalid JSON: ${e.message}`:e.message);if(!jsonMode)$('.q-name:invalid')?.reportValidity();return; }
   if(!request||typeof request!=='object'||Array.isArray(request)) { showDecideError('The request must be a JSON object.'); return; }
-  if(!$('#editJsonToggle').checked){
+  if(!jsonMode){
     const invalid=[...document.querySelectorAll('.question')].filter(card=>card._error);
     if(invalid.length){showDecideError(invalid.map(card=>`${$('.q-name',card).value||'question'}: ${card._error}`).join('\n'));return;}
   }
@@ -1511,19 +1562,22 @@ async function toggleHistory(row) {
 }
 function historyDetailRow(x) {
   const tr=document.createElement('tr'); tr.className='history-detail';
-  tr.innerHTML='<td colspan="7"><div class="history-panes"><div><strong>Request</strong><pre class="history-request"></pre></div><div><strong>Response</strong><pre class="history-response"></pre></div></div><div class="controls"><button type="button" class="copy-request">Copy request</button><button type="button" class="replay-request">Replay in Playground</button></div></td>';
+  tr.innerHTML='<td colspan="7"><div class="history-panes"><div><strong>Recorded request</strong><pre class="history-request"></pre></div><div><strong>Response</strong><pre class="history-response"></pre></div></div><div class="controls"><button type="button" class="copy-request">Copy request</button><button type="button" class="replay-request">Replay in Playground</button></div><div class="history-replay-error error-box" role="alert" hidden></div></td>';
   $('.history-request',tr).textContent=JSON.stringify(x.request,null,2);
   $('.history-response',tr).textContent=JSON.stringify(x.response,null,2);
   $('.copy-request',tr).onclick=()=>copyText(JSON.stringify(x.request,null,2),'Request copied');
-  $('.replay-request',tr).onclick=()=>replayRequest(x);
+  const replay=$('.replay-request',tr), error=$('.history-replay-error',tr);
+  if(x.replay_error){replay.disabled=true;error.textContent=x.replay_error;error.hidden=false;}
+  replay.onclick=()=>replayRequest(x);
   return tr;
 }
 function replayRequest(x) {
+  if(x.replay_error||!x.replay_request){toast(x.replay_error||'This request cannot be replayed.','error');return;}
   if(!readyModels().some(m=>m.id===x.model)){toast(`Model ${x.model} is not loaded`,'error');return;}
   selectedModel=x.model; localStorage.setItem('basal-ui.model',selectedModel);
   $('#playgroundModel').value=selectedModel; setPlaygroundMedia(readyModels().find(m=>m.id===selectedModel)?.media||[]);
-  setChecked($('#editJsonToggle'),true); $('#builder').hidden=true; $('#editJsonArea').hidden=false;
-  $('#requestJson').value=JSON.stringify(x.request,null,2);
+  $('#results').innerHTML='';$('#rawDetails').hidden=true;$('#decideError').hidden=true;
+  setRequest(x.replay_request);
   showView('playground',true);
 }
 function resetHistory(){historyAfter=null;historyBefore=null;loadHistory('reset');}

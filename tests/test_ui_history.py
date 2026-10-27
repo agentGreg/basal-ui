@@ -1,6 +1,6 @@
 import pytest
 
-from basal.ui.history import History, make_record
+from basal.ui.history import History, make_record, replay_fields
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +63,30 @@ def test_media_bytes_are_replaced_by_their_size_and_states_are_previewed():
     assert body["images"][0]["data"] == "QUJD"  # the caller's body is untouched
     assert len(r["state_preview"]) == 160 and r["state_preview"].startswith('{"text": "xxx')
     assert (r["status"], r["answers"], r["response"]) == (422, {}, {"error": "bad"})
+
+
+def test_decisions_api_history_has_a_playground_replay_without_changing_recorded_request():
+    request = {"model": "m", "input": "A state", "questions": [{"type": "choice", "name": "q",
+               "instructions": "Choose", "choices": [{"value": "yes"}, {"value": "no"}]}], "store": True}
+    record_ = make_record("m", "api", request, 200, {}, 1.0)
+    fields = replay_fields(record_["request"])
+    assert record_["request"] == request
+    assert fields == {"replay_request": {"state": "A state", "questions": {"q": {
+        "type": "choice", "instructions": "Choose", "criteria": {"yes": None, "no": None}}}, "model": "m"},
+        "replay_error": None}
+
+
+def test_redacted_media_blocks_history_replay_with_explanation():
+    request = {"model": "m", "input": [{"role": "user", "content": [{"type": "input_image",
+               "image_url": "data:image/png;base64," + "A" * 100}]}], "questions": [{"type": "predicate",
+               "instructions": "Is this a cat?"}]}
+    record_ = make_record("m", "api", request, 200, {}, 1.0)
+    fields = replay_fields(record_["request"])
+    assert fields["replay_request"] is None
+    assert "original media attachments" in fields["replay_error"]
+    text = replay_fields({"state": "The case says <120 bytes> but has no attachment.", "questions": {}})
+    assert text["replay_request"]["state"].endswith("<120 bytes> but has no attachment.")
+    assert text["replay_error"] is None
 
 
 def test_records_flag_deferred_answers_and_truncated_states():

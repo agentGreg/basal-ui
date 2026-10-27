@@ -325,6 +325,7 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
         assert items[0]["answers"] == {"q": {"type": "choice", "best": "a", "confidence": 0.75}}
         record = client.get(f"/api/history/{items[0]['id']}").json()
         assert record["request"] == {"model": "mini", "state": "hello", "images": [{"data": "<8 bytes>"}]}
+        assert record["replay_error"] and record["replay_request"] is None
         assert client.get("/api/history/h_missing").status_code == 404
         stats = client.get("/api/stats").json()["models"]["mini"]
         assert (stats["requests"], stats["questions"], stats["input_tokens"], stats["avg_best_prob"]) == (1, 1, 12, 0.75)

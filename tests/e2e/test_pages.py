@@ -76,6 +76,63 @@ def test_the_playground_builds_sends_and_renders_each_question_type(page, text_m
         sync_api.expect(articles.first.locator("tbody tr")).to_have_count(3)
 
 
+def test_playground_request_names_media_and_history_replay_are_lossless_until_send(page, text_model):
+    view(page, "playground")
+    page.evaluate("() => { addQuestion(); addQuestion(); }")
+    assert page.evaluate("() => [...document.querySelectorAll('.q-name')].slice(-2).map(x => x.value)") == ["question2", "question3"]
+
+    request = {"model": text_model["id"], "state": "inspect", "questions": {"q": {"type": "choice", "instructions": "Choose",
+               "criteria": {"a": None, "b": None}}}, "media": [{"type": "image", "data": "aGVsbG8="}], "detail": "high"}
+    page.evaluate("r => setRequest(r)", request)
+    assert page.evaluate("() => selectedModel") == text_model["id"]
+    assert page.evaluate("() => [selectedMedia.length, $('#mediaDetail').value, buildRequest().media[0].data]") == [1, "high", "aGVsbG8="]
+    unsupported = {**request, "vendor_extension": {"keep": True}}
+    page.evaluate("r => setRequest(r)", unsupported)
+    assert page.locator("#editJsonToggle").is_checked()
+    assert page.evaluate("() => JSON.parse($('#requestJson').value).vendor_extension") == {"keep": True}
+    assert page.evaluate("() => selectedMedia.length") == 0
+    for unsupported_value in ({"media": "opaque"}, {"media": [{"type": "image", "data": "aGVsbG8=", "name": "x.png"}]},
+                              {"lang": "fr"}):
+        page.evaluate("([base,extra]) => setRequest({...base,...extra})", [request, unsupported_value])
+        assert page.locator("#editJsonToggle").is_checked()
+        assert page.evaluate("() => JSON.parse($('#requestJson').value)") == {**request, **unsupported_value}
+
+    page.evaluate("r => setRequest(r)", {"state": "inspect", "questions": {"q": request["questions"]["q"],
+                  "q2": request["questions"]["q"]}})
+    page.locator(".q-name").first.fill("same")
+    page.locator(".q-name").nth(1).fill("same")
+    decide_calls=[]
+    def reject_decision(route):
+        decide_calls.append(1)
+        route.fulfill(status=500, body="unexpected send")
+    page.route("**/api/decide", reject_decision)
+    page.click("#sendButton")
+    sync_api.expect(page.locator("#decideError")).to_contain_text("non-blank and unique")
+    assert page.locator(".q-name:invalid").count() == 1
+    assert not decide_calls
+
+    page.locator(".q-name").nth(1).fill("")
+    page.click("#sendButton")
+    sync_api.expect(page.locator("#decideError")).to_contain_text("non-blank and unique")
+    assert not decide_calls
+    preset_calls=[]
+    def count_presets(route):
+        if route.request.method=="PUT":
+            preset_calls.append(route.request.method)
+        route.continue_()
+    page.route("**/api/presets", count_presets)
+    page.click("#saveRequestPreset")
+    page.fill("#presetName", "invalid")
+    page.click("#presetNameSave")
+    assert "PUT" not in preset_calls
+
+    page.evaluate("([model,r]) => replayRequest({model,replay_request:r,replay_error:null})",
+                  [text_model["id"], {"state": "replayed", "questions": {"q": request["questions"]["q"]}}])
+    assert page.locator("#stateInput").input_value() == "replayed"
+    assert page.locator("#results article.answer").count() == 0
+    assert not decide_calls
+
+
 RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
           "questions": {"category": {"type": "classify", "option_keys": "show",
                                      "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}]},
@@ -159,6 +216,7 @@ def test_edit_json_rebuilds_the_builder_and_keeps_invalid_json_open(page):
 def test_the_builder_switches_types_and_edits_a_cost_matrix(page):
     view(page, "playground")
     page.evaluate("() => setRequest({state: 'Paczka nie dotarła.', questions: {}})")
+    page.evaluate("() => addQuestion()")
     card = page.locator(".question").first
     card.locator(".q-type").select_option("act")
     card.locator('[data-f="criteria"]').fill("late: opóźnienie\nlost: zaginięcie")
