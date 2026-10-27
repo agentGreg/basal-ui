@@ -192,6 +192,7 @@ def test_server_templates_have_matching_polish_placeholders():
             assert code in translated
             assert set(re.findall(r"\{(\w+)\}", template)) == set(re.findall(r"\{(\w+)\}", translated[code]))
 
+
 def test_pico_is_recurrent_and_follows_basal_serve_default_modes():
     pico = variant("Remek/basal-omni-pico", size=1_700_000_000)
     assert pico.recurrent and pico.experimental and pico.media == ()

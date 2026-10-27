@@ -880,6 +880,15 @@ const PL = {
   "code:phase_warm_up": "rozgrzewka",
   "code:phase_sequential": "sekwencyjnie",
   "code:phase_concurrent": "równolegle",
+  // the same in Polish (listed so every string the frontend shows is reviewed)
+  "/path/to/labelled.jsonl": "/ścieżka/do/labelled.jsonl",
+  "Benchmark (preset)": "Benchmark (preset)",
+  "Format": "Format",
+  "Media": "Media",
+  "Model": "Model",
+  "README": "README",
+  "audio": "audio",
+  "p95 ms": "p95 ms",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],

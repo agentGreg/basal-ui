@@ -244,6 +244,45 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
                     .filter(has_text=options_target["mode"]["reason"]).first).to_be_visible()
 
 
+UNTRANSLATED = """() => {  // visible text and labels that are a key of the Polish dictionary, shown in English
+  const shown = el => el && el.getClientRects().length > 0;
+  const english = s => Object.hasOwn(PL, s) && PL[s] !== s;
+  const out = new Set(), walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = walk.nextNode());) { const s = n.nodeValue.trim(); if (s && shown(n.parentElement) && english(s)) out.add(s); }
+  for (const a of ['title', 'placeholder', 'aria-label'])
+    for (const el of document.querySelectorAll(`[${a}]`)) { const s = el.getAttribute(a).trim(); if (shown(el) && english(s)) out.add(`@${a}: ${s}`); }
+  return [...out];
+}"""
+
+
+def test_polish_ui_leaves_no_frontend_text_in_english(page, text_model):
+    page.evaluate("localStorage.setItem('basal-ui.lang', 'pl')")
+    page.reload()
+    page.wait_for_function("() => typeof statusCache !== 'undefined' && modelData.length > 0")
+    assert page.evaluate("() => [document.documentElement.lang, LANG]") == ["pl", "pl"]
+    left = {}
+    for name in VIEWS:
+        page.click(f'.side-nav [data-view="{name}"]')
+        sync_api.expect(page.locator(f'section.view[data-page="{name}"]').first).to_be_visible()
+        page.wait_for_timeout(300)  # views render their lists after their own requests
+        left[name] = page.evaluate(UNTRANSLATED)
+        if name == "models":
+            for tab in ("#suggestedTab", "#allModelsTab"):
+                page.click(tab)
+                left[f"models {tab}"] = page.evaluate(UNTRANSLATED)
+    page.click('.side-nav [data-view="models"]')
+    page.locator(f'#modelsTable .options-model[data-id="{text_model["id"]}"]').click()  # ⚙ Setup dialog
+    sync_api.expect(page.locator("#loadOptions")).to_be_visible()
+    left["load options"] = page.evaluate(UNTRANSLATED)
+    page.click("#optionsCancel")
+    page.evaluate("id => openModelCard(id)", text_model["id"])
+    sync_api.expect(page.locator("#modelCardDialog")).to_be_visible()
+    left["model card"] = page.evaluate(UNTRANSLATED)
+    assert not {k: v for k, v in left.items() if v}, left
+    assert page.locator(".side-nav [data-view='manager']").inner_text().strip() == "Menedżer modeli"
+
+
+
 RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
           "questions": {"category": {"type": "classify", "option_keys": "show",
                                      "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}]},
