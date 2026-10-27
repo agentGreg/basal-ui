@@ -1,6 +1,6 @@
 # Preparing a benchmark set
 
-basal-ui's **Benchmark** (Models → Loaded) and `basal-loadtest --questions` read simple JSONL items: one JSON object per
+basal-ui's **Benchmark** (Model manager → Loaded) and `basal-loadtest --questions` read simple JSONL items: one JSON object per
 line, each a state, one question and its options.
 
 ```json
