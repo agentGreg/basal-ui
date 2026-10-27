@@ -526,6 +526,11 @@ def test_batch_view_runs_a_file_and_lists_the_answers(page, text_model, tmp_path
     sync_api.expect(page.locator("#batchSummary")).to_contain_text("20 items")
 
 
+# the language buttons reload the page: until the new page's scripts run, LANG and statusCache do not exist
+SWITCHED = """lang => typeof LANG !== 'undefined' && typeof statusCache !== 'undefined' && LANG === lang
+  && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0"""
+
+
 def test_playground_builder_draft_survives_language_changes_once(page, text_model):
     view(page, "playground")
     request = {
@@ -538,7 +543,7 @@ def test_playground_builder_draft_survives_language_changes_once(page, text_mode
     }
     page.evaluate("r => setRequest(r)", request)
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    page.wait_for_function(SWITCHED, arg="pl")
     assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
         text_model["id"], "Review this order", True, "en"
     ]
@@ -548,7 +553,7 @@ def test_playground_builder_draft_survives_language_changes_once(page, text_mode
     assert page.evaluate("() => selectedMedia.length") == 0
     sync_api.expect(page.locator("#mediaError")).to_contain_text("dołącz media ponownie")
     page.locator('[data-lang-choice="en"]').click()
-    page.wait_for_function("() => LANG === 'en' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    page.wait_for_function(SWITCHED, arg="en")
     assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
         text_model["id"], "Review this order", True, "en"
     ]
@@ -566,7 +571,7 @@ def test_playground_edit_json_draft_keeps_invalid_text(page):
     text = '{"state": "unfinished", "questions": ['
     page.fill("#requestJson", text)
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    page.wait_for_function(SWITCHED, arg="pl")
     sync_api.expect(page.locator("#requestJson")).to_have_value(text)
     assert page.locator("#editJsonToggle").is_checked()
     page.reload()
@@ -591,7 +596,7 @@ def test_playground_incomplete_builder_draft_survives_language_switch_once(page,
         page.fill('.question [data-f="schema"]', '{"unfinished":')
 
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    page.wait_for_function(SWITCHED, arg="pl")
     if draft_case == "blank-name":
         sync_api.expect(page.locator(".question .q-name")).to_have_value("")
     elif draft_case == "duplicate-names":
@@ -618,7 +623,7 @@ def test_playground_language_draft_preserves_blank_act_matrix_rows(page):
     page.locator(".question tbody tr").nth(1).locator(".cost-cell").nth(1).fill("23")
 
     page.locator('[data-lang-choice="pl"]').click()
-    page.wait_for_function("() => LANG === 'pl' && !sessionStorage.getItem('basal-ui.language-draft') && statusCache && modelData.length > 0")
+    page.wait_for_function(SWITCHED, arg="pl")
     assert page.locator(".question .cost-action").evaluate_all("(els) => els.map(el => el.value)") == ["", "custom"]
     assert page.locator(".question tbody tr").evaluate_all("(rows) => rows.map(row => [...row.querySelectorAll('.cost-cell')].map(cell => cell.value))") == [
         ["0", "10"], ["17", "23"]

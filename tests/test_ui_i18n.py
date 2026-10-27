@@ -1,6 +1,7 @@
 """The Polish dictionary of basal-ui (basal/ui/static/i18n.js) against the strings the frontend passes to t() / tp()."""
 import json
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 STATIC = Path(__file__).parents[1] / "basal/ui/static"
@@ -55,3 +56,37 @@ def test_polish_translations_keep_placeholders_and_are_safe_in_html():
         assert placeholders(value) == placeholders(key), key
         assert not set('<>&"') & set(value), key  # t() does not escape and its output goes into innerHTML
         assert value.strip(), key
+
+
+SAME_IN_POLISH = {  # names, code, paths and keys: translateStatic leaves them as they are
+    "basal", "basal-viz", "API", "Python", "curl", "TypeSafe SDK", "OpenAI SDK", "LiteLLM", "Port", "System",
+    "/v1/systemone", "docs/SERVING.md#inference-on-a-jsonl-file", '{"state", "question", "options", "gold"?}',
+    "Alt + 0", "Alt + 1–9", "Ctrl/⌘ + Enter", "https://app.example.com", "~/basal-decisions.jsonl",
+}
+
+
+class StaticTexts(HTMLParser):
+    """The text nodes and title / placeholder / aria-label values translateStatic looks up in index.html."""
+    def __init__(self):
+        super().__init__()
+        self.texts, self.code = set(), 0
+
+    def handle_starttag(self, tag, attrs):
+        self.code += tag in ("script", "style")
+        self.texts |= {v.strip() for k, v in attrs if k in ("title", "placeholder", "aria-label") and v and v.strip()}
+
+    def handle_endtag(self, tag):
+        self.code -= tag in ("script", "style")
+
+    def handle_data(self, data):
+        if not self.code and data.strip():
+            self.texts.add(data.strip())
+
+
+def test_every_static_text_of_the_page_has_a_polish_translation():
+    page = StaticTexts()
+    page.feed((STATIC / "index.html").read_text())
+    assert len(page.texts) > 150
+    pl = dictionary("PL")
+    missing = sorted(t for t in page.texts - SAME_IN_POLISH if t not in pl and re.search(r"[A-Za-z]{2}", t))
+    assert not missing, "\n".join(missing)

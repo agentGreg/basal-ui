@@ -226,19 +226,10 @@ class Manager:
                                        'estimated_memory_bytes': needed,
                                        'mode_estimates': {mode: estimate(v, hw, mode).est_memory_bytes for mode in allowed} if needed else {}})
                     models.sort(key=lambda m: (m['estimated_memory_bytes'] is None, m['estimated_memory_bytes'] or 0, m['id']))
-                if reason:
-                    reason_text = reason
-                    reason_code, reason_params = _message_fields(reason)
-                elif check['error']:
-                    reason_text = check['error']
-                    reason_code, reason_params = _message_fields(reason_text)
-                elif check['missing']:
-                    reason_text = BACKEND_TEMPLATES['backend_reason_missing'].format(
-                        packages=', '.join(check['missing']))
-                    reason_code, reason_params = _message_fields(reason_text)
-                else:
-                    reason_text = BACKEND_TEMPLATES['backend_reason_unverified']
-                    reason_code, reason_params = _message_fields(reason_text)
+                reason_text = reason or check['error'] or (
+                    BACKEND_TEMPLATES['backend_reason_missing'].format(packages=', '.join(check['missing']))
+                    if check['missing'] else BACKEND_TEMPLATES['backend_reason_unverified'])
+                reason_code, reason_params = _message_fields(reason_text)
                 entries.append({'id': key, 'name': name, 'status': status,
                                 'status_code': f'backend_status_{status}', 'status_params': {},
                                 'compatible': reason is None, 'reason': reason_text,
