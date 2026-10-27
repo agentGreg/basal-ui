@@ -1255,12 +1255,17 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         except ValueError:  # options saved by another basal-ui version
             merged = dict(load_options.DEFAULTS)
         family_ok = variant.family == "basal-2.0" and variant.tier == "4.5B"
+        packed_reason = load_options.mlx_packed_unavailable(variant, current)
+        packed_code, packed_params = load_options.option_message_fields(packed_reason)
+        think_reason = None if family_ok else load_options.THINK_REASON
+        think_code, think_params = load_options.option_message_fields(think_reason)
         return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
                 "saved": bool(saved), "defaults": load_options.DEFAULTS,
                 "media_modes": load_options.available_media_modes(assessment, current),
-                "mlx_packed_reason": load_options.mlx_packed_unavailable(variant, current),
-                "think": {"model": family_ok, "vllm": "vllm" in current.engines,
-                          "reason": None if family_ok else load_options.THINK_REASON}}
+                "mlx_packed_reason": packed_reason, "mlx_packed_reason_code": packed_code,
+                "mlx_packed_reason_params": packed_params,
+                "think": {"model": family_ok, "vllm": "vllm" in current.engines, "reason": think_reason,
+                          "reason_code": think_code, "reason_params": think_params}}
 
     @app.put("/api/models/options")
     def put_model_options(body: dict = Body(...)):

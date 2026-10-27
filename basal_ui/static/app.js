@@ -1500,8 +1500,9 @@ function selectedOptionMode() { return $('#optionsForm input[name=optMode]:check
 function updateOptionVisibility() {
   const mode=selectedOptionMode(), think=optionsState.data.think||{};
   const packed=$('#opt-mlx_packed'), packedReason=optionsState.data.mlx_packed_reason;
+  const packedReasonText=ts(packedReason,optionsState.data.mlx_packed_reason_code,optionsState.data.mlx_packed_reason_params);
   packed.disabled=Boolean(packedReason)||optionsState.media||!['mlx','mlx-q8'].includes(mode);
-  $('#optPackedNote').textContent=mode==='mps'?t('Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.'):packedReason||t('MLX packed is off by default. Measured on an Apple M5 Pro (basal 2.3.1, #36): basal-2.0-4.5B 134 → 88 ms per two-order decision, mini 47 → 31 ms, the same decisions as the KV-cache path in bf16 (mlx-q8 on the 4.5B: 0.955 instead of 0.977 agreement). Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path.');
+  $('#optPackedNote').textContent=mode==='mps'?t('Packed PyTorch execution: choose Device cpu for the CPU path, or mps for Apple Silicon. The CPU default remains eager.'):packedReasonText||t('MLX packed is off by default. Measured on an Apple M5 Pro (basal 2.3.1, #36): basal-2.0-4.5B 134 → 88 ms per two-order decision, mini 47 → 31 ms, the same decisions as the KV-cache path in bf16 (mlx-q8 on the 4.5B: 0.955 instead of 0.977 agreement). Compatible Llama groups with prefix plus all suffixes up to 512 tokens use packed rows; longer groups keep the KV-cache path.');
   $('#opt-device option[value=cuda]').disabled=mode==='mps';
   $('#optionsForm').querySelectorAll('[data-modes]').forEach(x=>x.hidden=!x.dataset.modes.split(' ').includes(mode));
   // thinking: basal-2.0 4.5B with vLLM (here, in another environment, or a running server); early exit: fast-exit
@@ -1510,7 +1511,7 @@ function updateOptionVisibility() {
   Object.entries(OPTION_FIELDS).filter(([,f])=>f.think).forEach(([k])=>{$(`[data-opt="${k}"]`).hidden=!thinkBox.checked;});
   exitBox.disabled=mode!=='fast-exit'; if(exitBox.disabled)exitBox.value='off';
   const notes=[];
-  if(!think.model)notes.push(think.reason);
+  if(!think.model)notes.push(ts(think.reason,think.reason_code,think.reason_params));
   else if(!think.vllm)notes.push(t('vLLM is not installed in basal-ui’s environment: give the Python of one that has it, or the URL of a running think server.'));
   if(mode!=='fast-exit')notes.push(t('Early exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on a CUDA GPU).'));
   $('#optExperimentalNote').textContent=notes.join(' ');

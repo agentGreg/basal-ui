@@ -228,7 +228,21 @@ def available_media_modes(assessment, hw) -> list[dict]:
              "reason_code": vllm_message[0], "reason_params": vllm_message[1], "default": False}]
 
 
-THINK_REASON = "thinking is available for basal-2.0 4.5B with basal[vllm] (docs/THINKING.md)"
+OPTION_TEMPLATES = {
+    "think_unavailable": "thinking is available for basal-2.0 4.5B with basal[vllm] (docs/THINKING.md)",
+    "think_setup": "thinking is available for basal-2.0 4.5B with basal[vllm] (docs/THINKING.md); or give the Python of an environment with vLLM, or a running think server's URL",
+    "mlx_packed_device": "MLX packed needs Apple Silicon with basal[mlx]",
+    "mlx_packed_format": "MLX packed needs a Llama basal-1.x or basal-2.0 model in bf16 or MLX format",
+    "mlx_packed_mode": "--mlx-packed needs --mode mlx or mlx-q8 without media",
+}
+THINK_REASON = OPTION_TEMPLATES["think_unavailable"]
+
+
+def option_message_fields(text):
+    for code, template in OPTION_TEMPLATES.items():
+        if text == template:
+            return code, {}
+    return None, None
 
 
 def think_unavailable(v, hw, options=None) -> str | None:
@@ -238,15 +252,15 @@ def think_unavailable(v, hw, options=None) -> str | None:
         return THINK_REASON
     options = options or {}
     if "vllm" not in hw.engines and not (options.get("think_python") or options.get("think_url")):
-        return THINK_REASON + "; or give the Python of an environment with vLLM, or a running think server's URL"
+        return OPTION_TEMPLATES["think_setup"]
     return None
 
 
 def mlx_packed_unavailable(v, hw):
     if hw.platform != "apple" or "mlx" not in hw.engines:
-        return "MLX packed needs Apple Silicon with basal[mlx]"
+        return OPTION_TEMPLATES["mlx_packed_device"]
     if v.family not in ("basal-1.0", "basal-1.5", "basal-2.0") or not (v.port == "bf16" or v.port.startswith("MLX")):
-        return "MLX packed needs a Llama basal-1.x or basal-2.0 model in bf16 or MLX format"
+        return OPTION_TEMPLATES["mlx_packed_format"]
     return None
 
 

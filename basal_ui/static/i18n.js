@@ -841,6 +841,11 @@ const PL = {
   "code:backend_setup_default": "Polecenia dotyczą środowiska tej aplikacji. Po instalacji uruchom ponownie basal-ui i wybierz Odśwież.",
   "code:backend_setup_separate": "Użyj osobnego środowiska: te pakiety instalują własne zależności PyTorch. Zainstaluj tam ten sam fork Basal z zależnościami UI i uruchamiaj z niego basal-ui. Instalacja nie zmienia tego zestawienia.",
   "code:backend_setup_platform": "Użyj instalatora platformy z dokumentacji, aby dobrać właściwą kompilację PyTorch/ROCm; nie zastępuj działającej wersji GPU ogólnym pakietem.",
+  "code:think_unavailable": "thinking jest dostępne dla basal-2.0 4.5B z basal[vllm] (docs/THINKING.md)",
+  "code:think_setup": "thinking jest dostępne dla basal-2.0 4.5B z basal[vllm] (docs/THINKING.md); podaj też Python środowiska z vLLM lub adres działającego serwera think",
+  "code:mlx_packed_device": "MLX packed wymaga Apple Silicon z basal[mlx]",
+  "code:mlx_packed_format": "MLX packed wymaga modelu Llama basal-1.x lub basal-2.0 w formacie bf16 albo MLX",
+  "code:mlx_packed_mode": "--mlx-packed wymaga --mode mlx lub mlx-q8 bez mediów",
 };  // 'English text': 'tekst po polsku'
 const PL_PLURAL = {
   "Bundled examples ({n} item)": ["Przykłady dołączone ({n} element)", "Przykłady dołączone ({n} elementy)", "Przykłady dołączone ({n} elementów)"],

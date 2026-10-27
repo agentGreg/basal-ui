@@ -180,12 +180,13 @@ def test_suggestion_codes_reproduce_english_text_and_match_template_params():
 
 
 def test_server_templates_have_matching_polish_placeholders():
-    from basal.ui import backends
+    from basal.ui import backends, options
     from basal.ui.jobs import PHASE_TEMPLATES
 
     source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
     translated = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))
-    tables = (catalog.ASSESSMENT_TEMPLATES, backends.BACKEND_TEMPLATES, PHASE_TEMPLATES)
+    tables = (catalog.ASSESSMENT_TEMPLATES, backends.BACKEND_TEMPLATES,
+              options.OPTION_TEMPLATES, PHASE_TEMPLATES)
     for table in tables:
         for code, template in table.items():
             assert code in translated

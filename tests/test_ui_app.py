@@ -103,6 +103,17 @@ def test_model_api_includes_reason_and_suggestion_codes(tmp_path):
         assert card["why"] == catalog.ASSESSMENT_TEMPLATES[card["why_code"]].format(**card["why_params"])
 
 
+def test_model_options_include_codes_for_packed_and_think_reasons(tmp_path):
+    app, _ = app_for(tmp_path, [MINI])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        payload = client.get("/api/models/options", params={"id": "mini"}).json()
+    assert payload["mlx_packed_reason"] == "MLX packed needs Apple Silicon with basal[mlx]"
+    assert payload["mlx_packed_reason_code"] == "mlx_packed_device"
+    assert payload["mlx_packed_reason_params"] == {}
+    assert payload["think"]["reason_code"] == "think_unavailable"
+    assert payload["think"]["reason_params"] == {}
+
+
 def test_load_with_media_requires_engine_and_echoes_status(tmp_path, monkeypatch, instant_start):
     app, _ = app_for(tmp_path, [OMNI])
     with TestClient(app, base_url="http://127.0.0.1") as client:
