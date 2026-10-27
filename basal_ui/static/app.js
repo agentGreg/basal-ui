@@ -50,7 +50,7 @@ document.addEventListener('keydown',e=>{
   const typing=e.target.matches('input,textarea,select,[contenteditable=true]');
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$('#playground').hidden){e.preventDefault();$('#sendButton').click();}
   else if(!typing&&e.key==='?'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();$('#shortcutsDialog').showModal();}
-  else if(e.altKey&&!e.ctrlKey&&!e.metaKey&&/^Digit[1-9]$/.test(e.code)){const nav=[...document.querySelectorAll('.side-nav [data-view]')],target=nav[Number(e.code.slice(5))-1];if(target){e.preventDefault();showView(target.dataset.view,true);}}
+  else if(e.altKey&&!e.ctrlKey&&!e.metaKey&&/^Digit[0-9]$/.test(e.code)){const target=document.querySelector(`.side-nav [data-shortcut="${e.code.slice(5)}"]`);if(target){e.preventDefault();showView(target.dataset.view,true);}}
 });
 document.addEventListener('change',event=>{
   if(event.target.matches('input[type=checkbox]'))event.target.setAttribute('aria-checked',String(event.target.checked));
@@ -61,7 +61,8 @@ document.addEventListener('keydown',event=>{
     event.target.dispatchEvent(new Event('change',{bubbles:true}));
   }
 });
-document.querySelectorAll('.side-nav [data-view]').forEach((b,i)=>b.dataset.shortcut=String(i+1));
+document.querySelectorAll('.side-nav [data-view]:not([data-view=backends])').forEach((b,i)=>b.dataset.shortcut=String(i+1));
+$('.side-nav [data-view=backends]').dataset.shortcut='0';
 function setChecked(input, value) {
   input.checked=Boolean(value);
   input.setAttribute('aria-checked',String(input.checked));
@@ -87,6 +88,7 @@ function familyOrder(family) {
   return ({'basal-2.0':6,'basal-omni-1.1':5,'basal-omni-1.0':4,'basal-omni':3,'basal-1.5':2,'basal-1.0':1})[family] || 0;
 }
 function tierOrder(tier) { return ({pico:0,mini:1,'1.5B':2,'4.5B':3,max:4,ultra:5})[tier] ?? 9; }
+let backendModelFilter=null;
 function renderModels(data) {
   modelData = data.models || [];
   renderDiskModels(); renderCalibrationModels(); renderInspectModels();
@@ -98,13 +100,14 @@ function renderModels(data) {
   if(overviewLoad)overviewLoad.addEventListener('click',()=>loadModel(overviewLoad.dataset.id,overviewLoad.dataset.media==='true'));
   const slots = new Map(suggestions.map(s => [s.id, s.slot]));
   const older = $('#olderToggle').checked, showBad = $('#notRunnableToggle').checked, downloadedOnly = $('#downloadedToggle').checked;
-  const list = modelData.filter(m => (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
+  const list = modelData.filter(m => (!backendModelFilter||backendModelFilter.ids.has(m.id)) && (older || !['basal-1.0','basal-1.5'].includes(m.family)) && (showBad || m.runnable) && (!downloadedOnly || m.downloaded));
   list.sort((a,b) => familyOrder(b.family)-familyOrder(a.family) || tierOrder(a.tier)-tierOrder(b.tier) || a.port.localeCompare(b.port));
   const groups = new Map(); for (const m of list) { if (!groups.has(m.family)) groups.set(m.family, []); groups.get(m.family).push(m); }
   if (!list.length) { $('#modelsTable').innerHTML = '<div class="empty">No models match these filters.</div>'; return; }
-  let html = '<table><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th></th><th></th><th>Action</th></tr></thead><tbody>';
+  let html = '';
+  const tableHead='<table class="model-variants"><colgroup><col style="width:24%"><col style="width:14%"><col style="width:9%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:22%"></colgroup><thead><tr><th>Tier</th><th>Format</th><th>Size</th><th>Est. memory</th><th>Fit</th><th>Fit now</th><th>Action</th></tr></thead><tbody>';
   for (const [family, rows] of groups) {
-    html += `<tr class="family-row"><td colspan="9">${esc(family)}${family.startsWith('basal-omni')?' <span class="badge experimental">Experimental</span>':''}</td></tr>`;
+    html += `<section class="model-family-group"><div class="disk-group-heading"><h4>${esc(family)}</h4><span class="muted">${rows.length} ${rows.length===1?'variant':'variants'}</span></div><div class="table-wrap">${tableHead}`;
     for (const m of rows) {
       const classes = `fit-${esc(m.fit || 'unknown')}`;
       const nowClasses = `fit-${esc(m.fit_now || 'unknown')}`;
@@ -115,10 +118,11 @@ function renderModels(data) {
       const downloadStatus=statusCache?.downloads?.[m.repo], loaded=statusCache?.models?.find(x=>x.id===m.id);
       const downloadButton=downloadControl(m,downloadStatus);
       const mediaButton = (m.media_mode ? `<button class="load-media-model" data-id="${esc(m.id)}" title="${esc(mediaTitle(m.media || []))}">Load with media</button>` : '') + optionsButton(m.id);
-      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="nowrap"><span class="model-name">${esc(m.tier)}</span>${reason}${mediaReason}</td><td class="nowrap">${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}</td><td>${gb(m.weights_bytes)}</td><td>${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td>${badges}</td><td>${m.downloaded?`✓${m.downloaded_bytes == null?'':` ${gb(m.downloaded_bytes)}`}`:''}</td><td><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button>${loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadButton:m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>${mediaButton}`:'—'}</td></tr>`;
+      html += `<tr class="${m.runnable?'':'not-runnable'}"><td class="model-tier"><span class="model-name">${esc(m.tier)}</span>${badges?`<div class="model-badges">${badges}</div>`:''}${reason}${mediaReason}</td><td class="model-format">${esc(m.label)} ${m.community?'<span class="chip">community</span>':''}${m.revision?`<span class="chip">revision ${esc(m.revision)}</span>`:''}${m.downloaded?`<small class="model-downloaded muted">On disk${m.downloaded_bytes==null?'':` · ${gb(m.downloaded_bytes)}`}</small>`:''}</td><td class="model-size">${gb(m.weights_bytes)}</td><td class="model-size">${gb(m.est_memory_bytes)}</td><td><span class="badge ${classes}">${esc(m.fit || 'unknown')}</span></td><td><span class="badge ${nowClasses}">${esc(m.fit_now || 'unknown')}</span></td><td><div class="model-actions"><button type="button" class="model-card-open" data-id="${esc(m.id)}" aria-label="Model information">ⓘ</button>${loaded?`<span class="chip">loaded</span> <button class="unload-model" data-id="${esc(m.id)}">Unload</button>`:!m.downloaded?downloadButton:m.runnable?`<button class="load-model" data-id="${esc(m.id)}">Load</button>${mediaButton}`:''}</div></td></tr>`;
     }
+    html += '</tbody></table></div></section>';
   }
-  $('#modelsTable').innerHTML = html + '</tbody></table>';
+  $('#modelsTable').innerHTML = html;
   document.querySelectorAll('.load-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id)));
   document.querySelectorAll('.load-media-model').forEach(b => b.addEventListener('click', () => loadModel(b.dataset.id, true)));
   bindModelButtons('#modelsTable');
@@ -163,7 +167,16 @@ async function openModelCard(id) {
 }
 function renderDiskModels() {
   const rows = modelData.filter(m => m.downloaded), total = rows.reduce((sum,m) => sum + (Number(m.downloaded_bytes) || 0),0);
-  $('#diskModels').innerHTML = rows.length ? rows.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?'<span class="chip">community</span>':''}<span class="muted">${gb(m.downloaded_bytes)}</span></div><button type="button" class="delete-model" data-id="${esc(m.id)}">Delete</button></div>`).join('') : '<div class="empty">Nothing downloaded yet</div>';
+  const groups=new Map();
+  for(const model of rows){
+    const type=model.family||'Other';
+    if(!groups.has(type))groups.set(type,[]);
+    groups.get(type).push(model);
+  }
+  $('#diskModels').innerHTML=rows.length?[...groups].sort(([a],[b])=>familyOrder(b)-familyOrder(a)||a.localeCompare(b)).map(([type,models])=>{
+    const bytes=models.reduce((sum,m)=>sum+(Number(m.downloaded_bytes)||0),0);
+    return `<section class="disk-group"><div class="disk-group-heading"><h4>${esc(type)}</h4><span class="muted">${models.length} ${models.length===1?'model':'models'} · ${gb(bytes)}</span></div>${models.map(m => `<div class="disk-row"><div class="disk-info"><strong>${esc(m.family)} · ${esc(m.tier)} · ${esc(m.label)}</strong>${m.community?'<span class="chip">community</span>':''}<span class="muted">${gb(m.downloaded_bytes)}</span></div><button type="button" class="delete-model" data-id="${esc(m.id)}">Delete</button></div>`).join('')}</section>`;
+  }).join(''):'<div class="empty">Nothing downloaded yet</div>';
   $('#diskTotal').textContent = `Total: ${gb(total)} in ${rows.length} ${rows.length === 1 ? 'model' : 'models'}`;
   $('#diskSummary').textContent=`${rows.length} ${rows.length===1?'model':'models'} on disk`;
   $('#diskSummaryMeta').textContent=`${gb(total)} total`;
@@ -1738,7 +1751,7 @@ function inspectDecision(request) {
   const frame=$('#vizFrame'), send=()=>frame.contentWindow.postMessage({request:handoff.body},location.origin);
   if(frame.dataset.loaded==='1')send(); else frame.addEventListener('load',send,{once:true});
 }
-const PAGES={overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
+const PAGES={backends:['10 / BACKENDS','Backends','Local inference engines, compatibility, setup and explicit verification.'],overview:['01 / OVERVIEW','Overview','Hardware, model readiness, and serving at a glance.'],models:['02 / MODELS','Models','Loaded models with their statistics and benchmarks, suggestions, and every basal variant.'],manager:['03 / MODEL MANAGER','Model manager','Where models live, what is on disk.'],playground:['04 / PLAYGROUND','Playground','Ask typed questions of a loaded model.'],api:['05 / API SERVER','API server','One port for every loaded model, keys, MCP and the memory budget.'],history:['06 / HISTORY','History','Every decision this app answered: playground, API and MCP.'],logs:['07 / LOGS','Logs','Output of each basal-serve and basal-ui’s own events.'],batch:['08 / BATCH','Batch','Run a JSONL file of requests through a loaded model and export the answers.'],inspect:['09 / INSPECT','Inspect','basal-viz: the prompt, the tokens, every layer and the calibrated decision.']};
 function showView(hash, updateHash=false) {
   const raw=String(hash||'').replace(/^#/,''), slash=raw.indexOf('/');
   const view=slash<0?raw:raw.slice(0,slash), arg=slash<0?'':raw.slice(slash+1), name=PAGES[view]?view:'overview';
@@ -1749,6 +1762,7 @@ function showView(hash, updateHash=false) {
   if(updateHash&&location.hash!==target)history.pushState(null,'',target);
   shownHash=location.hash;
   clearTimeout(historyTimer); clearTimeout(logTimer);
+  if(name==='backends')window.dispatchEvent(new Event('backends:view'));
   if(name==='history')loadHistory('reset');
   if(name==='logs'){
     let source=logSource; try{if(arg)source=decodeURIComponent(arg);}catch{}

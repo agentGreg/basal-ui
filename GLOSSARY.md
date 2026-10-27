@@ -22,3 +22,18 @@ Calibration supplied with a model for a particular execution configuration.
 
 **Selected calibration**:
 Calibration explicitly chosen for a model's execution configuration, potentially replacing its shipped calibration.
+
+**Backend**:
+A local inference engine and its dependencies, such as PyTorch or MLX. A checkpoint format is not a backend group.
+
+**Execution mode**:
+A particular way Basal runs a model with a backend, such as eager or fast for PyTorch.
+
+**Machine compatibility**:
+Whether this Basal integration supports an engine on the app host's platform and hardware. Separate from whether its packages are installed.
+
+**Model compatibility**:
+Whether a model's architecture and format can run with an engine and execution mode after required dependencies are installed. Separate from memory fit.
+
+**Inference test**:
+An explicit, isolated check of one downloaded model, revision and execution mode using a fixed short decision. Passing is not a general accuracy or performance certification.

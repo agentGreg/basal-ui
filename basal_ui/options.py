@@ -181,7 +181,7 @@ def available_modes(v, hw, assessment) -> list[dict]:
         "eager": None if v.port == "bf16" else f"the eager engine reads bf16 weights, not {v.port}",
         "vllm": ("install basal[vllm] (own environment, docs/INSTALL.md)" if "vllm" not in hw.engines
                  else None if hw.platform == "cuda" else "vLLM needs an NVIDIA GPU"),
-        "sglang": ("install basal[sglang] in its own environment (docs/INSTALL.md)" if "sglang" not in hw.engines
+        "sglang": ("install sglang[srt] in its own environment (docs/INSTALL.md)" if "sglang" not in hw.engines
                    else None if hw.platform == "cuda" else "SGLang needs an NVIDIA GPU"),
         "mlx": ("MLX runs on Apple Silicon only" if hw.platform != "apple" else
                 "install basal[mlx]" if "mlx" not in hw.engines else

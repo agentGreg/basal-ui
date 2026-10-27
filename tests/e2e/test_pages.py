@@ -9,7 +9,7 @@ from tests.e2e.support import CHOICE, EXAMPLES, advanced_requests
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="install basal[e2e] and run: playwright install chromium")
 
-VIEWS = {"overview": "Overview", "models": "Models", "manager": "Model manager", "playground": "Playground",
+VIEWS = {"backends": "Backends", "overview": "Overview", "models": "Models", "manager": "Model manager", "playground": "Playground",
          "batch": "Batch", "inspect": "Inspect", "api": "API server", "history": "History", "logs": "Logs"}
 WAIT = 120_000  # ms: a decision of a large model, a model start
 
