@@ -322,7 +322,7 @@ async function refreshStatus() {
     const status = await api('/api/status');
     if (sequence === statusSequence) { renderStatus(status); if (serveData) renderServeStatus(status); }
   } catch(e) {
-    if (sequence === statusSequence) { showStatusError(e.message); pollTimer=setTimeout(refreshStatus,5000); }
+    if (sequence === statusSequence) { showStatusError(e.message); clearTimeout(pollTimer); pollTimer=setTimeout(refreshStatus,5000); }
   }
 }
 async function loadExamples() {
@@ -1206,7 +1206,7 @@ $('#copyServeConnect').onclick=()=>copyText($(`[data-connect-panel="${connectTab
 let selectedModel=localStorage.getItem('basal-ui.model')||'', previousDownloads=new Set(), rowsSignature='', playgroundSignature='';
 let statsData={models:{},benchmarks:{}}, statsSignature='', benchSignature='', benchRunning=false;
 let historyAfter=null, historyBefore=null, historySource='', historyTimer=null, historyDebounce=null, historyRows=new Map();
-const historyOpen=new Map();
+const historyOpen=new Map(), HISTORY_LIVE_MAX=500;  // rows the live History view keeps while it polls
 let logSource='basal-ui', logAfter=0, logGeneration=null, logTimer=null, shownHash=null;
 const readyModels=()=>(statusCache?.models||[]).filter(m=>m.state==='ready');
 const pct=v=>v==null?'—':`${(Number(v)*100).toFixed(1)}%`;
@@ -1334,9 +1334,9 @@ const BENCH_HINTS={benchmark:t('5 warm-up, 30 sequential and 120 concurrent requ
   loadtest:t('basal-loadtest against the model: 10 warm-up, sequential requests for the latency, then the concurrent ones for the throughput. Synthetic states of about N tokens replace the set when given.'),
   determinism:t('basal-loadtest --determinism: N requests alone, then the same N mixed with N others at the concurrency; a model loaded with Deterministic must return identical probabilities.'),
   modes:t('basal-bench in basal-ui’s process: each mode is loaded, measured and freed in turn (the first is the reference of the agreement). Needs the model’s memory once more (twice for eager-fp32) while it runs.')};
-$('#benchmarks').innerHTML=`<div class="section-head"><h3>${t('Benchmarks')}</h3></div><div class="controls"><select id="benchmarkKind" aria-label="${t('Measurement')}"><option value="benchmark">${t('Benchmark (preset)')}</option><option value="loadtest">${t('Load test')}</option><option value="determinism">${t('Determinism check')}</option><option value="modes">${t('Compare engine modes')}</option></select><select id="benchmarkModel" aria-label="${t('Model to benchmark')}"></select><select id="benchmarkSet" aria-label="${t('Benchmark set')}"><option value="bundled">${tp(44,'Bundled examples ({n} item)','Bundled examples ({n} items)')}</option><option value="custom">${t('Custom path…')}</option></select><input id="benchmarkPath" type="text" placeholder="${t('/path/to/set.jsonl or a directory of .jsonl')}" hidden><button type="button" id="runBenchmark">${t('Run')}</button><button type="button" id="cancelBenchmark" hidden>${t('Cancel')}</button><span id="benchmarkProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Abenchmark">${t('Logs')}</a></div>
-<div class="bench-params" data-kinds="loadtest determinism"><div class="qf-row"><div class="qf"><label>${t('Synthetic tokens')}</label><input type="number" id="bpSynthetic" min="50" step="50" placeholder="${t('use the set')}"></div><div class="qf" data-kinds="loadtest"><label>${t('Sequential')}</label><input type="number" id="bpNSeq" min="1" value="200"></div><div class="qf" data-kinds="loadtest"><label>${t('Concurrent')}</label><input type="number" id="bpNConc" min="1" value="1000"></div><div class="qf"><label>${t('Concurrency')}</label><input type="number" id="bpConcurrency" min="1" value="32"></div><div class="qf" data-kinds="loadtest"><label>${t('Questions per request')}</label><input type="number" id="bpQpr" min="1" max="5" value="1"></div><div class="qf" data-kinds="loadtest"><label>${t('Seed')}</label><input type="number" id="bpSeed" min="0" value="0"></div><div class="qf" data-kinds="loadtest"><label>${t('Long share')}</label><input type="number" id="bpLong" min="0" max="1" step="0.1" value="0"></div><div class="qf" data-kinds="determinism"><label>${t('Requests (N)')}</label><input type="number" id="bpN" min="1" value="50"></div><div class="qf" data-kinds="loadtest" id="bpEarlyExitField" hidden><label>${t('Early exit')}</label><select id="bpEarlyExit"></select></div></div></div>
-<div class="bench-params" data-kinds="modes"><div id="bpModes" class="controls"></div><div class="qf-row"><div class="qf"><label>${t('Questions (n)')}</label><input type="number" id="bpModesN" min="10" value="100"></div><div class="qf"><label>${t('Latency samples')}</label><input type="number" id="bpLatN" min="5" value="30"></div></div></div>
+$('#benchmarks').innerHTML=`<div class="section-head"><h3>${t('Benchmarks')}</h3></div><div class="controls"><select id="benchmarkKind" aria-label="${t('Measurement')}"><option value="benchmark">${t('Benchmark (preset)')}</option><option value="loadtest">${t('Load test')}</option><option value="determinism">${t('Determinism check')}</option><option value="modes">${t('Compare engine modes')}</option></select><select id="benchmarkModel" aria-label="${t('Model to benchmark')}"></select><select id="benchmarkSet" aria-label="${t('Benchmark set')}"><option value="bundled">${tp(44,'Bundled examples ({n} item)','Bundled examples ({n} items)')}</option><option value="custom">${t('Custom path…')}</option></select><input id="benchmarkPath" type="text" aria-label="${t('Custom path…')}" placeholder="${t('/path/to/set.jsonl or a directory of .jsonl')}" hidden><button type="button" id="runBenchmark">${t('Run')}</button><button type="button" id="cancelBenchmark" hidden>${t('Cancel')}</button><span id="benchmarkProgress" class="muted"></span><a class="dashboard-link" href="#logs/job%3Abenchmark">${t('Logs')}</a></div>
+<div class="bench-params" data-kinds="loadtest determinism"><div class="qf-row"><div class="qf"><label for="bpSynthetic">${t('Synthetic tokens')}</label><input type="number" id="bpSynthetic" min="50" step="50" placeholder="${t('use the set')}"></div><div class="qf" data-kinds="loadtest"><label for="bpNSeq">${t('Sequential')}</label><input type="number" id="bpNSeq" min="1" value="200"></div><div class="qf" data-kinds="loadtest"><label for="bpNConc">${t('Concurrent')}</label><input type="number" id="bpNConc" min="1" value="1000"></div><div class="qf"><label for="bpConcurrency">${t('Concurrency')}</label><input type="number" id="bpConcurrency" min="1" value="32"></div><div class="qf" data-kinds="loadtest"><label for="bpQpr">${t('Questions per request')}</label><input type="number" id="bpQpr" min="1" max="5" value="1"></div><div class="qf" data-kinds="loadtest"><label for="bpSeed">${t('Seed')}</label><input type="number" id="bpSeed" min="0" value="0"></div><div class="qf" data-kinds="loadtest"><label for="bpLong">${t('Long share')}</label><input type="number" id="bpLong" min="0" max="1" step="0.1" value="0"></div><div class="qf" data-kinds="determinism"><label for="bpN">${t('Requests (N)')}</label><input type="number" id="bpN" min="1" value="50"></div><div class="qf" data-kinds="loadtest" id="bpEarlyExitField" hidden><label for="bpEarlyExit">${t('Early exit')}</label><select id="bpEarlyExit"></select></div></div></div>
+<div class="bench-params" data-kinds="modes"><div id="bpModes" class="controls" role="group" aria-label="${t('Compare engine modes')}"></div><div class="qf-row"><div class="qf"><label for="bpModesN">${t('Questions (n)')}</label><input type="number" id="bpModesN" min="10" value="100"></div><div class="qf"><label for="bpLatN">${t('Latency samples')}</label><input type="number" id="bpLatN" min="5" value="30"></div></div></div>
 <p class="muted" id="benchmarkHint"></p><div id="benchmarkResults"></div>`;
 $('#benchmarkSet').value=localStorage.getItem('basal-ui.benchmarkSet')==='custom'?'custom':'bundled';
 $('#benchmarkPath').value=localStorage.getItem('basal-ui.benchmarkPath')||'';
@@ -1362,7 +1362,7 @@ async function loadComparisonModes() {
   try{
     const d=await api(`/api/modes?id=${encodeURIComponent(id)}`);
     const preset=new Set(d.modes.filter(m=>!['ollama','llamacpp'].includes(m)).slice(0,2));  // external services: opt in
-    $('#bpModes').innerHTML=d.modes.map(m=>`<label><input type="checkbox" role="switch" data-mode="${esc(m)}"${preset.has(m)?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(m)}</label>`).join('')||'<span class="muted">No mode can run this model here.</span>';
+    $('#bpModes').innerHTML=d.modes.map(m=>`<label><input type="checkbox" role="switch" data-mode="${esc(m)}"${preset.has(m)?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(m)}</label>`).join('')||`<span class="muted">${t('No mode can run this model here.')}</span>`;
   }catch(e){comparisonFor='';$('#bpModes').innerHTML=`<span class="reason">${esc(e.message)}</span>`;}
 }
 const intOf=sel=>$(sel).value===''?undefined:Number($(sel).value);
@@ -1590,10 +1590,10 @@ function optionInput(key, value) {
   if(f.kind==='bool')return `<label><input type="checkbox" role="switch" id="${id}"${value?' checked aria-checked="true"':' aria-checked="false"'}> ${esc(t(f.label))}</label>`;
   const listed=(f.values||[]).map(v=>Array.isArray(v)?v:[v,v]);
   const input=f.kind==='select'?`<select id="${id}">${listed.map(([v,l])=>`<option value="${esc(optionValue(v))}"${optionValue(v)===optionValue(value)?' selected':''}>${esc(t(l))}</option>`).join('')}${listed.some(([v])=>optionValue(v)===optionValue(value))?'':`<option value="${esc(optionValue(value))}" selected>${esc(value)}</option>`}</select>`
-    :f.kind==='band'?`<span class="controls"><input type="number" id="${id}-lo" min="0" max="1" step="0.05" value="${esc(value?.[0])}"><input type="number" id="${id}-hi" min="0" max="1" step="0.05" value="${esc(value?.[1])}"></span>`
+    :f.kind==='band'?`<span class="controls"><input type="number" id="${id}-lo" min="0" max="1" step="0.05" value="${esc(value?.[0])}" aria-label="${esc(t(f.label))} ${t('low')}"><input type="number" id="${id}-hi" min="0" max="1" step="0.05" value="${esc(value?.[1])}" aria-label="${esc(t(f.label))} ${t('high')}"></span>`
     :f.kind==='percent'?`<span class="controls"><input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round(Number(value)*100)}"><output id="${id}-out">${Math.round(Number(value)*100)}%</output></span>`
     :`<input type="${f.kind==='num'?'number':'text'}" id="${id}" value="${esc(optionValue(value))}" placeholder="${esc(t(f.placeholder||''))}" ${f.attrs||''}>`;
-  return `<label for="${id}">${esc(t(f.label))}</label>${input}`;
+  return `<label for="${f.kind==='band'?`${id}-lo`:id}">${esc(t(f.label))}</label>${input}`;
 }
 const optionSectionOpen=new Map();  // section title → open, as the user left it (this session)
 function renderOptionsForm(values) {
@@ -1713,27 +1713,37 @@ async function loadHistory(mode='reset') {
     if(mode==='reset'){historyRows=new Map();historyOpen.clear();}
     items.forEach(x=>historyRows.set(x.id,x));
     if(mode!=='poll')$('#historyMore').hidden=items.length<100;
-    const sorted=[...historyRows.values()].sort((a,b)=>b.ts-a.ts);
+    let sorted=[...historyRows.values()].sort((a,b)=>b.ts-a.ts);
     if(mode==='reset'){historyAfter=items[0]?.id||null;historyBefore=items.at(-1)?.id||null;}
     else if(mode==='more'&&items.length)historyBefore=items.at(-1).id;
     else if(mode==='poll'){historyAfter=pollCursor||historyAfter;if(!historyBefore)historyBefore=items[0]?.id||null;}
+    if(mode==='poll'&&sorted.length>HISTORY_LIVE_MAX){  // a view left open keeps the newest rows; More reloads older
+      sorted=sorted.slice(0,HISTORY_LIVE_MAX);
+      historyRows=new Map(sorted.map(x=>[x.id,x]));
+      [...historyOpen.keys()].forEach(id=>{if(!historyRows.has(id))historyOpen.delete(id);});
+      historyBefore=sorted.at(-1).id; $('#historyMore').hidden=false;
+    }
     if(mode!=='poll'||items.length)renderHistory(sorted);
   }catch(e){if(sequence!==historySequence)return;$('#historyTable').innerHTML=`<div class="error-box">${esc(e.message)}</div>`;}
   if(!$('#history').hidden&&sequence===historySequence)historyTimer=setTimeout(()=>loadHistory('poll'),5000);
 }
 function renderHistory(items) {
   const flags=x=>`${x.deferred?` <span class="badge fit-too_large">${t('deferred')}</span>`:''}${x.truncated?` <span class="badge fit-tight">${t('truncated')}</span>`:''}`;
-  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>${t('Time')}</th><th>${t('Model')}</th><th>${t('Source')}</th><th>${t('State')}</th><th>${t('Answers')}</th><th>${t('Latency')}</th><th>${t('Status')}</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(t(x.source))}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${t('No decisions yet — try the Playground.')}</div>`;
+  const focused=$('#historyTable').contains(document.activeElement)?document.activeElement.closest('[data-history]')?.dataset.history:null;
+  $('#historyTable').innerHTML=items.length?`<table><thead><tr><th>${t('Time')}</th><th>${t('Model')}</th><th>${t('Source')}</th><th>${t('State')}</th><th>${t('Answers')}</th><th>${t('Latency')}</th><th>${t('Status')}</th></tr></thead><tbody>${items.map(x=>`<tr class="history-row" data-history="${esc(x.id)}"><td><button type="button" class="history-open" aria-expanded="${historyOpen.has(x.id)}" title="${esc(new Date(x.ts*1000).toISOString())}">${esc(clock(x.ts))}</button></td><td title="${esc(x.model)}">${esc(shortName(x.model))}</td><td><span class="chip">${esc(t(x.source))}</span></td><td class="muted history-state">${esc(x.state_preview)}</td><td>${Object.entries(x.answers||{}).map(([n,a])=>`<span class="chip">${esc(n)}: ${esc(a.best??'—')} (${pct(a.confidence)})</span>`).join(' ')}${flags(x)}</td><td>${num(x.latency_ms,0)} ms</td><td><span class="badge ${x.status>=200&&x.status<300?'fit-fits':'fit-too_large'}">${esc(x.status)}</span></td></tr>`).join('')}</tbody></table>`:`<div class="empty">${t('No decisions yet — try the Playground.')}</div>`;
   $('#historyTable').querySelectorAll('[data-history]').forEach(row=>{
-    row.onclick=()=>act(()=>toggleHistory(row));
+    row.onclick=()=>act(()=>toggleHistory(row));  // pointer users click anywhere on the row
+    const open=$('.history-open',row);
+    open.onclick=e=>{e.stopPropagation();act(()=>toggleHistory(row));};  // keyboard: Tab to the time, Enter
     if(historyOpen.has(row.dataset.history))row.after(historyDetailRow(historyOpen.get(row.dataset.history)));
+    if(row.dataset.history===focused)open.focus();  // a live refresh must not drop keyboard focus
   });
 }
 async function toggleHistory(row) {
-  const id=row.dataset.history, next=row.nextElementSibling;
-  if(next?.classList.contains('history-detail')){next.remove();historyOpen.delete(id);return;}
+  const id=row.dataset.history, next=row.nextElementSibling, open=$('.history-open',row);
+  if(next?.classList.contains('history-detail')){next.remove();historyOpen.delete(id);open.setAttribute('aria-expanded','false');return;}
   const record=await api(`/api/history/${encodeURIComponent(id)}`);
-  historyOpen.set(id,record); row.after(historyDetailRow(record));
+  historyOpen.set(id,record); row.after(historyDetailRow(record)); open.setAttribute('aria-expanded','true');
 }
 function historyDetailRow(x) {
   const tr=document.createElement('tr'); tr.className='history-detail';
