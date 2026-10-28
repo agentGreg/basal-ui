@@ -7,10 +7,14 @@ import os
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-SUPPORTED_RANGE = ">=2.4.1,<2.5"  # bump per basal-ui release; CI tests both ends
+ENGINE_REPO = "rkinas/basal"
+TESTED_RELEASES = ("2.4.1",)  # every release basal-ui is tested with; CI runs each; the last is the pin
+SUPPORTED_RANGE = ">=2.4.1,<2.5"  # bump with TESTED_RELEASES
 SUPPORTED = SpecifierSet(SUPPORTED_RANGE)
 UNCHECKED_ENV = "BASAL_UI_ENGINE_UNCHECKED"
-INSTALL_HINT = 'uv pip install "basal @ https://github.com/rkinas/basal/archive/refs/tags/v2.4.1.tar.gz"'
+PINNED_RELEASE = TESTED_RELEASES[-1]
+ENGINE_URL = f"https://github.com/{ENGINE_REPO}/archive/refs/tags/v{PINNED_RELEASE}.tar.gz"
+INSTALL_HINT = f'uv pip install "basal @ {ENGINE_URL}"'
 
 
 def _spec(name):

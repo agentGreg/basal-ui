@@ -3,12 +3,14 @@ PYTHON ?= .venv/bin/python
 UV ?= uv
 REF ?=
 ARGS ?=
+export PYTHON UV REF  # recipes read them as shell variables ("$$UV"), which quotes paths with spaces
 
-.PHONY: help install engine lint test e2e run
+.PHONY: help install engine engine-pin lint test e2e run
 help:
 	@printf '%s\n' \
 	  'make install    uv sync: the venv with the dev group (engine pinned by [tool.uv.sources]) and the mcp extra' \
 	  'make engine     Switch the installed engine: REF=<release tag> installs the tag archive, REF=<branch|sha> the fork ref' \
+	  'make engine-pin Print the engine release basal-ui pins (basal_ui/engine.py PINNED_RELEASE)' \
 	  'make lint       Run ruff on all files' \
 	  'make test       Run the unit tests (tests/, not tests/e2e)' \
 	  'make e2e        Run the end-to-end gate with real models (BASAL_E2E=1; docs/E2E.md)' \
@@ -27,6 +29,9 @@ engine:
 	else \
 	  "$$UV" pip install --reinstall-package basal "basal @ git+https://github.com/pawelkiszczak/basal@$$REF"; \
 	fi
+
+engine-pin:
+	@"$$PYTHON" -c "from basal_ui.engine import PINNED_RELEASE; print(PINNED_RELEASE)"
 
 lint:
 	"$$UV" run --no-sync ruff check .

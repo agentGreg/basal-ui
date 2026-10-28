@@ -4,8 +4,9 @@ import time
 
 import httpx
 
+from .engine import ENGINE_REPO
+
 UI_REPO = "pawelkiszczak/basal-ui"
-ENGINE_REPO = "rkinas/basal"
 _TTL = 6 * 60 * 60
 _ERROR_TTL = 10 * 60  # a failed check is retried sooner than a successful one
 _lock = threading.Lock()

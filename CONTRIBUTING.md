@@ -3,7 +3,8 @@
 ## Dev setup
 
 ```bash
-make install                 # uv sync: dev group (engine pinned to v2.4.1 by [tool.uv.sources]) + mcp extra
+make install                 # uv sync: dev group (engine pinned by [tool.uv.sources]) + mcp extra
+make engine-pin              # the pinned engine release (basal_ui/engine.py PINNED_RELEASE)
 make engine REF=v2.4.2       # later: another release tag
 make engine REF=feat/engine-adapter-upstream   # or any ref of the fork pawelkiszczak/basal
 make lint                    # ruff check
@@ -32,16 +33,26 @@ UI never blocks on a proposal. The pipeline:
 3. **Ship the UI control behind a probe.** The basal-ui control for the capability lands behind
    `basal_ui.engine.feature("<name>")` and is tried through the experimental engine route
    (`BASAL_UI_ENGINE_UNCHECKED=1`), so users of supported releases are unaffected.
-4. **Close the loop.** When the release enters `SUPPORTED` (bump `basal_ui/engine.py` and the CI engine matrix),
-   drop the probe and update the research note's **Outcome**.
+4. **Close the loop.** When the release enters `SUPPORTED` (see "Bumping the engine" below), drop the probe and
+   update the research note's **Outcome**.
 
 `docs/adr/0003-separate-repo-on-upstream-engine.md` records why the repo is set up this way.
 
 ## Releasing
 
-1. Bump `SUPPORTED` in `basal_ui/engine.py` and the `engine` matrix in `.github/workflows/ci.yml` (one entry per
-   supported release), and add a `docs/WHATS_NEW.md` section for the version.
+1. If the engine moves, bump it ("Bumping the engine" below); add a `docs/WHATS_NEW.md` section for the version.
 2. Run the e2e gate on real hardware (`make e2e`, `docs/E2E.md`) and record the run (models, hardware, results) in
    the release PR.
 3. Tag `vX.Y.Z`; `publish.yml` builds and uploads to PyPI (trusted publishing) and the GitHub release notes come
    from WHATS_NEW.
+
+### Bumping the engine
+
+`basal_ui/engine.py` holds the engine release basal-ui runs on: `TESTED_RELEASES` (every release CI tests; the last
+is the pin, `PINNED_RELEASE`) and `SUPPORTED_RANGE`. CI's engine matrix is generated from `TESTED_RELEASES`. To move:
+
+1. Edit `TESTED_RELEASES` and `SUPPORTED_RANGE` in `basal_ui/engine.py`.
+2. Edit the `basal` url in `pyproject.toml` `[tool.uv.sources]` (uv cannot read Python) and run `uv lock`.
+3. Edit the install lines in `README.md` and `docs/E2E.md`.
+
+`make test` (`tests/test_engine_gate.py::test_every_pin_names_the_tested_release`) fails until they all agree.

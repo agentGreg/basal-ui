@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from basal_ui import catalog, settings, updates
 from basal_ui.app import create_app
+from basal_ui.engine import SUPPORTED_RANGE
 from basal_ui.hardware import Hardware
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
@@ -39,7 +40,7 @@ def test_ui_and_engine_updates_newer_older_unsupported_errors_and_disabled(tmp_p
         engine = d["engine"]
         assert (engine["version"], engine["latest"], engine["newer"], engine["latest_supported"]) == (
             "2.4.1", "2.4.9", True, True)
-        assert engine["experimental"] is False and engine["supported"] == ">=2.4.1,<2.5"
+        assert engine["experimental"] is False and engine["supported"] == SUPPORTED_RANGE
         monkeypatch.setattr(updates, "_cached", {})
         latest.update({updates.UI_REPO: "0.0.9", updates.ENGINE_REPO: "2.5.0"})
         d = client.get("/api/updates").json()
