@@ -25,8 +25,18 @@ def api_server(ui):
         ui.post("/api/serve/restart")
 
 
-def test_two_models_answer_behind_one_api_port_with_a_key(ui, text_model, second_model, api_server):
+@pytest.fixture
+def unload_after(ui):
+    """Model ids a test loads; unloaded afterwards even when it fails, so later tests start from a clean basal-ui."""
+    loaded = []
+    yield loaded
+    for model_id in loaded:
+        ui.unload(model_id)
+
+
+def test_two_models_answer_behind_one_api_port_with_a_key(ui, text_model, second_model, api_server, unload_after):
     a, b = text_model["id"], second_model["id"]
+    unload_after += [a, b]
     ui.load(a)
     ui.load(b)
     api, key, serve = api_server

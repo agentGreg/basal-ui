@@ -61,19 +61,25 @@ class UI:
             stdout=log,
             stderr=subprocess.STDOUT,
         )
-        deadline = time.monotonic() + 180
-        while time.monotonic() < deadline:
-            if self.proc.poll() is not None:
-                raise RuntimeError(f"basal-ui exited ({self.proc.returncode}): {self.root / 'basal-ui.log'}")
-            try:
-                if self.http.get("/api/status").status_code == 200:
-                    if os.environ.get("BASAL_E2E_MODELS_DIR"):
-                        self.put("/api/settings", {"models_dir": os.environ["BASAL_E2E_MODELS_DIR"]})
-                    return self
-            except httpx.HTTPError:
-                pass
-            time.sleep(0.3)
-        raise RuntimeError("basal-ui did not answer within 180 s")
+        try:
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                if self.proc.poll() is not None:
+                    raise RuntimeError(f"basal-ui exited ({self.proc.returncode}): {self.root / 'basal-ui.log'}")
+                try:
+                    if self.http.get("/api/status").status_code == 200:
+                        if os.environ.get("BASAL_E2E_MODELS_DIR"):
+                            self.put("/api/settings", {"models_dir": os.environ["BASAL_E2E_MODELS_DIR"]})
+                        return self
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.3)
+            raise RuntimeError("basal-ui did not answer within 180 s")
+        except BaseException:  # a basal-ui that never became usable must not outlive the session
+            self.proc.kill()
+            self.proc.wait()
+            self.http.close()
+            raise
 
     def child_pids(self):
         """The basal-serve children of this basal-ui (the private one of a calibration too)."""

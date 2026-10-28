@@ -45,7 +45,9 @@ def test_local_backend_inference_and_browser(ui):
         page.wait_for_selector(".backend-card")
         page.locator("#backendTests").get_by_text("Inference test passed", exact=True).wait_for()
         page.locator("#showUnavailableBackends").check()
-        assert page.locator("#backendInventory .backend-card").count() == 7
+        ids = {b["id"] for b in ui.get("/api/backends")["backends"]}
+        assert {"torch", "mlx", "gguf", "vllm", "sglang", "strix", "tpu"} <= ids  # a newer engine may add more
+        assert page.locator("#backendInventory .backend-card").count() == len(ids)
         page.locator(f'[data-backend-models="{backend["id"]}"]').click()
         playwright.expect(page.locator("#backendModelFilterNotice")).to_be_visible()
         page.locator("#clearBackendModelFilter").click()

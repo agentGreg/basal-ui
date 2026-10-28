@@ -53,6 +53,7 @@ dev = [
     "pytest",
     "ruff>=0.17",
     "pre-commit>=4.6.2",
+    "pytest-cov>=7.1.0",
 ]  # basal: the newest engine release in the supported range
 
 [project.scripts]

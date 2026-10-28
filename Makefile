@@ -42,7 +42,7 @@ format:
 	"$$UV" run --no-sync ruff format .
 
 test:
-	"$$UV" run --no-sync pytest -q --ignore=tests/e2e $(ARGS)
+	"$$UV" run --no-sync pytest -q --ignore=tests/e2e --cov=basal_ui --cov-report=term-missing:skip-covered $(ARGS)
 
 e2e:
 	BASAL_E2E=1 "$$UV" run --no-sync pytest tests/e2e $(ARGS)

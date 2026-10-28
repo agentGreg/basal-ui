@@ -1,6 +1,7 @@
 """Load options: the engine modes this machine offers, options reaching basal-serve, the context policy, basal-serve's
 own refusals, and options remembered for a model."""
 
+from basal_ui.options import MODE_ORDER
 from tests.e2e.support import CHOICE, context_of, long_state
 
 
@@ -11,7 +12,7 @@ def options_of(ui, model_id):
 def test_the_mode_list_covers_every_mode_and_offers_the_default(ui, text_model, hardware):
     d = options_of(ui, text_model["id"])
     modes = {m["mode"]: m for m in d["modes"]}
-    assert len(modes) == 16 and {"ollama", "llamacpp"} <= {m for m, v in modes.items() if v["available"]}
+    assert set(MODE_ORDER) <= set(modes) and {"ollama", "llamacpp"} <= {m for m, v in modes.items() if v["available"]}
     default = [m for m, v in modes.items() if v["default"]]
     assert default == [text_model["mode"]] and modes[text_model["mode"]]["available"]
     assert all(v["reason"] for v in modes.values() if not v["available"])
