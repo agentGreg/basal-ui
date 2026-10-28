@@ -29,6 +29,7 @@ def test_ui_and_engine_updates_newer_older_unsupported_errors_and_disabled(tmp_p
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     monkeypatch.setattr(updates, "_cached", {})
     monkeypatch.setattr("basal_ui.app.ui_version", lambda: "0.1.0")
+    monkeypatch.setattr("basal_ui.engine.installed", lambda: ("2.4.1", None))  # a release, whatever CI installed
     latest = {updates.UI_REPO: "0.2.0", updates.ENGINE_REPO: "2.4.9"}
     monkeypatch.setattr(httpx, "get", lambda url, **kwargs: Reply(next(v for r, v in latest.items() if r in url)))
     with TestClient(app(tmp_path), base_url="http://127.0.0.1") as client:
