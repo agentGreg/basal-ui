@@ -1,4 +1,6 @@
+import base64
 import os
+import struct
 import sys
 import threading
 import time
@@ -95,6 +97,48 @@ def test_calibrations_listing_survives_a_stale_saved_adapter_path(tmp_path, monk
     assert response.status_code == 200
     assert response.json()["files"] == []
     assert "adapter" in response.json()["shipped"]["error"]
+
+
+def test_media_examples_inline_their_files_and_carry_element_boxes(tmp_path):
+    app, _ = app_for(tmp_path, [])
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        examples = client.get("/api/examples").json()
+    media = [e for e in examples if e["request"].get("media")]
+    assert [e["id"] for e in media] == ["media-01-checkout-elements", "media-02-invoice", "media-03-revenue-chart",
+                                        "media-04-voice-complaint", "media-05-voice-appointment"]
+    for e in media:
+        assert "elements" not in e["request"] and "media_files" not in e["request"]  # only server fields are sent
+        assert len(e["media_files"]) == len(e["request"]["media"])
+        for item in e["request"]["media"]:
+            assert set(item) == {"type", "data"}
+            head, payload = item["data"].split(",", 1)
+            assert head == {"image": "data:image/png;base64", "audio": "data:audio/wav;base64"}[item["type"]]
+            base64.b64decode(payload, validate=True)
+    checkout = media[0]
+    assert checkout["media_files"] == ["checkout.png"]
+    elements = checkout["elements"]
+    raw = base64.b64decode(checkout["request"]["media"][elements["image"]]["data"].split(",", 1)[1])
+    w, h = struct.unpack(">II", raw[16:24])  # PNG IHDR
+    assert [w, h] == elements["size"]
+    assert all(0 <= x and 0 <= y and x + bw <= w and y + bh <= h for x, y, bw, bh in elements["boxes"].values())
+    assert set(elements["boxes"]) == set(checkout["request"]["questions"][elements["question"]]["criteria"])
+
+
+def test_bundled_media_examples_decode():
+    """The engine's media decoder accepts every bundled sample as the Playground sends it."""
+    pytest.importorskip("PIL.Image")
+    pytest.importorskip("soundfile")
+    from basal import media
+    from basal_ui.app import examples
+    bundled = [e for e in examples() if e["request"].get("media")]
+    assert len(bundled) == 5
+    for e in bundled:
+        entries = e["request"]["media"]
+        assert len(e["media_files"]) == len(entries)
+        images, audio, order = media.decode(entries, ("image", "audio"), 30.0)
+        assert order == [m["type"] for m in entries] and all(im.mode == "RGB" for im in images)
+        assert all(0 < len(a) <= 30 * media.SAMPLE_RATE for a in audio)
+
 
 def test_model_api_sorting_load_validation_and_decide_requires_a_loaded_model(tmp_path):
     large = Variant("large", "Remek/basal-2.0-4.5B-FP8", "basal-2.0", "4.5B", "FP8", "FP8", None, 100, False)

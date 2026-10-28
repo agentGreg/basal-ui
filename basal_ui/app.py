@@ -9,6 +9,7 @@ crashed or unloaded model never takes the UI down.
 """
 import argparse
 import asyncio
+import base64
 import dataclasses
 import hashlib
 import json
@@ -40,6 +41,8 @@ from .stats import Stats
 
 STATIC = Path(__file__).parent / "static"
 EXAMPLES = Path(__file__).parent / "examples"
+MEDIA = EXAMPLES / "media"  # the files the bundled examples name in media[i].file
+MIME = {".png": "image/png", ".jpg": "image/jpeg", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac"}
 FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "omni", "1.5", "1.0"))}
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
 MODEL_LOGS_KEPT = 10  # log buffers of unloaded models kept for the Logs view
@@ -799,18 +802,36 @@ def _byte_counter():
     return Counter
 
 
+def _inline(m):
+    """A bundled media item {"type", "file"} -> {"type", "data": data URL}; the file lives in basal_ui/examples/media/."""
+    name = m["file"]
+    if Path(name).name != name:
+        raise ValueError(f"media file must be a bare name, got {name!r}")
+    path = MEDIA / name
+    return {"type": m["type"], "data": f"data:{MIME[path.suffix]};base64,{base64.b64encode(path.read_bytes()).decode()}"}
+
+
 def examples():
-    """The engine's bundled examples (basal-viz's list) and basal-ui's own requests of every advanced question type
-    (basal_ui/examples), in basal-viz's shape."""
+    """The engine's bundled examples (basal-viz's list) and basal-ui's own requests (basal_ui/examples: every advanced
+    question type, and media examples), in basal-viz's shape. Media examples name their files (media[i].file, inlined
+    as data URLs into the request) and may carry "elements", the boxes of a choice question's options in an image:
+    both stay outside the request, as "media_files" (aligned with request.media) and "elements"."""
     from basal.run import to_request
     from basal.viz import examples as engine_examples
     out = engine_examples()
     for path in sorted(EXAMPLES.glob("*.jsonl")):
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
-            if line.strip():
-                item = json.loads(line)
-                out.append({"file": path.stem, "id": item.get("id") or f"{path.stem}-{n + 1}",
-                            "request": to_request(item)})
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            elements = item.pop("elements", None)
+            ex = {"file": path.stem, "id": item.get("id") or f"{path.stem}-{n + 1}", "request": to_request(item)}
+            if item.get("media"):
+                ex["media_files"] = [m.get("file") for m in item["media"]]
+                ex["request"]["media"] = [_inline(m) if "file" in m else m for m in item["media"]]
+            if elements:
+                ex["elements"] = elements
+            out.append(ex)
     return out
 
 

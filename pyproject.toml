@@ -41,7 +41,8 @@ basal-ui = "basal_ui.__main__:main"  # checks the engine before basal_ui.app imp
 packages = ["basal_ui"]
 
 [tool.setuptools.package-data]
-basal_ui = ["static/*.html", "static/*.js", "static/*.css", "static/vendor/*", "static/fonts/*", "examples/*.jsonl"]
+basal_ui = ["static/*.html", "static/*.js", "static/*.css", "static/vendor/*", "static/fonts/*", "examples/*.jsonl",
+            "examples/media/*.png", "examples/media/*.wav"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]  # tests import shared stubs from tests.conftest and tests.test_ui_app

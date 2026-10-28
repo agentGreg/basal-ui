@@ -251,19 +251,24 @@ function showStatusError(text) { if(text)toast(text,'error'); }
 function mediaTitle(kinds) { return kinds.map(kind => kind === 'image' ? t('images') : kind === 'audio' ? t('audio') : kind).join(` ${t('and')} `); }
 function clearSelectedMedia() {
   mediaSelection++;
+  clearElementQuestions();
   selectedMedia.forEach(item => URL.revokeObjectURL(item.url));
   selectedMedia = [];
   $('#mediaInput').value = '';
-  renderSelectedMedia();
+  renderSelectedMedia(); syncRequest();
 }
 const fileSize = n => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 function renderSelectedMedia() {
   $('#mediaItems').innerHTML = selectedMedia.map((item,index) => `<div class="media-item">${item.kind === 'image'
     ? `<button type="button" class="media-preview" data-preview="${index}" title="${t('Open preview')}"><img src="${esc(item.url)}" alt="${esc(item.file.name)}"></button>`
-    : `<div class="media-audio">${t('audio')}</div>`}<div class="media-meta"><span><span class="media-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span><small data-dims="${index}">${fileSize(item.file.size)}</small></span><button type="button" data-remove="${index}" aria-label="${t('Remove {name}',{name:esc(item.file.name)})}">${t('Remove')}</button></div></div>`).join('');
+    : `<audio class="media-audio" controls preload="metadata" src="${esc(item.url)}"></audio>`}${item.kind==='image'?`<button type="button" class="mark-elements" data-mark="${index}"${selectedMedia.some((m,i)=>i!==index&&m.elements)?' hidden':''} title="${selectedMedia.some((m,i)=>i!==index&&m.elements)?t('Only one image can have marked elements at a time'):t('Mark elements')}">${t('Mark elements')}</button>`:''}<div class="media-meta"><span><span class="media-name" title="${esc(item.file.name)}">${esc(item.file.name)}</span><small data-dims="${index}">${fileSize(item.file.size)}</small></span><button type="button" data-remove="${index}" aria-label="${t('Remove {name}',{name:esc(item.file.name)})}">${t('Remove')}</button></div></div>`).join('');
+  $('#mediaItems').querySelectorAll('[data-mark]').forEach(button=>button.addEventListener('click',()=>openElementsEditor(Number(button.dataset.mark))));
   $('#mediaItems').querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
-    URL.revokeObjectURL(selectedMedia[Number(button.dataset.remove)].url);
+    const item=selectedMedia[Number(button.dataset.remove)];
+    if(item.elements)removeElementQuestion(item);
+    URL.revokeObjectURL(item.url);
     selectedMedia.splice(Number(button.dataset.remove),1);
+    syncElementIndices();
     renderSelectedMedia(); syncRequest();
   }));
   $('#mediaItems').querySelectorAll('[data-preview]').forEach(button => {
@@ -277,6 +282,9 @@ function renderSelectedMedia() {
     });
   });
   $('#mediaOptions').hidden = !selectedMedia.some(item => item.kind === 'image');
+  $('#mediaField').hidden = !loadedMedia.length && !selectedMedia.length;  // media of a loaded example stays visible
+  $('#mediaInput').disabled = !loadedMedia.length;
+  updateMediaEvidence();
 }
 function showMediaError(message='') {
   $('#mediaError').textContent = message;
@@ -302,6 +310,7 @@ async function selectMedia(files) {
   try {
     const filesData = await Promise.all(files.map(readFile));
     if (selection !== mediaSelection) return;
+    clearElementQuestions();
     selectedMedia.forEach(item => URL.revokeObjectURL(item.url));
     selectedMedia = filesData.map(item => ({...item,url:URL.createObjectURL(item.file)}));
     renderSelectedMedia(); syncRequest();
@@ -319,7 +328,7 @@ async function refreshStatus() {
 async function loadExamples() {
   try {
     examples=await api('/api/examples');
-    $('#examples').innerHTML=`<option value="">${t('Load an example…')}</option>`+examples.map((e,i)=>`<option value="${i}">${esc(e.file || e.id || t('Example {number}',{number:i+1}))}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('');
+
     renderRequestPresets();
   } catch { examples=[];renderRequestPresets(); }
 }
@@ -334,7 +343,8 @@ async function loadPresets() {try{presetData=await api('/api/presets');renderReq
 function renderRequestPresets() {
   const select=$('#examples'), current=select.value;
   const saved=Object.keys(presetData.request||{});
-  select.innerHTML=`<option value="">${t('Load an example…')}</option>`+examples.map((e,i)=>`<option value="${i}">${esc(e.file||e.id||t('Example {number}',{number:i+1}))}${e.file&&e.id?` / ${esc(e.id)}`:''}</option>`).join('')+`<optgroup label="${t('Saved requests')}">${saved.map(n=>`<option value="preset:${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`;
+  const mediaSuffix=e=>{const kinds=[...new Set((e.request?.media||[]).map(m=>m.type))];return kinds.length?` · ${esc(mediaTitle(kinds))}`:'';};
+  select.innerHTML=`<option value="">${t('Load an example…')}</option>`+examples.map((e,i)=>`<option value="${i}">${esc(e.file||e.id||t('Example {number}',{number:i+1}))}${e.file&&e.id?` / ${esc(e.id)}`:''}${mediaSuffix(e)}</option>`).join('')+`<optgroup label="${t('Saved requests')}">${saved.map(n=>`<option value="preset:${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`;
   if(current&&[...select.options].some(o=>o.value===current))select.value=current;
 }
 function renderLoadPresets() {
@@ -348,15 +358,21 @@ function promptPresetName(target) {
 $('#presetNameSave').onclick=()=>act(async()=>{
   const name=$('#presetName').value.trim(); if(!name)return;
   let value;
-  try { value=presetTarget==='load'?collectOptions():$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); }
+  try { value=presetTarget==='load'?collectOptions():$('#editJsonToggle').checked?JSON.parse($('#requestJson').value):buildRequest(); if(presetTarget==='request')value._elements=elementPresetData(); }
   catch(e) { toast(e.message,'error');$('.q-name:invalid')?.reportValidity();return; }
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind:presetTarget,name,value})});
   $('#presetNameDialog').close(); renderLoadPresets();renderRequestPresets();toast(t('Preset saved'));
 });
 $('#examples').addEventListener('change',e=>{
   const val=e.target.value;
-  if(val.startsWith('preset:')){const name=val.slice(7),request=presetData.request?.[name];if(request)setRequest(request);return;}
-  const item=examples[Number(val)];if(item?.request){const request={...item.request};delete request.id;delete request.gold;setRequest(request);}else if(item)setRequest({state:item.state,questions:item.questions});
+  if(val.startsWith('preset:')){const name=val.slice(7),stored=presetData.request?.[name];if(stored){const {_elements:metadata={},...request}=stored;let mediaNames=metadata.mediaNames||[],records=metadata.marked||[];if(Array.isArray(metadata)){records=metadata;mediaNames=[];metadata.forEach(record=>{mediaNames[record.index]=record.markedName;});}if(!setRequest(request,mediaNames))restorePresetMediaFallback(request,mediaNames);restoreElementMarks(records);}return;}
+  const item=examples[Number(val)];
+  if(item?.request){
+    const request={...item.request};delete request.id;delete request.gold;setRequest(request,item.media_files||[]);
+    if(item.elements&&selectedMedia[item.elements.image]){const media=selectedMedia[item.elements.image];media.elements=item.elements;const card=[...document.querySelectorAll('.question')].find(q=>$('.q-name',q).value===item.elements.question);if(card){card._elementOwner=item.elements.image;card._elementItem=media;card.dataset.elementOwner=item.elements.image;card.querySelector('.q-name').addEventListener('input',event=>{media.elements.question=event.target.value;});}}
+    const needs=[...new Set((request.media||[]).map(m=>m.type))].filter(k=>!loadedMedia.includes(k));
+    if(needs.length)showMediaError(t('This example carries {media}: load a basal-omni model with "Load with media", then pick this example again to send it.',{media:mediaTitle(needs)}));
+  }else if(item)setRequest({state:item.state,questions:item.questions});
 });
 async function deletePreset(kind,name) {
   presetData=await api('/api/presets',{method:'PUT',body:JSON.stringify({kind,name,value:null})});
@@ -674,23 +690,24 @@ function addQuestion(name, q={type:'choice',instructions:'',criteria:{}}) {
   });
   card.addEventListener('click',e=>{
     const b=e.target.closest('button'); if(!b)return;
-    if(b.matches('.remove-question')){card.remove();syncRequest();}
+    if(b.matches('.remove-question')){if(card._elementItem)removeElementQuestion(card._elementItem);card.remove();syncRequest();}
     else if(b.dataset.costMode){setCostMode(card,b.dataset.costMode);syncRequest();}
     else if(b.matches('.add-action')){card._costRows=readCostRows(card);card._costRows.push({action:'',costs:{}});renderCostMatrix(card,true);syncRequest();}
     else if(b.matches('.remove-action')){card._costRows=readCostRows(card);card._costRows.splice(Number(b.dataset.row),1);renderCostMatrix(card,true);syncRequest();}
   });
-  $('#questions').append(card); syncRequest();
+  $('#questions').append(card); updateMediaEvidence(); syncRequest();
 }
-function setRequest(req) {
+function setRequest(req, names=[]) {  // names: file names of req.media (bundled examples); otherwise replay.<ext>
   mediaSelection++;
   selectedMedia.forEach(item=>URL.revokeObjectURL(item.url));selectedMedia=[];$('#mediaInput').value='';renderSelectedMedia();
   const preserveJson=()=>{
     $('#editJsonToggle').checked=true;$('#editJsonArea').hidden=false;$('#builder').hidden=true;
     $('#requestJson').value=JSON.stringify(req,null,2);
     showMediaError(t('This request contains fields or values the Playground builder cannot edit. It remains in Edit JSON mode.'));
+    return false;
   };
   if(!req||typeof req!=='object'||Array.isArray(req)||!Object.hasOwn(req,'state')||req.state==null||
-     !Object.hasOwn(req,'questions')||!req.questions||typeof req.questions!=='object'||Array.isArray(req.questions)){preserveJson();return;}
+     !Object.hasOwn(req,'questions')||!req.questions||typeof req.questions!=='object'||Array.isArray(req.questions))return preserveJson();
   const known=new Set(['state','questions','facts','lang','think','think_text','early_exit','media','detail','model']);
   const media=Array.isArray(req.media)?req.media:[];
   let restored=[];
@@ -705,15 +722,14 @@ function setRequest(req) {
        (Object.hasOwn(req,'think')&&!['','off','force'].includes(req.think))||(Object.hasOwn(req,'think_text')&&typeof req.think_text!=='boolean')||
        (Object.hasOwn(req,'model')&&![...$('#playgroundModel').options].some(o=>o.value===req.model))||
        (Object.hasOwn(req,'early_exit')&&!([...$('#earlyExitSelect').options].some(o=>o.value===req.early_exit))))throw new Error();
-    for(const item of media){
+    media.forEach((item,i)=>{
       const match=item.data.match(/^data:([^;]+);base64,(.*)$/),mime=match?.[1]|| (item.type==='image'?'image/png':'audio/wav'),data=match?.[2]||item.data;
-      const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0)),file=new File([bytes],`replay.${item.type==='image'?'png':'wav'}`,{type:mime});
+      const bytes=Uint8Array.from(atob(data),char=>char.charCodeAt(0)),file=new File([bytes],names[i]||`replay.${item.type==='image'?'png':'wav'}`,{type:mime});
       restored.push({kind:item.type,data,file,url:URL.createObjectURL(file)});
-    }
+    });
   } catch {
     restored.forEach(item=>URL.revokeObjectURL(item.url));
-    preserveJson();
-    return;
+    return preserveJson();
   }
   selectedMedia=restored;renderSelectedMedia();
   $('#editJsonToggle').checked=false;$('#editJsonArea').hidden=true;$('#builder').hidden=false;showMediaError();
@@ -731,12 +747,15 @@ function setRequest(req) {
   $('#questions').innerHTML='';
   for(const [name,q] of Object.entries(req.questions||{})) addQuestion(name,q);
   syncRequest(true);
+  return true;
 }
 const PLAYGROUND_DRAFT='basal-ui.language-draft';
 window.preparePlaygroundLanguageSwitch=()=>{
-  const hadMedia=selectedMedia.length>0;
+  let hadMedia=selectedMedia.length>0;
   if($('#editJsonToggle').checked){
-    sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({json:true,text:$('#requestJson').value,hadMedia}));
+    let text=$('#requestJson').value;
+    try {const request=JSON.parse(text);if(request&&typeof request==='object'&&!Array.isArray(request)){hadMedia=hadMedia||(Array.isArray(request.media)&&request.media.length>0);if('media' in request||'_elements' in request){delete request.media;delete request._elements;text=JSON.stringify(request,null,2);}}} catch {}
+    sessionStorage.setItem(PLAYGROUND_DRAFT,JSON.stringify({json:true,text,hadMedia}));
     return;
   }
   const cards=[...document.querySelectorAll('#questions .question')];
@@ -935,6 +954,21 @@ function renderSource(state, spans) {
   const kinds=[...new Set(accepted.map(s=>s.kind))];
   return `<div class="source-view"><div class="section-head"><strong>${t('Source')}</strong><span class="chips">${kinds.map(k=>`<mark class="${k}">${esc(t(k))}</mark>`).join(' ')}</span></div><pre class="source">${html}</pre></div>`;
 }
+// the probabilities of a choice over the boxes of its options in an image (bundled examples carry the boxes); the
+// colours are fixed (app.css .image-source): the image is the background in both themes
+function imageSources(answers, request, mediaSnapshot=selectedMedia) {
+  return mediaSnapshot.map((item,i)=>({item,i}))
+    .filter(({item,i})=>item?.kind==='image'&&validElementGeometry(item.elements)&&request.media?.[i]?.data===item.data&&answers?.[item.elements.question]?.probabilities)
+    .map(({item})=>{
+      const {question,boxes,size:[w,h]}=item.elements, a=answers[question], probs=a.probabilities, chosen=String(a.choice??a.answer??'');
+      const badge=Math.max(20,Math.min(32,w/28));  // the painted badge's size (elements.js): labels start after it
+      const rects=Object.entries(boxes).map(([k,[x,y,bw,bh]])=>{
+        const p=Number(probs[k])||0, win=k===chosen;
+        return `<rect class="${win?'chosen':''}" x="${x}" y="${y}" width="${bw}" height="${bh}" fill-opacity="${(0.08+0.5*p).toFixed(3)}"><title>${esc(k)} · ${pct(p)}</title></rect><text x="${x+badge+6}" y="${Math.max(16,y-4)}">${esc(k)} · ${pct(p)}</text>`;
+      }).join('');
+      return `<div class="source-view image-source"><div class="section-head"><strong>${t('Image · {question}',{question:esc(question)})}</strong><span class="chips"><span class="chip">${t('element probabilities')}</span></span></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${t('Element probabilities over {name}',{name:esc(item.file.name)})}"><image href="data:${esc(item.file.type)};base64,${esc(item.data)}" width="${w}" height="${h}"/>${rects}</svg></div>`;  // not the blob URL: it is revoked when the media change
+    }).join('');
+}
 // thinking (basal/think.py): readout 2 after the reasoning, with the answer it replaced
 function thinkBlock(a) {
   const think=a.think, used=a.meta?.think;
@@ -942,7 +976,7 @@ function thinkBlock(a) {
   if(!think||think.tokens==null)return used?`<div class="chips"><span class="chip muted">${t('no reasoning')}</span></div>`:'';
   return `<div class="think-block"><span class="chip">${t('reasoned')}</span> ${esc(think.tokens)} ${t('tokens')} · ${num(think.ms,0)} ms · ${t('calibration')} ${esc(t(think.calibration??'—'))}; ${t('without thinking')}: ${pct(think.no_think?.confidence)}${think.text?`<details><summary>${t('Reasoning')}</summary><pre>${esc(think.text)}</pre></details>`:''}</div>`;
 }
-function renderResults(data, request) {
+function renderResults(data, request, mediaSnapshot=selectedMedia) {
   const answers=data?.answers || data || {}, entry=modelEntry(request.model); let html='';
   for(const [name,answer] of Object.entries(answers)) {
     const q=request.questions?.[name]||{};
@@ -958,7 +992,7 @@ function renderResults(data, request) {
   const extraUsage=[['branches',u?.branches],['second_order_branches',u?.second_order_branches],['lane',u?.lane]].filter(([,v])=>v!=null).map(([k,v])=>`${k}: ${esc(v)}`).join(' · ');
   const usage=u?`<div class="answer-meta">${t('Latency')}: ${u.latency_ms??'—'} ms · ${t('Input tokens')}: ${u.input_tokens??'—'} · ${t('Questions')}: ${u.questions??'—'}${extraUsage?` · ${extraUsage}`:''}${mediaSummary}${thinkUsage}</div>`:'';
   const meter=u&&entry?.context?`<div class="answer-meta">${t('Longest prompt')} ${esc(u.longest_prompt_tokens??'—')} / ${esc(entry.context.limit??'—')} ${t('tokens')} · ${t('policy')} ${esc(entry.context.overflow)}</div>`:'';
-  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong>${html&&!request.media?`<button type="button" id="inspectDecision">${t('Inspect this decision')}</button>`:''}</div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'') : `<div class="empty">${t('No answers returned.')}</div>`);
+  $('#results').innerHTML=`<div class="section-head"><strong>${esc(request.model||'')}</strong>${html&&!request.media?`<button type="button" id="inspectDecision">${t('Inspect this decision')}</button>`:''}</div>`+resultBanners(entry,u)+(html ? usage+meter+html+(spans.length?renderSource(request.state,spans):'')+imageSources(answers,request,mediaSnapshot) : `<div class="empty">${t('No answers returned.')}</div>`);
   const inspectButton=$('#inspectDecision'); if(inspectButton)inspectButton.onclick=()=>inspectDecision(request);
   $('#rawResponse').textContent=JSON.stringify(data,null,2); $('#rawDetails').hidden=false;
 }
@@ -974,9 +1008,14 @@ async function sendDecision() {
     if(invalid.length){showDecideError(invalid.map(card=>`${$('.q-name',card).value||t('question')}: ${card._error}`).join('\n'));return;}
   }
   request.model=selectedModel;
+  const unsupported=[...new Set((Array.isArray(request.media)?request.media:[]).map(m=>m?.type))].filter(k=>['image','audio'].includes(k)&&!loadedMedia.includes(k));
+  if(unsupported.length){showDecideError(t('{model} does not take {media}. Remove the media, or load a basal-omni model with "Load with media" and select it.',{model:shortName(selectedModel||t('This model')),media:mediaTitle(unsupported)}));return;}
+  const withEvidence=Array.isArray(request.media)&&request.media.length?Object.entries(request.questions||{}).filter(([,q])=>q?.evidence).map(([name])=>name):[];
+  if(withEvidence.length){showDecideError(t('Evidence spans are read from the state\'s text, so a request with media cannot have them: turn off "Evidence spans" on {questions}, or remove the media.',{questions:withEvidence.join(', ')}));return;}
   if($('#editJsonToggle').checked)$('#requestJson').value=JSON.stringify(request,null,2);
   $('#sendButton').disabled=true;
-  try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request); }
+  const mediaSnapshot=(Array.isArray(request.media)?request.media:[]).map(media=>{const item=selectedMedia.find(current=>current.data===media?.data);return item?{kind:item.kind,data:item.data,file:item.file,elements:item.elements}:null;});
+  try { const response=await api('/api/decide',{method:'POST',body:JSON.stringify(request)}); renderResults(response,request,mediaSnapshot); }
   catch(e) { showDecideError(e.message); toast(e.message,'error'); }
   finally { $('#sendButton').disabled=false; }
 }
@@ -999,7 +1038,12 @@ $('#editJsonToggle').addEventListener('change',()=>{
     try{request=JSON.parse($('#requestJson').value);}
     catch(e){showMediaError(t('Invalid request JSON: {message}',{message:e.message}));$('#editJsonToggle').checked=true;return;}
     if(!request||typeof request!=='object'||Array.isArray(request)){showMediaError(t('request JSON must be an object'));$('#editJsonToggle').checked=true;return;}
-    showMediaError();setRequest(request);
+    showMediaError();
+    const meta=elementPresetData(),media=Array.isArray(request.media)?request.media:[];
+    const names=media.map(item=>selectedMedia.find(current=>current.data===item?.data)?.file.name);
+    const marks=meta.marked.flatMap(record=>{const index=media.findIndex(item=>item?.data===record.markedData);return index<0?[]:[{...record,index}];});
+    if(!setRequest(request,names))restorePresetMediaFallback(request,names);
+    restoreElementMarks(marks);
   }
   $('#editJsonArea').hidden=!$('#editJsonToggle').checked;$('#builder').hidden=$('#editJsonToggle').checked;
 });
@@ -1258,7 +1302,6 @@ function renderPlaygroundModels(ready) {
 function setPlaygroundMedia(kinds) {
   if(JSON.stringify(kinds)===JSON.stringify(loadedMedia))return;
   loadedMedia=kinds; clearSelectedMedia(); syncRequest();
-  $('#mediaField').hidden=!kinds.length;
   $('#mediaInput').accept=[kinds.includes('image')?'image/*':'',kinds.includes('audio')?'audio/*':''].filter(Boolean).join(',');
 }
 $('#playgroundModel').addEventListener('change',e=>{selectedModel=e.target.value;localStorage.setItem('basal-ui.model',selectedModel);const model=readyModels().find(m=>m.id===selectedModel);setPlaygroundMedia(model?.media||[]);setPlaygroundExperimental(model);syncRequest(false,REQUEST_OPTION_KEYS);if(serveData)renderConnect();});

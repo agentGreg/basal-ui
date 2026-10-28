@@ -334,6 +334,38 @@ def test_model_manager_disk_rows_stack_without_overflow_at_mobile_width(page, te
         }""")
 
 
+def test_media_example_loads_with_a_notice_and_draws_element_probabilities(page, text_model):
+    view(page, "playground")
+    page.select_option("#playgroundModel", text_model["id"])
+    index = page.evaluate("() => examples.findIndex(e => e.id === 'media-01-checkout-elements')")
+    page.select_option("#examples", str(index))
+    sync_api.expect(page.locator("#mediaError")).to_contain_text("Load with media")  # a text model takes no images
+    assert page.evaluate("() => selectedMedia.map(m => m.file.name)") == ["checkout.png"]
+    sync_api.expect(page.locator("#mediaField")).to_be_visible()
+    sync_api.expect(page.locator("#mediaInput")).to_be_disabled()
+    decide_calls = []
+    page.route("**/api/decide", lambda route: (decide_calls.append(1), route.fulfill(status=500, body="sent")))
+    page.click("#sendButton")
+    sync_api.expect(page.locator("#decideError")).to_contain_text("does not take images")  # refused before sending
+    assert not decide_calls
+    page.evaluate("() => { loadedMedia = ['image', 'audio']; }")  # as on a media model: evidence is what is refused
+    page.check("#editJsonToggle")
+    page.evaluate("""() => { const r = JSON.parse($('#requestJson').value); r.questions.click_target.evidence = true;
+      $('#requestJson').value = JSON.stringify(r); }""")
+    page.click("#sendButton")
+    sync_api.expect(page.locator("#decideError")).to_contain_text('turn off "Evidence spans" on click_target')
+    assert not decide_calls
+    page.evaluate("() => { loadedMedia = []; }")
+    page.evaluate("""() => renderResults({answers: {click_target: {type: 'choice', choice: '1',
+      probabilities: {'1': 0.7, '2': 0.2, '3': 0.05, '4': 0.05}}}}, buildRequest())""")
+    overlay = page.locator("#results .image-source svg")
+    assert overlay.locator("rect").count() == 4
+    assert "checkout.png" in overlay.get_attribute("aria-label")
+    sync_api.expect(overlay.locator("text").first).to_have_text("1 · 70.0%")
+    page.select_option("#examples", str(page.evaluate("() => examples.findIndex(e => e.id === 'media-04-voice-complaint')")))
+    sync_api.expect(page.locator("#mediaItems audio.media-audio")).to_have_count(1)
+    assert page.evaluate("() => selectedMedia.map(m => m.file.name)") == ["complaint_pl.wav"]
+
 
 RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
           "questions": {"category": {"type": "classify", "option_keys": "show",

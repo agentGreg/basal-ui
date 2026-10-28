@@ -655,7 +655,7 @@ function explainPosted(req) {
     INFO = await ri.json();
     if (!ri.ok) throw new Error(INFO.error || ri.statusText);
     $("#modelchip").textContent = `${INFO.model} · ${INFO.device} · ${INFO.dtype} · ${INFO.layers} layers · prompt format ${INFO.prompt_format} · ${INFO.orders} option order${INFO.orders === 1 ? "" : "s"}`;
-    EXAMPLES = await (await fetch("api/examples")).json();
+    EXAMPLES = (await (await fetch("api/examples")).json()).filter(e => !e.request.media);  // the lens reads text only
     const sel = $("#ex"), groups = {};
     EXAMPLES.forEach((e, i) => {
       groups[e.file] ??= sel.appendChild(h("optgroup", { label: e.file }));

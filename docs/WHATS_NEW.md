@@ -19,6 +19,12 @@
   (not the cache path) so `basal-serve` applies it; Inspect explains a `"facts": "auto"` request with the facts the
   served model reads; the Playground's context meter appears once the engine reports its context policy. MCP on the
   API server answers with the first loaded model until the engine's MCP takes a `model` argument.
+- **Playground visual elements and media samples:** mark, label, move and resize numbered boxes on an uploaded image;
+  save them as a `choice` question and see per-element probabilities over the marked image. Saved requests retain the
+  original screenshot and marks. Evidence spans are disabled while media is attached. `basal_ui/examples/media.jsonl`
+  adds three generated images (a checkout screenshot with numbered elements, a Polish invoice, a revenue chart) and
+  two voice clips (Polish complaint, English appointment) for basal-omni, loaded into the media field with an audio
+  player for clips and a notice on a model without media; Inspect skips them. [USAGE.md](USAGE.md#browser-app-pick-a-model-for-your-hardware-and-try-it)
 
 # Before 0.1.0 (in the fork)
 

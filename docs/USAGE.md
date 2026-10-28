@@ -81,7 +81,10 @@ when new models appeared in the Hugging Face catalog (the offline catalog of the
   Models: for a `-GGUF` repository only the chosen `.gguf` file goes, and the repository once no `.gguf` is left. The
   directory cannot change while any model is loaded or downloading.
 - **Playground**: a model selector (the ready models), the bundled examples (`advanced.jsonl`: one request per
-  question type), a question builder for every type (`choice`, `noul`, `score`, `multi`, `act` with simple costs or a
+  question type; `media.jsonl`: basal-omni requests with the images and voice clips of `basal_ui/examples/media/` — a
+  checkout screenshot whose numbered elements are the options of a `choice` (web agent), a Polish invoice, a revenue
+  chart, a Polish complaint call and an English appointment call; `media/make_media.py` regenerates the files), a
+  question builder for every type (`choice`, `noul`, `score`, `multi`, `act` with simple costs or a
   cost matrix, `tool`, `classify`, `verify`, `compress`, `extract`, with `max_error` and evidence where the type takes
   them), `facts` and `lang` for the request, or the raw JSON request (which carries `"model"`). Question names must be
   non-blank and unique; requests containing fields or media the builder cannot restore stay visible in Edit JSON mode.
@@ -95,7 +98,13 @@ when new models appeared in the Hugging Face catalog (the offline catalog of the
   in its own fields (classify labels with rubrics, keyed criteria, `option_keys`) is sent as it was until that field
   is edited; `multi`, multi-label `classify` and multi `tool` take the set options (objective, threshold, min, max;
   multi and tool also fallback and exclusive keys). Requests go to the selected model's `POST /v1/systemone`. With a
-  media server, up to 8 images or audio files (20 MiB each) go along as `media`, with the image `detail`.
+  media server, up to 8 images or audio files (20 MiB each) go along as `media`, with the image `detail`. The media
+  examples load their files into the media field, with an audio player for clips; on a model without media they load
+  with a notice and cannot be sent. Mark elements on one image to add a `choice` question; boxes are saved as numbered
+  overlays in a marked copy, and their probabilities appear over that image after a decision. Saved requests retain
+  the original and marked image and boxes. Evidence spans are disabled while media is attached because they refer to
+  spans in the state's text; the raw JSON request still rejects evidence with media. Inspect's example list leaves the
+  media examples out (the lens reads text only).
 
 ## Load options
 
