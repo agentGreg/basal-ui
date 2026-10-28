@@ -1,3 +1,4 @@
+import json
 import math
 import re
 from pathlib import Path
@@ -481,7 +482,7 @@ def test_community_cache_reads_weights_only_gguf_base_model(monkeypatch, tmp_pat
         {
             "repo_type": "model",
             "repo_id": "pawelkiszczak/basal-1.0-4.5B-GGUF",
-            "revisions": [type("Revision", (), {"files": [file, readmefile]})()],
+            "revisions": [type("Revision", (), {"files": [file, readmefile], "refs": {"main"}, "last_modified": 0})()],
         },
     )()
     outsider = type(
@@ -490,13 +491,58 @@ def test_community_cache_reads_weights_only_gguf_base_model(monkeypatch, tmp_pat
         {
             "repo_type": "model",
             "repo_id": "other/basal-1.0-4.5B-GGUF",
-            "revisions": [type("Revision", (), {"files": [file, readmefile]})()],
+            "revisions": [type("Revision", (), {"files": [file, readmefile], "refs": {"main"}, "last_modified": 0})()],
         },
     )()
     monkeypatch.setattr("huggingface_hub.scan_cache_dir", lambda _: type("Cache", (), {"repos": [repo, outsider]})())
     (v,) = catalog._cache_variants(tmp_path)
     assert v.community and v.author == "pawelkiszczak"
     assert v.base_repo == "Remek/basal-1.0-4.5B" and v.base_revision == "abc123" and v.weights_only
+
+
+def _bf16_cache(tmp_path, snapshots: dict[str, dict[str, bytes]], main: str):
+    """A Remek/basal-2.0-mini cache with the given snapshots (revision -> files) and refs/main."""
+    repo = tmp_path / "models--Remek--basal-2.0-mini"
+    for revision, files in snapshots.items():
+        snapshot = repo / "snapshots" / revision
+        snapshot.mkdir(parents=True)
+        for name, data in files.items():
+            (snapshot / name).write_bytes(data)
+    (repo / "refs").mkdir()
+    (repo / "refs" / "main").write_text(main)
+    return repo / "snapshots" / main
+
+
+BF16_MINI = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
+
+
+def test_a_sharded_snapshot_is_downloaded_only_with_every_shard_its_index_names(tmp_path):
+    index = json.dumps(
+        {"weight_map": {"a": "model-00001-of-00002.safetensors", "b": "model-00002-of-00002.safetensors"}}
+    ).encode()
+    snapshot = _bf16_cache(
+        tmp_path,
+        {"a" * 40: {"model.safetensors.index.json": index, "model-00001-of-00002.safetensors": b"1"}},
+        "a" * 40,
+    )
+    assert is_downloaded(BF16_MINI, tmp_path) is None
+    (snapshot / "model-00002-of-00002.safetensors").write_bytes(b"2")
+    assert is_downloaded(BF16_MINI, tmp_path) == snapshot
+    (snapshot / "model.safetensors.index.json").write_text("{not json")
+    assert is_downloaded(BF16_MINI, tmp_path) is None
+
+
+def test_an_offline_entry_counts_the_main_snapshot_only(tmp_path):
+    _bf16_cache(
+        tmp_path,
+        {
+            "a" * 40: {"model-00001-of-00002.safetensors": b"1" * 10, "model-00002-of-00002.safetensors": b"2" * 10},
+            "b" * 40: {"model.safetensors": b"3" * 7},
+        },
+        "b" * 40,
+    )
+    (v,) = catalog._cache_variants(tmp_path)
+    assert v.weights_bytes == 7
 
 
 def test_weights_only_gguf_download_and_serve_require_base_metadata(monkeypatch, tmp_path):

@@ -87,6 +87,23 @@ def test_bundled_set_and_custom_set_validation(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(
+    ("row", "reason"),
+    [
+        ({"state": "s", "question": "q", "options": ["only"]}, r"rows\.jsonl:2: expected"),
+        ({"state": "s", "options": ["a", "b"]}, r"rows\.jsonl:2: expected"),
+        ({"state": "s", "question": "q", "options": ["a", "b"], "gold": 2}, r"rows\.jsonl:2: gold must index"),
+        ({"state": "s", "question": "q", "options": ["a", "b"], "gold": True}, r"rows\.jsonl:2: gold must index"),
+    ],
+)
+def test_a_malformed_benchmark_row_names_its_line(tmp_path, row, reason):
+    good = {"state": "s", "question": "q", "options": ["a", "b"], "gold": 1}
+    path = tmp_path / "rows.jsonl"
+    path.write_text(json.dumps(good) + "\n" + json.dumps(row) + "\n")
+    with pytest.raises(ValueError, match=reason):
+        bench.load_items([path])
+
+
 def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monkeypatch):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     release = threading.Event()

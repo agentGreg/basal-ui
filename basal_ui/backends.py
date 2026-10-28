@@ -264,13 +264,7 @@ class Manager:
                             needed = assessment.est_memory_bytes
                         except ValueError:
                             needed = None
-                        with self.fleet.lock:
-                            runner = self.fleet.runners.get(v.id)
-                        revision = (
-                            runner.options.get("revision")
-                            if runner is not None and runner.status()["state"] == "ready"
-                            else self.settings.load_options(v.id).get("revision")
-                        )
+                        revision = self._lookup_revision(v.id)
                         models.append(
                             {
                                 "id": v.id,
@@ -349,6 +343,14 @@ class Manager:
             for record in self.tests.values()
         ]
 
+    def _lookup_revision(self, model_id):
+        """The revision the inventory checks a model's files at: the running child's, else the saved load option."""
+        with self.fleet.lock:
+            runner = self.fleet.runners.get(model_id)
+        if runner is not None and runner.status()["state"] == "ready":
+            return runner.options.get("revision")
+        return self.settings.load_options(model_id).get("revision")
+
     def start(self, body):
         import secrets
 
@@ -364,7 +366,7 @@ class Manager:
         variants = {v.id: v for v in self.variants()}
         variant, hw = variants[model_id], self.current_hardware()
         assessment = estimate(variant, hw, mode)
-        local = catalog.is_downloaded(variant, self.settings.models_dir())
+        local = catalog.is_downloaded(variant, self.settings.models_dir(), revision=self._lookup_revision(model_id))
         if local is None:
             raise ValueError("Downloaded files are missing; no download will be attempted")
         # Pin the selected cache snapshot so a later main-branch refresh cannot change the test.

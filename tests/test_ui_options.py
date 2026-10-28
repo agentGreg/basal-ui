@@ -255,6 +255,15 @@ def test_available_modes_follow_the_hardware_and_the_variant():
     ]
 
 
+def test_rocm_is_not_offered_the_nvidia_only_modes():
+    rocm = Hardware(
+        "cuda", "AMD Radeon 8060S", 96 * 1024**3, None, (11, 5), frozenset({"cuda", "rocm", "vllm", "sglang"})
+    )
+    assert not available(BF16, rocm) & {"vllm", "sglang", "fp8", "nvfp4"}
+    fp8 = Variant("fp8", "Remek/basal-omni-1.0-mini-FP8", "basal-omni-1.0", "mini", "FP8", "FP8", None, 100, False)
+    assert not catalog.assess(fp8, rocm).runnable
+
+
 def test_availability_messages_return_reproducible_codes_and_params():
 
     recurrent = Variant(

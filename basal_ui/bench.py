@@ -32,14 +32,20 @@ def load_items(paths) -> list[dict]:
                 item = json.loads(line)
             except ValueError as exc:
                 raise ValueError(f"{path}:{number}: not JSON ({exc})") from exc
-            if (
+            if not (
                 isinstance(item, dict)
                 and isinstance(item.get("options"), list)
                 and len(item["options"]) >= 2
                 and isinstance(item.get("state"), (str, dict))
                 and isinstance(item.get("question"), str)
             ):
-                items.append({**item, "_file": path.stem})
+                raise ValueError(f'{path}:{number}: expected {{"state", "question", "options" (2 or more)}}')
+            gold = item.get("gold")
+            if "gold" in item and not (
+                isinstance(gold, int) and not isinstance(gold, bool) and 0 <= gold < len(item["options"])
+            ):
+                raise ValueError(f"{path}:{number}: gold must index options")
+            items.append({**item, "_file": path.stem})
     return items
 
 

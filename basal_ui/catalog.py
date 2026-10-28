@@ -4,6 +4,7 @@ Each repository from the supported basal authors (and each .gguf file of a -GGUF
 reports whether this machine can serve it and whether it fits the memory budget; suggest() selects model cards by fit.
 """
 
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -309,9 +310,13 @@ def _cache_variants(cache_dir: Path) -> list[Variant]:
     out = []
     for repo in cache.repos:
         author = repo.repo_id.split("/", 1)[0]
-        if repo.repo_type != "model" or author not in AUTHORS or not parse_repo(repo.repo_id):
+        if repo.repo_type != "model" or author not in AUTHORS or not parse_repo(repo.repo_id) or not repo.revisions:
             continue
-        files = {f.file_name: f.size_on_disk for rev in repo.revisions for f in rev.files}
+        # one snapshot: the one refs/main names, else the newest (other revisions may hold other shards)
+        main = next((r for r in repo.revisions if "main" in r.refs), None) or max(
+            repo.revisions, key=lambda r: r.last_modified
+        )
+        files = {f.file_name: f.size_on_disk for f in main.files}
         base_repo = base_revision = None
         if parse_repo(repo.repo_id)[2] == "GGUF" and not any(
             name in files for name in ("tokenizer.json", "CALIBRATION.json")
@@ -361,7 +366,7 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
     """(basal-serve --mode, None) or (None, why this machine cannot serve the variant)."""
     cap = hw.cuda_capability or (0, 0)
     if v.port == "FP8":
-        if hw.platform != "cuda" or cap < (8, 9):
+        if hw.platform != "cuda" or cap < (8, 9) or "rocm" in hw.engines:  # ROCm reports platform "cuda"
             return None, _text("fp8_hardware")
         if v.family == CURRENT_TEXT_FAMILY:  # loaded as stored by the basal engine
             return "fast", None
@@ -369,7 +374,7 @@ def _mode(v: Variant, hw: Hardware) -> tuple[str | None, str | None]:
             return None, _text("fp8_vllm")
         return "vllm", None
     if v.port == "NVFP4":
-        if hw.platform != "cuda" or cap < (10, 0):
+        if hw.platform != "cuda" or cap < (10, 0) or "rocm" in hw.engines:
             return None, _text("nvfp4_hardware")
         if "vllm" not in hw.engines:
             return None, _text("nvfp4_vllm")
@@ -606,7 +611,16 @@ def is_downloaded(v: Variant, cache_dir: Path, revision: str | None = None) -> P
         )
     except Exception:  # noqa: BLE001 — an absent or partial snapshot is not downloaded
         return None
-    weights = [path / v.gguf_file] if v.gguf_file else list(path.glob("*.safetensors"))
+    if v.gguf_file:
+        weights = [path / v.gguf_file]
+    elif (path / "model.safetensors.index.json").exists():  # sharded: every shard the index names
+        try:
+            index = json.loads((path / "model.safetensors.index.json").read_text(encoding="utf-8"))
+            weights = [path / name for name in set(index["weight_map"].values())]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+    else:
+        weights = list(path.glob("*.safetensors"))
     return (
         path
         if weights and all(w.exists() for w in weights) and (not v.base_repo or base_dir(v, cache_dir) is not None)

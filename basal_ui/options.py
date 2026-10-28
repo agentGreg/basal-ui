@@ -278,26 +278,27 @@ def available_modes(v, hw, assessment) -> list[dict]:
     """Every basal-serve mode in MODE_ORDER with whether this machine can serve the variant with it and why not."""
     graph = _cuda_graph(v, hw)
     cap = hw.cuda_capability or (0, 0)
+    nvidia = hw.platform == "cuda" and "rocm" not in hw.engines  # ROCm reports platform "cuda" too
     mlx_port = v.port.startswith("MLX") or v.port == "bf16"
     reasons = {
         "fast": graph,
         "fast-nocompile": graph,
         "fast-exit": graph or (None if v.family == "basal-1.0" else OPTION_TEMPLATES["mode_exit_heads"]),
         "fp8": graph or fp8_unavailable(hw),
-        "nvfp4": graph or (None if cap >= (10, 0) else OPTION_TEMPLATES["mode_nvfp4_blackwell"]),
+        "nvfp4": graph or (None if cap >= (10, 0) and nvidia else OPTION_TEMPLATES["mode_nvfp4_blackwell"]),
         "eager": None if v.port == "bf16" else OPTION_TEMPLATES["mode_eager_format"].format(port=v.port),
         "vllm": (
             OPTION_TEMPLATES["mode_vllm_install"]
             if "vllm" not in hw.engines
             else None
-            if hw.platform == "cuda"
+            if nvidia
             else OPTION_TEMPLATES["mode_vllm_hardware"]
         ),
         "sglang": (
             OPTION_TEMPLATES["mode_sglang_install"]
             if "sglang" not in hw.engines
             else None
-            if hw.platform == "cuda"
+            if nvidia
             else OPTION_TEMPLATES["mode_sglang_hardware"]
         ),
         "mlx": (
@@ -353,7 +354,8 @@ def available_media_modes(assessment, hw) -> list[dict]:
     """The modes of a load with media (--media on): eager wherever basal[media] is installed, vLLM on CUDA with
     basal[vllm] (basal-serve refuses the checkpoints vLLM reads differently, basal-omni-1.1-max)."""
     reason = assessment.media_reason if assessment.media_mode is None else None
-    vllm = reason or (None if hw.platform == "cuda" and "vllm" in hw.engines else OPTION_TEMPLATES["mode_vllm_media"])
+    nvidia = hw.platform == "cuda" and "rocm" not in hw.engines
+    vllm = reason or (None if nvidia and "vllm" in hw.engines else OPTION_TEMPLATES["mode_vllm_media"])
     eager = _availability_message(reason)
     vllm_message = _availability_message(vllm)
     return [
@@ -461,7 +463,7 @@ def adapter_unavailable():
 def fp8_unavailable(hw):
     """Why fp8 cannot run here, None when it can: basal-serve ≥ 2.3.2 stops --mode fp8 / --quant fp8 before loading
     below compute capability 8.9 (engine.fp8_refused)."""
-    if hw.platform == "cuda" and (hw.cuda_capability or (0, 0)) < (8, 9):
+    if hw.platform == "cuda" and ((hw.cuda_capability or (0, 0)) < (8, 9) or "rocm" in hw.engines):
         return OPTION_TEMPLATES["mode_fp8_hardware"]
     return None
 

@@ -109,6 +109,21 @@ def test_inventory_uses_saved_revision_for_downloaded_model_lookup(manager, monk
     assert calls and all(revision == "pinned-revision" for _, revision in calls)
 
 
+def test_start_checks_the_files_at_the_revision_the_inventory_checked(manager, monkeypatch):
+    calls = []
+    real = catalog.is_downloaded
+    monkeypatch.setattr(settings, "load_options", lambda model_id: {"revision": "pinned-revision"})
+
+    def recording(variant, cache, revision=None):
+        calls.append(revision)
+        return real(variant, cache)
+
+    monkeypatch.setattr(catalog, "is_downloaded", recording)
+    manager.start(request())
+    finish(manager)
+    assert calls and set(calls) == {"pinned-revision"}
+
+
 def test_private_test_does_not_change_settings_history_or_stats(manager, tmp_path):
     before = {p.name: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
     manager.start(request())
