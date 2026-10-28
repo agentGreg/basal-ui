@@ -5,7 +5,7 @@ REF ?=
 ARGS ?=
 export PYTHON UV REF  # recipes read them as shell variables ("$$UV"), which quotes paths with spaces
 
-.PHONY: help install engine engine-pin lint test e2e run
+.PHONY: help install engine engine-pin lint test e2e run screenshots
 help:
 	@printf '%s\n' \
 	  'make install    uv sync: the venv with the dev group (engine pinned by [tool.uv.sources]) and the mcp extra' \
@@ -15,6 +15,7 @@ help:
 	  'make test       Run the unit tests (tests/, not tests/e2e)' \
 	  'make e2e        Run the end-to-end gate with real models (BASAL_E2E=1; docs/E2E.md)' \
 	  'make run        Start basal-ui' \
+	  'make screenshots Refresh docs/images (README screenshots, tour GIF): basal-2.0-mini on disk, Chromium, ffmpeg' \
 	  'Variables: PYTHON UV REF ARGS' \
 	  'ARGS appends pytest or basal-ui options (shell quoting applies).' \
 	  'A later make install restores the engine pinned by the dev group over a make engine switch.'
@@ -44,3 +45,6 @@ e2e:
 
 run:
 	"$$PYTHON" -m basal_ui $(ARGS)
+
+screenshots:
+	"$$UV" run --extra e2e python scripts/screenshots.py
