@@ -772,6 +772,46 @@ def test_restart_reserves_memory_until_the_replacement_load_starts(tmp_path, mon
     assert not thread.is_alive() and not errors and "restart:a" not in fleet.reserved
 
 
+def test_a_restart_keeps_its_model_out_of_concurrent_loads_and_releases_its_reservation(tmp_path, monkeypatch):
+    monkeypatch.setattr(Runner, "_start", lambda *args: None)
+    fleet = make_fleet(tmp_path, Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset()))
+
+    def assessment(model_id):
+        variant = Variant(model_id, f"repo/{model_id}", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
+        return SimpleNamespace(variant=variant, mode="eager", est_memory_bytes=4 * 1024**3)
+
+    fleet.load(assessment("a"))
+    fleet.runners["a"].state = "ready"
+    terminating, release = threading.Event(), threading.Event()
+
+    def slow_terminate(proc):
+        terminating.set()
+        release.wait(2)
+
+    monkeypatch.setattr(Runner, "_terminate", staticmethod(slow_terminate))
+    errors = []
+
+    def restart():
+        try:
+            fleet.restart(assessment("a"))
+        except RuntimeError as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=restart, daemon=True)
+    thread.start()
+    assert terminating.wait(2)
+    with pytest.raises(RuntimeError, match="maintenance"):  # the old child is still going away
+        fleet.load(assessment("a"))
+    fleet.stopping = True  # the replacement load now fails
+    release.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive() and errors
+    assert fleet.reserved == {} and fleet.draining == set() and fleet.retiring == {}
+    fleet.stopping = False
+    fleet.load(assessment("a"))
+    assert fleet.runners["a"].state == "downloading"
+
+
 def test_memory_routes_validate_and_report_the_hardware_budget(tmp_path):
     app, _ = app_for(tmp_path, [], hw=Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset(), 5))
     with TestClient(app, base_url="http://127.0.0.1") as client:

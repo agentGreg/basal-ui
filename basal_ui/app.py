@@ -38,6 +38,7 @@ STATIC = Path(__file__).parent / "static"
 EXAMPLES = Path(__file__).parent / "examples"
 MEDIA = EXAMPLES / "media"  # the files the bundled examples name in media[i].file
 MIME = {".png": "image/png", ".jpg": "image/jpeg", ".wav": "audio/wav", ".mp3": "audio/mpeg", ".flac": "audio/flac"}
+AUTO_LOAD_STOP_S = 30  # shutdown waits this long for a stalled auto-load (catalog, download) before moving on
 FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "omni", "1.5", "1.0"))}
 
 
@@ -187,8 +188,9 @@ def create_app(
         with auto_load_lock:
             auto_load_stop.set()
         if auto_load_thread is not None:
-            while auto_load_thread.is_alive():
-                auto_load_thread.join(timeout=5)
+            auto_load_thread.join(timeout=AUTO_LOAD_STOP_S)
+            if auto_load_thread.is_alive():  # auto_load_stop keeps it from loading anything once it wakes up
+                fleet.event("warn", "shutdown: auto-load is still running (catalog or download stalled); continuing")
         while not gateway.stop():
             fleet.event("error", "API server shutdown is still draining; waiting before tearing down shared state")
             await asyncio.sleep(1)

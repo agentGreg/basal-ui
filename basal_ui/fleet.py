@@ -1,5 +1,6 @@
 """The loaded models: one basal-serve child per Runner, owned by the Fleet with their downloads, logs, jobs, statistics and history."""
 
+import asyncio
 import dataclasses
 import hashlib
 import os
@@ -24,6 +25,7 @@ from .jobs import Jobs, LogBuffer, terminate
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
 MODEL_LOGS_KEPT = 10  # log buffers of unloaded models kept for the Logs view
 RSS_INTERVAL_S = 2  # `ps` runs at most this often for the resident memory of the children
+JOB_SHUTDOWN_S = 30  # shutdown waits this long for cancelled jobs before unloading the models
 
 
 def _lan_ip():
@@ -593,9 +595,10 @@ class Fleet:
             self.reserved.pop(kind, None)
 
     def load(self, assessment, media=False, options=None, _reservation=None, **runner_options):
+        """_reservation: the memory restart() reserved; that restart also holds the model in maintenance."""
         model_id = assessment.variant.id
         with self.lock:
-            if self.stopping or model_id in self.draining:
+            if self.stopping or (model_id in self.draining and _reservation is None):
                 raise RuntimeError("model is unavailable during maintenance")
             existing = self.runners.get(model_id)
             state = existing.status()["state"] if existing is not None else "idle"
@@ -658,7 +661,8 @@ class Fleet:
         return self.status()
 
     def restart(self, assessment, media=False, options=None):
-        """Unload and load again; options None keeps the running child's load options."""
+        """Unload and load again; options None keeps the running child's load options. The model stays in maintenance
+        (no concurrent load) until the replacement load starts, and a failed load releases the memory it reserved."""
         model_id = assessment.variant.id
         with self.lock:
             if model_id in self.draining:
@@ -671,14 +675,21 @@ class Fleet:
             proc, est = current.detach()
             self.runners.pop(model_id)
             self.retiring[current] = est
+            self.draining.add(model_id)
             # The existing remembered model remains available for auto-load after the restart.
         self.event("info", f"restart: {model_id}")
-        Runner._terminate(proc)
         reservation = f"restart:{model_id}"
-        with self.lock:
-            self.retiring.pop(current, None)
-            self.reserved[reservation] = assessment.est_memory_bytes or 0
-        return self.load(assessment, media=media, options=options, _reservation=reservation)
+        try:
+            Runner._terminate(proc)
+            with self.lock:
+                self.retiring.pop(current, None)
+                self.reserved[reservation] = assessment.est_memory_bytes or 0
+            return self.load(assessment, media=media, options=options, _reservation=reservation)
+        finally:
+            with self.lock:
+                self.retiring.pop(current, None)
+                self.draining.discard(model_id)
+                self.reserved.pop(reservation, None)
 
     def download(self, variant) -> bool:
         """Start a runner-less download into the models directory; False when the model is on disk already.
@@ -768,13 +779,17 @@ class Fleet:
             return fn()
 
     def _record(self, model_id, body, path, source, status, data, latency_ms):
+        """Count and keep the decision; a failed write is logged, never turned into a failed answer."""
         if source == "benchmark":
             return
-        if self.stats is not None:
-            self.stats.record(model_id, data, latency_ms, ok=200 <= status < 300)
-        if self.history is not None:
-            request = {"model": model_id, **body} if path == "/v1/systemone" else body
-            self.history.append(make_record(model_id, source, request, status, data, latency_ms))
+        try:
+            if self.stats is not None:
+                self.stats.record(model_id, data, latency_ms, ok=200 <= status < 300)
+            if self.history is not None:
+                request = {"model": model_id, **body} if path == "/v1/systemone" else body
+                self.history.append(make_record(model_id, source, request, status, data, latency_ms))
+        except OSError as exc:
+            self.event("error", f"decision not recorded: {exc}")
 
     @staticmethod
     def _json(response):
@@ -859,7 +874,8 @@ class Fleet:
             try:
                 response = await runner.adecide(client, body, path)
             except httpx.HTTPError as exc:
-                self._record(
+                await asyncio.to_thread(
+                    self._record,
                     model_id,
                     body,
                     path,
@@ -869,7 +885,8 @@ class Fleet:
                     (time.perf_counter() - t0) * 1000,
                 )
                 raise
-            self._record(
+            await asyncio.to_thread(
+                self._record,
                 model_id,
                 body,
                 path,
@@ -881,9 +898,18 @@ class Fleet:
             return response
 
     def shutdown(self):
+        """Cancel the jobs, end their private children (a job reading from one fails through job.check()), wait up
+        to JOB_SHUTDOWN_S for them, then unload every model. A calibration fitted inside basal-ui's own process cannot
+        be interrupted: it is bounded by that wait, and its daemon thread ends with the process."""
         with self.lock:
             self.stopping = True
+            temporary = list(self.temporary)
         self.jobs.cancel_all()
+        for kind in temporary:
+            self.stop_temporary(kind)
+        left = self.jobs.join(JOB_SHUTDOWN_S)
+        if left:
+            self.event("warn", f"shutdown: jobs still running: {', '.join(left)}")
         self.unload(forget=False)
 
 

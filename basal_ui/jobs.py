@@ -98,6 +98,25 @@ def terminate(proc):
     except subprocess.TimeoutExpired:
         signal_group(kill=True)
         proc.wait()
+        return
+    if os.name == "posix":  # the leader is reaped; a member that ignored SIGTERM keeps the group alive
+        deadline = time.monotonic() + 5
+        while _group_alive(proc.pid):
+            if time.monotonic() >= deadline:
+                signal_group(kill=True)
+                break
+            time.sleep(0.1)
+
+
+def _group_alive(pgid) -> bool:
+    """Whether any process of the group is left (signal 0 only probes)."""
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # a member exists but cannot be signalled by this user
+        pass
+    return True
 
 
 def run_tool(job, module, argv, out_path=None, on_json=None):
@@ -168,6 +187,7 @@ class Job:
         self.running, self.started, self.result = True, time.time(), None
         self.cancel = threading.Event()
         self.lock = threading.Lock()
+        self.thread = None
 
     def progress(self, phase, done=0, total=0):
         with self.lock:
@@ -244,7 +264,8 @@ class Jobs:
                 self.event("error", f"{kind} failed: {label}: {exc}")
 
         self.event("info", f"{kind} started: {label}")
-        threading.Thread(target=run, name=f"basal-ui-{kind}", daemon=True).start()
+        job.thread = threading.Thread(target=run, name=f"basal-ui-{kind}", daemon=True)
+        job.thread.start()
         return job.state()
 
     def get(self, kind) -> Job | None:
@@ -263,6 +284,20 @@ class Jobs:
             jobs = list(self.jobs.values())
         for job in jobs:
             job.cancel.set()
+
+    def join(self, timeout: float) -> list[str]:
+        """Wait up to timeout seconds for running jobs; -> the kinds still running."""
+        deadline = time.monotonic() + timeout
+        with self.lock:
+            jobs = list(self.jobs.values())
+        left = []
+        for job in jobs:
+            if job.thread is None:
+                continue
+            job.thread.join(max(0.0, deadline - time.monotonic()))
+            if job.thread.is_alive():
+                left.append(job.kind)
+        return left
 
     def states(self) -> dict[str, dict]:
         with self.lock:

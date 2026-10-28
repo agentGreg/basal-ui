@@ -172,8 +172,8 @@ class History:
             self.lines += 1
 
         with self.lock:
-            self.records.append(record)
             settings._locked(write)()
+            self.records.append(record)  # only once the file has it: a failed write leaves both unchanged
 
     def list(self, model=None, source=None, q=None, limit=100, before=None, after=None, order="desc") -> list[dict]:
         with self.lock:

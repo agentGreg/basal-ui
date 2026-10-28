@@ -107,6 +107,17 @@ def test_forwarding_counts_and_records_api_decisions(fleet):
     assert fleet.history.get(history[-1]["id"])["request"] == {"model": "b/two", "state": "s", "questions": {}}
 
 
+def test_a_history_write_error_does_not_fail_the_api_answer(fleet, monkeypatch):
+    def full_disk(record):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(fleet.history, "append", full_disk)
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        ok = client.post("/v1/systemone", json={"model": "b/two", "state": "s", "questions": {}})
+    assert ok.status_code == 200 and ok.json()["model"] == "b/two"
+    assert "decision not recorded: [Errno 28] No space left on device" in fleet.logs["basal-ui"].text()
+
+
 def test_models_list_in_basal_and_openai_shapes(fleet):
     fleet.runners["b/two"].state = "starting"
     with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:

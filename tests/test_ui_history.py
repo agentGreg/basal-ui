@@ -61,6 +61,18 @@ def test_oldest_first_poll_pages_drain_a_burst_with_equal_timestamps(tmp_path):
     assert [item["id"] for item in received] == [item["id"] for item in records[1:]]
 
 
+def test_a_failed_write_leaves_memory_unchanged(tmp_path):
+    path = tmp_path / "h.jsonl"
+    history = History(path)
+    history.append(record(state="kept"))
+    before = history.list()
+    path.unlink()
+    path.mkdir()  # the file cannot be opened for writing any more
+    with pytest.raises(OSError):
+        history.append(record(state="lost"))
+    assert history.list() == before
+
+
 def test_media_bytes_are_replaced_by_their_size_and_states_are_previewed():
     body = {
         "state": {"text": "x" * 300},
