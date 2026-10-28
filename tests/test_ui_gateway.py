@@ -68,7 +68,8 @@ def test_model_is_required_and_must_be_loaded_in_both_error_envelopes(fleet):
         assert unknown.status_code == 404
         assert unknown.json()["error"]["code"] == "MODEL_NOT_FOUND"
         assert unknown.json()["error"]["message"] == "model 'nope' is not loaded; loaded models: a/one, b/two"
-        assert client.post("/decisions", content=b"{").json()["error"]["code"] == "INVALID_JSON"
+        json_type = {"content-type": "application/json"}
+        assert client.post("/decisions", content=b"{", headers=json_type).json()["error"]["code"] == "INVALID_JSON"
         assert client.post("/v1/basal", json=[1]).json()["code"] == "INVALID_JSON"
     assert fleet.calls == []
 
@@ -116,6 +117,35 @@ def test_a_history_write_error_does_not_fail_the_api_answer(fleet, monkeypatch):
         ok = client.post("/v1/systemone", json={"model": "b/two", "state": "s", "questions": {}})
     assert ok.status_code == 200 and ok.json()["model"] == "b/two"
     assert "decision not recorded: [Errno 28] No space left on device" in fleet.logs["basal-ui"].text()
+
+
+def test_a_browser_origin_outside_the_cors_origins_is_refused_before_the_model(fleet):
+    body = {"model": "a/one", "state": "s", "questions": {}}
+    evil = {"Origin": "http://evil.example"}
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        refused = client.post("/v1/systemone", json=body, headers=evil)
+        assert refused.status_code == 403 and refused.json()["code"] == "ORIGIN_REFUSED"
+        openai = client.post("/v1/decisions", json={"model": "a/one", "input": "s", "questions": []}, headers=evil)
+        assert openai.status_code == 403 and openai.json()["error"]["code"] == "ORIGIN_REFUSED"
+        assert client.get("/health", headers=evil).status_code == 200
+        assert client.post("/v1/systemone", json=body).status_code == 200  # no Origin: not a browser
+    assert len(fleet.calls) == 1
+    allowed = build_app(fleet, fleet.stats, cors_origins=["http://evil.example"])
+    with TestClient(allowed, base_url="http://127.0.0.1") as client:
+        assert client.post("/v1/systemone", json={**body, "model": "nope"}, headers=evil).status_code == 404
+
+
+def test_a_body_over_the_limit_is_refused_while_it_streams(fleet, monkeypatch):
+    monkeypatch.setattr(gateway_module, "MAX_BODY_BYTES", 1024)
+
+    def chunks():
+        for _ in range(4):
+            yield b" " * 512
+
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        response = client.post("/v1/systemone", content=chunks(), headers={"content-type": "application/json"})
+    assert response.status_code == 413 and response.json()["code"] == "REQUEST_TOO_LARGE"
+    assert fleet.calls == []
 
 
 def test_models_list_in_basal_and_openai_shapes(fleet):

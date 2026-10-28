@@ -76,7 +76,10 @@ async def _json(send, status, body, headers=()):
 
 
 def protect(app, keys, cors_origins=()):
-    """Protect HTTP routes without consuming request or response streams."""
+    """Protect HTTP routes without consuming request or response streams. A browser request (it carries Origin) from
+    an origin outside cors_origins is refused before it reaches a model: CORS alone would only hide the answer, and a
+    keyless server would still run the decision for any web page."""
+    allowed_origins = set(cors_origins)
 
     async def auth_app(scope, receive, send):
         if scope["type"] != "http":
@@ -85,8 +88,20 @@ def protect(app, keys, cors_origins=()):
         path, method = scope["path"], scope["method"]
         open_health = path == "/health" and method == "GET"
         record = None
+        headers = dict(scope.get("headers", ()))
+        origin = headers.get(b"origin", b"").decode("latin1")
+        refused = origin and origin not in allowed_origins and "*" not in allowed_origins
+        if refused and method != "OPTIONS" and not open_health:  # preflights are CORSMiddleware's
+            message = "browser origin not allowed; add it to the API server's CORS origins"
+            if path in ("/v1/decisions", "/decisions"):
+                body = {
+                    "error": {"message": message, "type": "permission_error", "param": None, "code": "ORIGIN_REFUSED"}
+                }
+            else:
+                body = {"error": message, "code": "ORIGIN_REFUSED"}
+            await _json(send, 403, body)
+            return
         if not open_health and keys is not None:
-            headers = dict(scope.get("headers", ()))
             authorization = headers.get(b"authorization", b"").decode("latin1")
             secret = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
             secret = headers.get(b"x-api-key", b"").decode("latin1") or secret

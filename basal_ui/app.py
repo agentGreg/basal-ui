@@ -231,16 +231,21 @@ def create_app(
         return await call_next(request)
 
     @app.middleware("http")
-    async def revalidate_static(request: Request, call_next):
+    async def page_headers(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith("/static/"):  # like index.html: an updated basal-ui must not run cached scripts
-            response.headers["Cache-Control"] = "no-cache"  # the ETag keeps an unchanged file a 304
+        path = request.url.path
+        # the page, its scripts and the embedded inspector revalidate: an updated basal-ui must not run cached code
+        # against the new API (the ETag keeps an unchanged file a 304)
+        if path.startswith("/static/") or path in ("/", "/viz", "/viz/"):
+            response.headers["Cache-Control"] = "no-cache"
+        if response.headers.get("content-type", "").startswith("text/html"):  # no framing by other sites
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
+            response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
         return response
 
     @app.get("/")
     def index():
-        # revalidate on every load: a cached copy from an older basal-ui would talk to the new API
-        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+        return FileResponse(STATIC / "index.html")
 
     def find_variant(model_id):
         variants, _ = catalog_fn(cache_dir=settings_mod.models_dir())

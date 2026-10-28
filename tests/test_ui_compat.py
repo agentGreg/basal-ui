@@ -94,7 +94,9 @@ def test_systemone_codes_request_ids_and_alias_media(make):
         assert response.status_code == 200
         assert response.headers["x-request-id"] == response.headers["x-typesafe-request-id"] == "client:42"
         assert child.requests[0]["media"] == [{"type": "image", "data": "aGk="}] and "images" not in child.requests[0]
-        assert c.post("/v1/systemone", content="{").json()["code"] == "INVALID_JSON"
+        json_type = {"content-type": "application/json"}
+        assert c.post("/v1/systemone", content="{", headers=json_type).json()["code"] == "INVALID_JSON"
+        assert c.post("/v1/systemone", content="{}", headers={"content-type": "text/plain"}).status_code == 415
         assert c.post("/v1/systemone", content="[]", headers={"content-type": "application/json"}).status_code == 400
         malformed_id = c.get("/health", headers={"x-request-id": "!bad"})
         assert malformed_id.headers["x-request-id"].startswith("req_")

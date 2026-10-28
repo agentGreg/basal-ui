@@ -2,6 +2,7 @@
 gateway checks API keys and CORS, serves MCP, answers OpenAI Decisions requests, then forwards to that model's
 private basal-serve and counts the decision in the statistics and the history."""
 
+import json
 import socket
 import threading
 import time
@@ -12,6 +13,7 @@ import httpx
 SYSTEMONE = ("/v1/systemone", "/v1/basal")
 DECISIONS = ("/v1/decisions", "/decisions")
 SNAPSHOT_KEYS = ("host", "port", "require_key", "cors_origins", "mcp")
+MAX_BODY_BYTES = 256 * 1024**2  # a request with 8 media items of 20 MiB, base64-encoded, fits
 
 
 def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0.1"):
@@ -37,9 +39,17 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
 
     async def forward(request):
         path = request.url.path
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type != "application/json":
+            return error(path, 415, "Content-Type must be application/json", "UNSUPPORTED_MEDIA_TYPE")
+        raw = bytearray()
+        async for chunk in request.stream():
+            raw += chunk
+            if len(raw) > MAX_BODY_BYTES:
+                return error(path, 413, f"request body exceeds {MAX_BODY_BYTES // 1024**2} MiB", "REQUEST_TOO_LARGE")
         try:
-            body = await request.json()
-        except Exception:
+            body = json.loads(raw)
+        except ValueError:
             return error(path, 400, "malformed JSON", "INVALID_JSON")
         if not isinstance(body, dict):
             return error(path, 400, "request body must be a JSON object", "INVALID_JSON")

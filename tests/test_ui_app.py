@@ -94,13 +94,19 @@ def test_examples_include_a_full_request_of_every_advanced_type(tmp_path):
 def test_the_page_and_its_scripts_are_revalidated_so_an_update_is_never_served_from_cache(tmp_path):
     app, _ = app_for(tmp_path, [])
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        for path in ("/", "/static/app.js", "/static/app.css", "/static/i18n.js"):
+        for path in ("/", "/viz/", "/static/app.js", "/static/app.css", "/static/i18n.js"):
             response = client.get(path)
             assert response.status_code == 200 and response.headers["cache-control"] == "no-cache", path
         etag = client.get("/static/app.js").headers["etag"]
         again = client.get("/static/app.js", headers={"If-None-Match": etag})
         assert again.status_code == 304 and again.headers["cache-control"] == "no-cache"  # unchanged: no download
-        assert "cache-control" not in client.get("/api/examples").headers  # the rule is for the page's files only
+        examples = client.get("/api/examples").headers
+        assert "cache-control" not in examples  # the rule is for the page's files only
+        for path in ("/", "/viz/"):  # the pages refuse framing by other sites
+            headers = client.get(path).headers
+            assert headers["x-frame-options"] == "SAMEORIGIN", path
+            assert headers["content-security-policy"] == "frame-ancestors 'self'", path
+        assert "x-frame-options" not in examples and "content-security-policy" not in examples
 
 
 def test_calibrations_listing_survives_a_stale_saved_adapter_path(tmp_path, monkeypatch):

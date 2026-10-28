@@ -6,6 +6,11 @@ names; the request and response bodies are the engine's own, so the full request
 question-type reference live in the [engine's API reference](https://github.com/rkinas/basal/blob/main/docs/API.md).
 Turning the server on, creating keys and the settings table: [USAGE.md](USAGE.md#api-server).
 
+Trust boundary: the API server and every model's `basal-serve` listen on loopback by default, and loopback is not
+isolation from other users of the same machine — any local account can reach a keyless server. Serve without a key
+only on a host whose users you trust. Backend URLs and interpreters set in a model's load options (`ollama_url`,
+`llamacpp_url`, `think_url`, `think_python`) are contacted or run with basal-ui's own privileges.
+
 ## Several models behind basal-ui
 
 basal-ui's API server ([USAGE.md](USAGE.md#api-server)) serves every model loaded in the app on one port and
@@ -20,6 +25,9 @@ response.
 | `model` not loaded or not ready | 404 | `MODEL_NOT_FOUND` — the message lists the loaded models |
 | the model was unloaded while the request arrived | 409 | `MODEL_NOT_READY` |
 | its `basal-serve` cannot be reached | 502 | `UPSTREAM_ERROR` |
+| `Content-Type` is not `application/json` | 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| the body is over 256 MiB | 413 | `REQUEST_TOO_LARGE` |
+| a browser `Origin` outside the **CORS origins** setting | 403 | `ORIGIN_REFUSED` |
 
 Errors use the basal envelope (`{"error", "code"}`) on the System One paths and the OpenAI envelope on the Decisions
 paths, like basal-serve's own errors.
@@ -100,7 +108,10 @@ until used); it does not return secrets or hashes.
 The **CORS origins** setting (API server view) takes browser origins, one per line, or `*`. CORS permits GET, POST and OPTIONS and the headers
 `Authorization`, `Content-Type`, `X-API-Key`, `X-Request-Id`, `Mcp-Session-Id` and `Mcp-Protocol-Version`. It exposes `Mcp-Session-Id`, `x-request-id` and `x-typesafe-request-id`. Preflight
 requests are handled before authentication; allowed origins receive CORS headers, and a foreign origin is rejected
-with HTTP 400 and no allow-origin header.
+with HTTP 400 and no allow-origin header. Any other request that carries an `Origin` header (a browser page) from an
+origin not in the list is refused with 403 `ORIGIN_REFUSED` before the key check and before it reaches a model, so a
+web page cannot run decisions on a keyless server; `GET /health` stays open. Clients outside a browser send no
+`Origin` and are unaffected.
 
 ## OpenAI Decisions compatibility
 
