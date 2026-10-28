@@ -4,14 +4,22 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   releases:
     # the engine matrix: every release in basal_ui/engine.py TESTED_RELEASES, as its tag
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     outputs:
       engines: ${{ steps.read.outputs.engines }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
       - id: read
         run: |
           python3 - >> "$GITHUB_OUTPUT" <<'EOF'
@@ -24,6 +32,7 @@ jobs:
   ci:
     needs: releases
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -35,10 +44,13 @@ jobs:
       # servers; uv's own builds do not (Linux CPU torch comes from [tool.uv.sources] in pyproject.toml)
       UV_PYTHON_PREFERENCE: only-managed
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+        with:
+          enable-cache: true
       - run: uv sync --group dev --extra mcp --python ${{ matrix.python }}
       # the dev group installs the pinned release; install the matrix release over it (a no-op reinstall for the pin)
       - run: uv pip install --reinstall-package basal "basal @ https://github.com/rkinas/basal/archive/refs/tags/${{ matrix.engine }}.tar.gz"
       - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
       - run: uv run --no-sync pytest -q --ignore=tests/e2e

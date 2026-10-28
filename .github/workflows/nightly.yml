@@ -5,18 +5,20 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: read
   issues: write
 
 jobs:
   nightly:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     continue-on-error: true  # upstream main may break; the issue below tracks it
     env:
       BASAL_UI_ENGINE_UNCHECKED: "1"
       UV_PYTHON_PREFERENCE: only-managed  # see ci.yml
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
       - run: uv sync --group dev --extra mcp
       - run: uv pip install --reinstall-package basal "basal @ git+https://github.com/rkinas/basal@main"
       - run: uv run --no-sync ruff check .

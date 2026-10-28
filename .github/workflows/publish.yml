@@ -3,27 +3,65 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - name: The tag names the version in pyproject.toml
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          [ "$tag" = "$version" ] || { echo "tag v$tag does not match pyproject version $version"; exit 1; }
       - run: uv build
-      - uses: actions/upload-artifact@v4
+      - name: The wheel carries the page and the examples, and installs
+        run: |
+          unzip -l dist/*.whl | grep -q 'basal_ui/static/vendor/'
+          unzip -l dist/*.whl | grep -q 'basal_ui/examples/media/'
+          uv venv /tmp/smoke
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          /tmp/smoke/bin/python -c "import importlib.resources as r; assert (r.files('basal_ui')/'static/index.html').is_file()"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: dist
           path: dist/
 
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: build
     environment: pypi
     permissions:
       id-token: write  # trusted publishing
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
+
+  release:
+    # the GitHub release: the "# X.Y.Z" section of docs/WHATS_NEW.md as its notes, the built files attached
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: dist
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          awk -v v="$tag" '$0=="# "v{p=1;next} /^# /{p=0} p' docs/WHATS_NEW.md > notes.md
+          [ -s notes.md ] && grep -q '[^[:space:]]' notes.md || { echo "docs/WHATS_NEW.md has no '# $tag' section"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md dist/*
