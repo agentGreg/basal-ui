@@ -33,12 +33,12 @@ def config(tmp_path, monkeypatch):
 def instant_start(monkeypatch):
     """Runner._start reaches ready at once, without a download or a child process."""
     def start(self, assessment, gen, media=False, cache_dir=None, serve=None):
-        with self.lock:
+        with self.lock:  # remembered before it is reported ready, as Runner._start does
             if gen == self.gen:
+                if not self.temporary:
+                    settings.remember_loaded(assessment.variant.id, media)
                 self.state, self.media, self.ready_at = "ready", (["image", "audio"] if media else []), time.time()
                 self.serve_snapshot = {"log_decisions": "", "max_len": 4096, "calibration": None}
-        if not self.temporary:
-            settings.remember_loaded(assessment.variant.id, media)
     monkeypatch.setattr(Runner, "_start", start)
 
 
@@ -351,7 +351,8 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
                         [sys.executable, "-c", code, str(port)])
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/load", json={"id": MINI.id}).status_code == 202
-        wait_for(lambda: states(client) == {"mini": "ready"}, timeout=30)  # a cold interpreter start on a CI runner
+        wait_for(lambda: states(client) == {"mini": "ready"} or states(client)["mini"] == "error", timeout=30)
+        assert states(client) == {"mini": "ready"}, client.get("/api/status").json()["models"]
         runner = fleet.runners["mini"]
         assert httpx.get(runner.base_url + "/health").status_code == 200
         body = {"state": "hello", "questions": {"q": {"type": "choice", "instructions": "?", "criteria": ["a", "b"]}},
