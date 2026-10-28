@@ -351,7 +351,7 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
                         [sys.executable, "-c", code, str(port)])
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/load", json={"id": MINI.id}).status_code == 202
-        wait_for(lambda: states(client) == {"mini": "ready"}, timeout=5)
+        wait_for(lambda: states(client) == {"mini": "ready"}, timeout=30)  # a cold interpreter start on a CI runner
         runner = fleet.runners["mini"]
         assert httpx.get(runner.base_url + "/health").status_code == 200
         body = {"state": "hello", "questions": {"q": {"type": "choice", "instructions": "?", "criteria": ["a", "b"]}},
