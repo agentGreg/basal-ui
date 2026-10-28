@@ -13,7 +13,7 @@ jobs:
     continue-on-error: true  # upstream main may break; the issue below tracks it
     env:
       BASAL_UI_ENGINE_UNCHECKED: "1"
-      UV_TORCH_BACKEND: cpu
+      UV_PYTHON_PREFERENCE: only-managed  # see ci.yml
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

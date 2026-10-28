@@ -14,7 +14,9 @@ jobs:
         python: ["3.10", "3.13"]
         engine: ["v2.4.1"]  # both ends of SUPPORTED (>=2.4.1,<2.5); list every supported release
     env:
-      UV_TORCH_BACKEND: cpu  # Linux: resolve CPU torch instead of the CUDA wheels
+      # macOS runners' python.org 3.13 framework build times out on loopback connections to the test's child
+      # servers; uv's own builds do not (Linux CPU torch comes from [tool.uv.sources] in pyproject.toml)
+      UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
