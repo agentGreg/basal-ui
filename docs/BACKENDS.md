@@ -8,9 +8,9 @@ The inventory groups execution modes under PyTorch, MLX, in-process llama.cpp, v
 
 ## Setup
 
-Setup guidance offers copyable commands and official documentation. Nothing is installed by the UI. Commands for MLX, llama.cpp and TPU target the displayed Python interpreter; use the platform installer for PyTorch/ROCm. vLLM and SGLang need separate environments: install the same Basal fork and its UI dependencies in that environment, then launch basal-ui there. Restart after installing dependencies; Refresh alone does not replace already imported packages in the main app.
+Setup guidance offers copyable commands and official documentation. Nothing is installed by the UI. Commands for MLX, llama.cpp and TPU target the displayed Python interpreter; use the platform installer for PyTorch/ROCm. vLLM and SGLang need separate environments: install the engine and basal-ui in that environment, then launch basal-ui there. Restart after installing dependencies; Refresh alone does not replace already imported packages in the main app.
 
-Basal integration limits may be narrower than upstream engine support. For example, this integration uses MLX on Apple Silicon and vLLM/SGLang on NVIDIA Linux. Commands follow this repository's installation constraints; consult [INSTALL.md](INSTALL.md) and the relevant upstream documentation before changing an environment:
+Basal integration limits may be narrower than upstream engine support. For example, this integration uses MLX on Apple Silicon and vLLM/SGLang on NVIDIA Linux. Commands follow this repository's installation constraints; consult [INSTALL.md](https://github.com/rkinas/basal/blob/main/docs/INSTALL.md) and the relevant upstream documentation before changing an environment:
 
 - [PyTorch installer](https://pytorch.org/get-started/locally/)
 - [MLX installation](https://ml-explore.github.io/mlx/build/html/install.html)

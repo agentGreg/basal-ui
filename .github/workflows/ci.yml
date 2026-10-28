@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.13"]
+        engine: ["v2.4.1"]  # both ends of SUPPORTED (>=2.4.1,<2.5); list every supported release
+    env:
+      UV_TORCH_BACKEND: cpu  # Linux: resolve CPU torch instead of the CUDA wheels
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev --extra mcp --python ${{ matrix.python }}
+      # the dev group pins v2.4.1; a matrix engine other than the pinned tag replaces it
+      - if: matrix.engine != 'v2.4.1'
+        run: uv pip install --reinstall-package basal "basal @ https://github.com/rkinas/basal/archive/refs/tags/${{ matrix.engine }}.tar.gz"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync pytest -q --ignore=tests/e2e

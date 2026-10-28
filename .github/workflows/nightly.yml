@@ -1,0 +1,36 @@
+name: nightly
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # upstream main may break; the issue below tracks it
+    env:
+      BASAL_UI_ENGINE_UNCHECKED: "1"
+      UV_TORCH_BACKEND: cpu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev --extra mcp
+      - run: uv pip install --reinstall-package basal "basal @ git+https://github.com/rkinas/basal@main"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync pytest -q --ignore=tests/e2e
+      - name: Track the failure in an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="nightly: upstream main breaks basal-ui"
+          body="The nightly run against upstream main failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          number=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

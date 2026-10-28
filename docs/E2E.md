@@ -1,6 +1,6 @@
 # End-to-end tests of basal-ui
 
-The release gate of basal-ui. `tests/e2e/` starts a real basal-ui (`python -m basal.ui.app` on a free port, its own
+The release gate of basal-ui. `tests/e2e/` starts a real basal-ui (`python -m basal_ui.app` on a free port, its own
 settings directory under pytest's temporary directory), loads real models from your models directory into real
 `basal-serve` children, and drives everything a user can do: basal-ui's HTTP API, its API server (keys, both request
 shapes, MCP) and the pages in Chromium. The unit tests (`tests/test_ui_*.py`) cover the same routes with stubbed
@@ -9,9 +9,10 @@ children; these tests are what catches a broken model start, a page script error
 They are skipped unless `BASAL_E2E=1`, so `pytest` stays fast.
 
 ```bash
-uv sync --extra ui --extra test --extra e2e      # plus mlx / vllm / media as on the machine under test
-uv run playwright install chromium               # once: the page tests drive Chromium
-BASAL_E2E=1 uv run pytest tests/e2e -v -rs       # minutes; -rs lists what this machine skipped and why
+uv sync --group dev --extra mcp --extra e2e      # the dev group pins the engine release basal-ui is tested with
+uv pip install --reinstall-package basal "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v2.4.1.tar.gz"  # optional: the engine extras of the machine under test (mlx, vllm, media)
+uv run --no-sync playwright install chromium     # once: the page tests drive Chromium
+BASAL_E2E=1 uv run --no-sync pytest tests/e2e -v -rs  # minutes; -rs lists what this machine skipped and why
 ```
 
 Run it on every hardware class you ship for (Apple Silicon, an NVIDIA GPU, a CPU-only machine): each run tests the

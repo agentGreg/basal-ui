@@ -22,7 +22,7 @@ Agent packages were committed separately on `basecoat-visual`, `basecoat-replay`
 - `pytest tests/test_ui_*.py tests/test_auth.py tests/test_api_compat.py -q`: **226 passed**.
 - With `BASAL_E2E=1`, `HF_HUB_OFFLINE=1`, `BASAL_E2E_MODEL=Remek/basal-2.0-mini-MLX-8bit`, `BASAL_E2E_BF16_MODEL=Remek/basal-2.0-mini`, and `BASAL_E2E_LOAD_TIMEOUT=180`:
   `pytest tests/e2e/test_pages.py tests/e2e/test_activity.py tests/e2e/test_visual.py tests/e2e/test_engine231.py::test_browser_errors_health_warnings_and_options -q -rs`: **34 passed**.
-- `node --check basal/ui/static/app.js` and `git diff --check`: passed.
+- `node --check basal_ui/static/app.js` and `git diff --check`: passed.
 - Wheel build: passed. All **nine** production static files match source bytes; HTML asset references resolve; prototypes are excluded.
 
 The browser suite exercised actual downloaded models on this Apple M4 Max using isolated temporary settings/history. History bursts, log restarts, HTTP error responses, and health-warning edge cases use deterministic fixtures; those checks do not establish physical failure behavior. No model downloads were requested or performed.
@@ -33,4 +33,4 @@ Final screenshots were inspected after disabling capture-time CSS animations: `/
 
 CI, deployment, NVIDIA hardware, and the full hardware release suite were not run. This is local implementation and validation, not a release or user visual sign-off. No remote push or publication was performed.
 
-The original interrupted edits are recoverable in `/tmp/basal-basecoat-checkpoint`; the existing untracked `basal/ui/prototype-components/` remains intact. The three agent worktrees and branches remain available for review.
+The original interrupted edits are recoverable in `/tmp/basal-basecoat-checkpoint`; the existing untracked `basal_ui/prototype-components/` remains intact. The three agent worktrees and branches remain available for review.
