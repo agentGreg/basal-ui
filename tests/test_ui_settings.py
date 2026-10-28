@@ -47,9 +47,21 @@ def test_invalid_json_shape_uses_default_and_relative_path_is_absolute(tmp_path,
     monkeypatch.chdir(tmp_path)
     config.write_text("[]")
     assert settings.models_dir() == Path(HF_HUB_CACHE)
+    config.unlink()
     stored = settings.set_models_dir("relative-models-dir")
     assert stored == (tmp_path / "relative-models-dir").resolve()
     assert settings.load()["models_dir"] == str(stored)
+
+
+@pytest.mark.parametrize("text", ["{not json", "[]"])
+def test_a_corrupt_settings_file_is_read_as_empty_but_never_overwritten(tmp_path, monkeypatch, text):
+    config = tmp_path / "settings.json"
+    monkeypatch.setenv("BASAL_UI_CONFIG", str(config))
+    config.write_text(text)
+    with pytest.raises(settings.CorruptSettings, match="not valid JSON"):
+        settings.set_auto_load(True)
+    assert config.read_text() == text
+    assert settings.load() == {}
 
 
 def test_serve_settings_validation_and_api_key_file(tmp_path, monkeypatch):

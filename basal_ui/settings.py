@@ -167,9 +167,24 @@ def load() -> dict:
     return value
 
 
+class CorruptSettings(ValueError):
+    """The settings file exists but is not a JSON object: saving would replace what the user may still recover."""
+
+
 @_locked
 def save(settings: dict) -> None:
-    _write_private(_settings_path(), json.dumps(settings, indent=2))
+    path = _settings_path()
+    try:
+        current = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        current = {}
+    except ValueError:
+        current = None
+    if not isinstance(current, dict):
+        raise CorruptSettings(
+            f"{path} is not valid JSON (a settings object); fix or delete it before changing settings"
+        )
+    _write_private(path, json.dumps(settings, indent=2))
 
 
 def models_dir() -> Path:
