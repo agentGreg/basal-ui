@@ -12,6 +12,7 @@ line to media.jsonl, e.g.
     {"id": "media-06-my-clip", "state": "", "lang": "en", "media": [{"type": "audio", "file": "my_clip.wav"}],
      "questions": {"intent": {"type": "choice", "instructions": "What does the caller want?", "criteria": {...}}}}
 """
+
 import shutil
 import subprocess
 import sys
@@ -30,10 +31,22 @@ CHECKOUT = {"1": [60, 430, 200, 52], "2": [60, 370, 24, 24], "3": [300, 445, 130
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 REVENUE = [42, 45, 47, 49, 51, 50, 53, 55, 56, 23, 54, 58]
 VOICES = [
-    ("complaint_pl.wav", "Zosia", ("Dzień dobry, dzwonię w sprawie zamówienia numer 88412. Czajnik przyszedł z "
-                                   "pękniętą obudową. Proszę o wymianę albo zwrot pieniędzy.")),
-    ("appointment_en.wav", "Samantha", ("Hi, this is Mark Evans. I need to move my appointment from Tuesday to "
-                                        "Thursday afternoon, if that is possible. Please call me back at 555 0142.")),
+    (
+        "complaint_pl.wav",
+        "Zosia",
+        (
+            "Dzień dobry, dzwonię w sprawie zamówienia numer 88412. Czajnik przyszedł z "
+            "pękniętą obudową. Proszę o wymianę albo zwrot pieniędzy."
+        ),
+    ),
+    (
+        "appointment_en.wav",
+        "Samantha",
+        (
+            "Hi, this is Mark Evans. I need to move my appointment from Tuesday to "
+            "Thursday afternoon, if that is possible. Please call me back at 555 0142."
+        ),
+    ),
 ]
 MAX_SECONDS = 15  # well inside the 30 s audio window, and the clips stay small (16 kHz 16-bit mono: 32 kB/s)
 
@@ -56,8 +69,11 @@ def checkout():
     d.rectangle([0, 0, 800, 64], fill=INK)
     d.text((32, 32), "shop.example · Checkout", font=font(22, "Bold"), fill=PAPER, anchor="lm")
     d.text((60, 96), "Your order", font=font(20, "Bold"), fill=INK)
-    rows = [("Kettle KT-200 × 1", "189,00 zł", "Regular"), ("Shipping", "15,00 zł", "Regular"),
-            ("Total", "204,00 zł", "Bold")]
+    rows = [
+        ("Kettle KT-200 × 1", "189,00 zł", "Regular"),
+        ("Shipping", "15,00 zł", "Regular"),
+        ("Total", "204,00 zł", "Bold"),
+    ]
     for i, (name, price, weight) in enumerate(rows):
         y = 150 + 40 * i
         d.text((60, y), name, font=font(18, weight), fill=INK, anchor="lm")
@@ -86,14 +102,19 @@ def invoice():
     d = ImageDraw.Draw(im)
     d.rectangle([20, 20, 680, 880], outline=LINE, width=2)
     d.text((60, 70), "FAKTURA VAT nr FV/2026/03/117", font=font(26, "Bold"), fill=INK)
-    lines = ["Data wystawienia: 2026-03-28", "Termin płatności: 2026-04-11", "",
-             "Sprzedawca: Nowak Sp. z o.o., NIP 526-000-11-22", "Nabywca: Jan Kowalski"]
+    lines = [
+        "Data wystawienia: 2026-03-28",
+        "Termin płatności: 2026-04-11",
+        "",
+        "Sprzedawca: Nowak Sp. z o.o., NIP 526-000-11-22",
+        "Nabywca: Jan Kowalski",
+    ]
     for i, text in enumerate(lines):
         d.text((60, 140 + 34 * i), text, font=font(18), fill=INK)
     cols = [(60, "Towar"), (290, "Ilość"), (370, "Netto"), (480, "VAT"), (560, "Brutto")]
     row = ["Czajnik KT-200", "1", "1 000,00", "23%", "1 230,00"]
     d.rectangle([50, 340, 650, 380], fill="#eef1ec")
-    for (x, head), value in zip(cols, row):
+    for (x, head), value in zip(cols, row, strict=True):
         d.text((x, 360), head, font=font(16, "Bold"), fill=INK, anchor="lm")
         d.text((x, 410), value, font=font(16), fill=INK, anchor="lm")
     d.line([50, 440, 650, 440], fill=LINE, width=2)
@@ -113,7 +134,7 @@ def chart():
         d.line([left, y, right, y], fill=LINE, width=1)
         d.text((left - 10, y), str(v), font=font(14), fill=MUTED, anchor="rm")
     slot = (right - left) / len(MONTHS)
-    for i, (month, v) in enumerate(zip(MONTHS, REVENUE)):
+    for i, (month, v) in enumerate(zip(MONTHS, REVENUE, strict=True)):
         x = left + slot * i + slot * 0.18
         y = bottom - (bottom - top) * v / top_value
         d.rectangle([x, y, x + slot * 0.64, bottom], fill=BLUE)
@@ -132,8 +153,9 @@ def voices():
         sys.exit("`say` not found (macOS only): run the commands above on a Mac")
     for name, voice, text in VOICES:
         path = HERE / name
-        subprocess.run(["say", "-v", voice, "-o", str(path), "--file-format=WAVE", "--data-format=LEI16@16000", text],
-                       check=True)
+        subprocess.run(
+            ["say", "-v", voice, "-o", str(path), "--file-format=WAVE", "--data-format=LEI16@16000", text], check=True
+        )
         with wave.open(str(path)) as w:
             seconds = w.getnframes() / w.getframerate()
             assert w.getframerate() == 16000 and w.getnchannels() == 1, (name, w.getframerate(), w.getnchannels())

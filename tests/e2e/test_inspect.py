@@ -1,4 +1,5 @@
 """The Inspect view's backend: basal-viz for a downloaded bf16 model at /viz, explaining a decision, stopping it."""
+
 import time
 
 from tests.e2e.support import CHOICE, catalog

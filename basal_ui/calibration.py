@@ -4,6 +4,7 @@ basal-serve of the model (basal-calibrate --url). With task questions (classify 
 thresholds are certified on the answers as served with the fitted temperatures: with the engine in basal-ui's process
 (basal-calibrate --model --mode). Files fitted elsewhere can be imported. The files live in
 settings.calibrations_dir(model); one per model can be selected (basal-serve --calibration)."""
+
 import contextlib
 import io
 import json
@@ -50,16 +51,23 @@ def load(path) -> dict:
         raise ValueError(f"cannot read {path}: {getattr(exc, 'strerror', None) or exc}") from None
     except ValueError:
         raise ValueError(f"{path} is not JSON") from None
-    if not isinstance(cal, dict) or not any(k in cal for k in ("temperature_per_prim", "thresholds", "task_thresholds")):
+    if not isinstance(cal, dict) or not any(
+        k in cal for k in ("temperature_per_prim", "thresholds", "task_thresholds")
+    ):
         raise ValueError(f"{path} is not a basal calibration file (no temperature_per_prim or thresholds)")
     return cal
 
 
 def report_warnings(report):
     """Keep engine warning text, including FIT/CERT summaries and strict-check omissions."""
-    return list(dict.fromkeys(line.strip().removeprefix("warning: ") for line in report.splitlines()
-                             if line.strip().startswith("warning:") or
-                             (line.strip().startswith("--strict:") and "0 families tested" in line)))
+    return list(
+        dict.fromkeys(
+            line.strip().removeprefix("warning: ")
+            for line in report.splitlines()
+            if line.strip().startswith("warning:")
+            or (line.strip().startswith("--strict:") and "0 families tested" in line)
+        )
+    )
 
 
 def summary(path, local_dir=None) -> dict:
@@ -68,10 +76,17 @@ def summary(path, local_dir=None) -> dict:
     cal = json.loads(Path(path).read_text(encoding="utf-8"))
     report_path = Path(path).with_suffix(".report.txt")
     warnings = report_warnings(report_path.read_text(encoding="utf-8")) if report_path.exists() else []
-    out = {"warnings": warnings, "fitted_on": cal.get("fitted_on"), "gates": cal.get("gates"), "thresholds": certified_table(cal),
-           "task_thresholds": cal.get("task_thresholds") or {}, "temperature_per_prim": cal.get("temperature_per_prim"),
-           "engine": cal.get("engine"), "has_report": Path(path).with_suffix(".report.txt").exists(),
-           "imported": Path(path).name.startswith("imported-")}
+    out = {
+        "warnings": warnings,
+        "fitted_on": cal.get("fitted_on"),
+        "gates": cal.get("gates"),
+        "thresholds": certified_table(cal),
+        "task_thresholds": cal.get("task_thresholds") or {},
+        "temperature_per_prim": cal.get("temperature_per_prim"),
+        "engine": cal.get("engine"),
+        "has_report": Path(path).with_suffix(".report.txt").exists(),
+        "imported": Path(path).name.startswith("imported-"),
+    }
     if local_dir:  # basal-serve's own check, with --model the local directory as basal-ui starts it
         out["warning"] = calibration_mismatch(cal, str(local_dir), Path(local_dir))
     return out
@@ -81,7 +96,7 @@ def certified_table(cal):
     """{max_error target: {question type: certified confidence threshold}} of a calibration ({} without thresholds):
     what a client needs to tell automatable decisions from those to review."""
     table = {}
-    for target in (cal.get("thresholds") or {}):
+    for target in cal.get("thresholds") or {}:
         row = {t: c for t in ("choice", "noul", "score") if (c := certified(cal, float(target), t)) is not None}
         if row:
             table[target] = row
@@ -92,8 +107,9 @@ def shipped_file(local_dir, mode, preset=None, quant=None, layout="canonical", a
     """The calibration file basal-serve loads for the model in `mode` without --calibration (adapter_dir: only with
     an engine that takes --adapter)."""
     kind, default_quant = MODES[mode][:2]
-    return calibration_file(Path(local_dir), kind, None, quant or default_quant, preset, layout,
-                            *([adapter_dir] if adapter_dir else []))
+    return calibration_file(
+        Path(local_dir), kind, None, quant or default_quant, preset, layout, *([adapter_dir] if adapter_dir else [])
+    )
 
 
 def served_certified(entry, local_dir, mode, options, selected=None) -> dict:
@@ -103,10 +119,20 @@ def served_certified(entry, local_dir, mode, options, selected=None) -> dict:
     if entry is None or entry.get("calibration_warning"):
         return {}
     from basal.prompt import model_layout
+
     try:
-        path = Path(selected) if selected else shipped_file(
-            local_dir, mode, options.get("vllm_preset"), options.get("quant"),
-            options.get("layout") or model_layout(Path(local_dir)), options.get("adapter"))
+        path = (
+            Path(selected)
+            if selected
+            else shipped_file(
+                local_dir,
+                mode,
+                options.get("vllm_preset"),
+                options.get("quant"),
+                options.get("layout") or model_layout(Path(local_dir)),
+                options.get("adapter"),
+            )
+        )
         return certified_table(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, TypeError, AttributeError):
         return {}
@@ -116,8 +142,9 @@ def listing(model_id, settings_mod, local_dir=None) -> list[dict]:
     """The calibration files of the model in basal-ui (fitted or imported), newest first; unreadable files are listed
     with the error."""
     files = []
-    for path in sorted(settings_mod.calibrations_dir(model_id).glob("*.json"), key=lambda p: p.stat().st_mtime,
-                       reverse=True):
+    for path in sorted(
+        settings_mod.calibrations_dir(model_id).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         rows = path.with_suffix(".rows.jsonl")
         entry = {"file": str(path), "when": path.stat().st_mtime, "rows": str(rows) if rows.is_file() else None}
         try:
@@ -176,6 +203,7 @@ def import_file(model_id, settings_mod, source) -> Path:
 def labelled(input_path):
     """(decision requests, labelled task decisions) of a basal-calibrate input; ValueError names the problem line."""
     from basal import calibrate
+
     try:
         bodies, _, _, units = calibrate.read(str(input_path))
     except calibrate.InputError as exc:
@@ -187,6 +215,7 @@ def engine_flags(flags) -> list[str]:
     """The basal-serve flags basal-calibrate's engine takes (add_engine_args), of a flag list such as
     catalog.serve_args + options.args; basal-serve's own (thinking, --strict-calibration) and --model are dropped."""
     from basal import calibrate
+
     known = {s for a in calibrate.parser()._actions for s in a.option_strings}
     out, keep = [], False
     for token in flags:
@@ -201,14 +230,20 @@ def _basal_calibrate(job, argv, writer):
     """basal-calibrate's main with its output in the job's log (the redirection is process-wide: one calibration at
     a time)."""
     from basal import calibrate
+
     try:
         with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
             calibrate.main(argv)
     except SystemExit as exc:
         if exc.code not in (None, 0):
             job.check()  # cancelled: the engine was stopped under basal-calibrate
-            raise RuntimeError(exc.code if isinstance(exc.code, str) else
-                               writer.lines[-1] if writer.lines else f"basal-calibrate exited ({exc.code})") from None
+            raise RuntimeError(
+                exc.code
+                if isinstance(exc.code, str)
+                else writer.lines[-1]
+                if writer.lines
+                else f"basal-calibrate exited ({exc.code})"
+            ) from None
     finally:
         writer.flush()
 
@@ -228,17 +263,31 @@ def name_snapshot(path, local_dir):
     Path(path).write_text(json.dumps(cal, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, targets=TARGETS, options=None,
-                    engine_args=None, advanced=None):
+def run_calibration(
+    job,
+    fleet,
+    assessment,
+    local_dir,
+    input_path,
+    out_path,
+    targets=TARGETS,
+    options=None,
+    engine_args=None,
+    advanced=None,
+):
     """Run basal-calibrate, either against a private child or an in-process engine."""
     writer = _Lines(job.log)
     advanced = advanced or {}
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     rows_path = Path(out_path).with_suffix(".rows.jsonl")
     common = ["--model", str(local_dir), "--out", str(out_path), "--targets", ",".join(targets)]
-    for key, flag in (("min_per_type", "--min-per-type"), ("min_blend", "--min-blend"),
-                      ("min_family", "--min-family"), ("min_per_set", "--min-per-set"),
-                      ("concurrency", "--concurrency")):
+    for key, flag in (
+        ("min_per_type", "--min-per-type"),
+        ("min_blend", "--min-blend"),
+        ("min_family", "--min-family"),
+        ("min_per_set", "--min-per-set"),
+        ("concurrency", "--concurrency"),
+    ):
         if key in advanced:
             common += [flag, str(advanced[key])]
     reference = advanced.get("reference")

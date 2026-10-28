@@ -1,4 +1,5 @@
 """The Polish dictionary of basal-ui (basal_ui/static/i18n.js) against the strings the frontend passes to t() / tp()."""
+
 import json
 import re
 from html.parser import HTMLParser
@@ -59,14 +60,30 @@ def test_polish_translations_keep_placeholders_and_are_safe_in_html():
 
 
 SAME_IN_POLISH = {  # names, code, paths and keys: translateStatic leaves them as they are
-    "basal", "basal-viz", "API", "Python", "curl", "TypeSafe SDK", "OpenAI SDK", "LiteLLM", "Port", "System",
-    "/v1/systemone", "docs/SERVING.md#inference-on-a-jsonl-file", '{"state", "question", "options", "gold"?}',
-    "Alt + 0", "Alt + 1–9", "Ctrl/⌘ + Enter", "https://app.example.com", "~/basal-decisions.jsonl",
+    "basal",
+    "basal-viz",
+    "API",
+    "Python",
+    "curl",
+    "TypeSafe SDK",
+    "OpenAI SDK",
+    "LiteLLM",
+    "Port",
+    "System",
+    "/v1/systemone",
+    "docs/SERVING.md#inference-on-a-jsonl-file",
+    '{"state", "question", "options", "gold"?}',
+    "Alt + 0",
+    "Alt + 1–9",
+    "Ctrl/⌘ + Enter",
+    "https://app.example.com",
+    "~/basal-decisions.jsonl",
 }
 
 
 class StaticTexts(HTMLParser):
     """The text nodes and title / placeholder / aria-label values translateStatic looks up in index.html."""
+
     def __init__(self):
         super().__init__()
         self.texts, self.code = set(), 0

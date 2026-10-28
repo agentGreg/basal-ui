@@ -7,6 +7,7 @@ Every loaded model runs in its own basal-serve subprocess on a free loopback por
 /api/decide and the API server (basal_ui/gateway.py, one port for every model, with its API keys) forward to it, so a
 crashed or unloaded model never takes the UI down.
 """
+
 import argparse
 import asyncio
 import base64
@@ -46,7 +47,10 @@ def _inline(m):
     if Path(name).name != name:
         raise ValueError(f"media file must be a bare name, got {name!r}")
     path = MEDIA / name
-    return {"type": m["type"], "data": f"data:{MIME[path.suffix]};base64,{base64.b64encode(path.read_bytes()).decode()}"}
+    return {
+        "type": m["type"],
+        "data": f"data:{MIME[path.suffix]};base64,{base64.b64encode(path.read_bytes()).decode()}",
+    }
 
 
 def examples():
@@ -56,6 +60,7 @@ def examples():
     both stay outside the request, as "media_files" (aligned with request.media) and "elements"."""
     from basal.run import to_request
     from basal.viz import examples as engine_examples
+
     out = engine_examples()
     for path in sorted(EXAMPLES.glob("*.jsonl")):
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
@@ -76,6 +81,7 @@ def examples():
 def ui_version():
     """basal-ui's installed version ("0" in a source tree that was never installed)."""
     import importlib.metadata
+
     try:
         return importlib.metadata.version("basal-ui")
     except importlib.metadata.PackageNotFoundError:
@@ -88,16 +94,30 @@ def host_middleware(app, allowed_hosts):
     return app
 
 
-def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fleet=None,
-               settings_mod=settings, allowed_hosts=("127.0.0.1", "localhost", "::1"), gateway=None, stats=None,
-               history=None) -> FastAPI:
+def create_app(
+    catalog_fn=catalog.list_variants,
+    hardware_fn=hardware.detect,
+    fleet=None,
+    settings_mod=settings,
+    allowed_hosts=("127.0.0.1", "localhost", "::1"),
+    gateway=None,
+    stats=None,
+    history=None,
+) -> FastAPI:
     stats = stats or Stats(settings_mod.stats_path())
     history = history or History(settings_mod.history_path())
-    fleet = fleet or Fleet(models_dir_fn=settings_mod.models_dir, platform_fn=lambda: hardware_fn().platform,
-                           settings_mod=settings_mod, hardware_fn=hardware_fn, stats=stats, history=history)
+    fleet = fleet or Fleet(
+        models_dir_fn=settings_mod.models_dir,
+        platform_fn=lambda: hardware_fn().platform,
+        settings_mod=settings_mod,
+        hardware_fn=hardware_fn,
+        stats=stats,
+        history=history,
+    )
     gateway = gateway or Gateway(fleet, settings_mod, stats)
     allowed_hosts = tuple(allowed_hosts)
     from .inspect import Inspector, inspect_app, inspectable
+
     inspector = Inspector()
 
     def hw():
@@ -118,8 +138,9 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                 raise ValueError(chosen["reason"])
             assessment = dataclasses.replace(assessment, mode=merged["mode"] or "eager")
         elif merged["mode"]:
-            mode = next(m for m in load_options.available_modes(variant, current, assessment)
-                        if m["mode"] == merged["mode"])
+            mode = next(
+                m for m in load_options.available_modes(variant, current, assessment) if m["mode"] == merged["mode"]
+            )
             if not mode["available"]:
                 raise ValueError(f"--mode {merged['mode']}: {mode['reason']}")
             assessment = dataclasses.replace(assessment, mode=merged["mode"])
@@ -181,7 +202,6 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         app.mount("/static", StaticFiles(directory=STATIC), name="static")
     app.mount("/viz", inspect_app(inspector.explainer, examples))  # basal-viz for the Inspect view
 
-
     @app.middleware("http")
     async def refuse_cross_origin(request: Request, call_next):
         origin = request.headers.get("origin")
@@ -194,9 +214,17 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             except ValueError:
                 parsed, origin_host = None, None
                 origin_port = request_port = None
-            if (origin_host is None or origin_host.lower() not in {host.lower() for host in allowed_hosts}
-                    or parsed.scheme != request.url.scheme or parsed.path or parsed.query or parsed.fragment
-                    or parsed.username is not None or parsed.password is not None or origin_port != request_port):
+            if (
+                origin_host is None
+                or origin_host.lower() not in {host.lower() for host in allowed_hosts}
+                or parsed.scheme != request.url.scheme
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or parsed.username is not None
+                or parsed.password is not None
+                or origin_port != request_port
+            ):
                 return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
         return await call_next(request)
 
@@ -228,16 +256,25 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         hint = None
         try:
             from basal.mcp_server import available as mcp_available
+
             hint = mcp_available()
             available = hint is None
         except ImportError as exc:
             hint = str(exc)
         usage = gateway.key_usage()
         lan = fleet.lan_ip() if config["host"] == "0.0.0.0" else None
-        return {"settings": config, "auto_load": settings_mod.load().get("auto_load", False),
-                "keys": [{**{k: v for k, v in key.items() if k != "sha256"},
-                          "last_used": usage.get(key["name"])} for key in settings_mod.keys()],
-                "mcp_available": available, "mcp_hint": hint, "lan_ip": lan}
+        api_keys = settings_mod.keys()  # a list of key records, not a dict view
+        return {
+            "settings": config,
+            "auto_load": settings_mod.load().get("auto_load", False),
+            "keys": [
+                {**{k: v for k, v in key.items() if k != "sha256"}, "last_used": usage.get(key["name"])}
+                for key in api_keys
+            ],
+            "mcp_available": available,
+            "mcp_hint": hint,
+            "lan_ip": lan,
+        }
 
     @app.get("/api/serve")
     def get_serve():
@@ -281,8 +318,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     @app.get("/api/memory")
     def get_memory():
         current = hw()
-        return {"settings": settings_mod.memory_settings(), "hardware_budget_bytes": current.memory_bytes,
-                "available_bytes": current.available_bytes}
+        return {
+            "settings": settings_mod.memory_settings(),
+            "hardware_budget_bytes": current.memory_bytes,
+            "available_bytes": current.available_bytes,
+        }
 
     @app.put("/api/memory")
     def put_memory(body: dict = Body(...)):
@@ -306,8 +346,9 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             raise HTTPException(400, "loaded model is no longer available")
         try:
             options = body.get("options")
-            assessment, options = prepare(variant, current.get("media_requested", False),
-                                          current.get("options") if options is None else options)
+            assessment, options = prepare(
+                variant, current.get("media_requested", False), current.get("options") if options is None else options
+            )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         try:
@@ -317,8 +358,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return full_status()
 
     from .backends import Manager as BackendManager
-    backend_manager = BackendManager(fleet, lambda: catalog_fn(cache_dir=settings_mod.models_dir())[0],
-                                     hardware_fn, settings_mod)
+
+    backend_manager = BackendManager(
+        fleet, lambda: catalog_fn(cache_dir=settings_mod.models_dir())[0], hardware_fn, settings_mod
+    )
     app.state.backends = backend_manager
 
     @app.get("/api/backends")
@@ -348,10 +391,10 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             record = backend_manager.tests.get(test_id)
             if record is None:
                 raise HTTPException(404, "Unknown test session")
-            if record['status'] == 'starting':
-                fleet.jobs.cancel('backend-test')
-            if record['restoring']:
-                fleet.jobs.cancel('backend-restore')
+            if record["status"] == "starting":
+                fleet.jobs.cancel("backend-test")
+            if record["restoring"]:
+                fleet.jobs.cancel("backend-restore")
         return {"cancelled": test_id}
 
     @app.post("/api/backends/tests/{test_id}/restore", status_code=202)
@@ -369,10 +412,15 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
     def settings_response():
         from huggingface_hub.constants import HF_HUB_CACHE
+
         models = Path(settings_mod.models_dir()).resolve()
         default = Path(HF_HUB_CACHE).resolve()
-        return {"models_dir": str(models), "default_models_dir": str(default), "is_default": models == default,
-                "check_updates": settings_mod.check_updates()}
+        return {
+            "models_dir": str(models),
+            "default_models_dir": str(default),
+            "is_default": models == default,
+            "check_updates": settings_mod.check_updates(),
+        }
 
     @app.get("/api/settings")
     def get_settings():
@@ -403,31 +451,66 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         current_hw = hw()
         variants, source = catalog_fn(refresh=refresh, cache_dir=cache_dir)
         assessed = [catalog.assess(v, current_hw) for v in variants]
-        assessed.sort(key=lambda a: (FAMILY_ORDER.get(a.variant.family, 99),
-                                     catalog.TIER_ORDER.get(a.variant.tier, 99), a.variant.port, a.variant.label))
-        fields = ("id", "repo", "author", "community", "base_repo", "family", "tier", "port", "label", "gguf_file",
-                  "weights_bytes", "experimental", "recurrent")
+        assessed.sort(
+            key=lambda a: (
+                FAMILY_ORDER.get(a.variant.family, 99),
+                catalog.TIER_ORDER.get(a.variant.tier, 99),
+                a.variant.port,
+                a.variant.label,
+            )
+        )
+        fields = (
+            "id",
+            "repo",
+            "author",
+            "community",
+            "base_repo",
+            "family",
+            "tier",
+            "port",
+            "label",
+            "gguf_file",
+            "weights_bytes",
+            "experimental",
+            "recurrent",
+        )
         on_disk = {a.variant.id: catalog.downloaded_bytes(a.variant, cache_dir) for a in assessed}
         saved = settings_mod.load().get("load_options")  # once, not load_options() per row
-        revisions = {k: v.get("revision") for k, v in saved.items() if isinstance(v, dict)} if isinstance(
-            saved, dict) else {}
-        return {"source": source, "suggestions": catalog.suggest(assessed, current_hw),
-                "models_dir": str(Path(cache_dir).resolve()), "models": [
-            {**{k: getattr(a.variant, k) for k in fields}, "runnable": a.runnable, "reason": a.reason,
-             "reason_code": catalog.message_fields(a.reason, "")[0],
-             "reason_params": catalog.message_fields(a.reason, "")[1],
-             "mode": a.mode, "est_memory_bytes": a.est_memory_bytes, "fit": a.fit, "fit_now": a.fit_now,
-             "media": list(a.variant.media), "media_mode": a.media_mode, "media_reason": a.media_reason,
-             "media_reason_code": catalog.message_fields(a.media_reason, "")[0],
-             "media_reason_params": catalog.message_fields(a.media_reason, "")[1],
-             "downloaded": on_disk[a.variant.id] is not None, "downloaded_bytes": on_disk[a.variant.id],
-             "revision": revisions.get(a.variant.id), "inspect_reason": inspectable(a.variant)}
-            for a in assessed]}
+        revisions = (
+            {k: v.get("revision") for k, v in saved.items() if isinstance(v, dict)} if isinstance(saved, dict) else {}
+        )
+        return {
+            "source": source,
+            "suggestions": catalog.suggest(assessed, current_hw),
+            "models_dir": str(Path(cache_dir).resolve()),
+            "models": [
+                {
+                    **{k: getattr(a.variant, k) for k in fields},
+                    "runnable": a.runnable,
+                    "reason": a.reason,
+                    "reason_code": catalog.message_fields(a.reason, "")[0],
+                    "reason_params": catalog.message_fields(a.reason, "")[1],
+                    "mode": a.mode,
+                    "est_memory_bytes": a.est_memory_bytes,
+                    "fit": a.fit,
+                    "fit_now": a.fit_now,
+                    "media": list(a.variant.media),
+                    "media_mode": a.media_mode,
+                    "media_reason": a.media_reason,
+                    "media_reason_code": catalog.message_fields(a.media_reason, "")[0],
+                    "media_reason_params": catalog.message_fields(a.media_reason, "")[1],
+                    "downloaded": on_disk[a.variant.id] is not None,
+                    "downloaded_bytes": on_disk[a.variant.id],
+                    "revision": revisions.get(a.variant.id),
+                    "inspect_reason": inspectable(a.variant),
+                }
+                for a in assessed
+            ],
+        }
 
     @app.get("/api/presets")
     def get_presets():
-        return {"load": settings_mod.presets().get("load", {}),
-                "request": settings_mod.presets().get("request", {})}
+        return {"load": settings_mod.presets().get("load", {}), "request": settings_mod.presets().get("request", {})}
 
     @app.put("/api/presets")
     def put_preset(body: dict = Body(...)):
@@ -436,7 +519,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             if kind == "load" and value is not None:
                 value = load_options.non_default(load_options.validate(value))
             elif kind == "request" and value is not None:
-                if not isinstance(value, dict) or not isinstance(value.get("questions"), dict) or not value["questions"]:
+                if (
+                    not isinstance(value, dict)
+                    or not isinstance(value.get("questions"), dict)
+                    or not value["questions"]
+                ):
                     raise ValueError("request preset must contain a non-empty questions object")
                 value = {k: v for k, v in value.items() if k != "model"}
             settings_mod.set_preset(kind, name, value)
@@ -453,10 +540,12 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         loaded = next((m.get("entry") for m in fleet.status()["models"] if m["id"] == variant.id), None)
         from huggingface_hub import scan_cache_dir
         from huggingface_hub.errors import CacheNotFound
+
         try:
             info = scan_cache_dir(cache_dir)
-            revisions = sorted({s.commit_hash for repo in info.repos if repo.repo_id == variant.repo
-                                for s in repo.revisions})
+            revisions = sorted(
+                {s.commit_hash for repo in info.repos if repo.repo_id == variant.repo for s in repo.revisions}
+            )
         except (CacheNotFound, OSError, ValueError):
             revisions = []
         revision = served_revision(variant) or "main"
@@ -487,26 +576,46 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         shipped_calibration = None
         if local_dir:
             from . import calibration
+
             try:
                 path, _ = resolve_shipped_calibration(variant, local_dir, assessment)
                 shipped_calibration = calibration.summary(path) if path.is_file() else None
             except (OSError, ValueError, KeyError) as exc:
                 shipped_calibration = {"error": str(exc)}
-        return {"id": variant.id, "repo": variant.repo, "url": f"https://huggingface.co/{variant.repo}",
-                "author": variant.author, "community": variant.community, "base_repo": variant.base_repo,
-                "base_revision": variant.base_revision,
-                "family": variant.family, "tier": variant.tier, "port": variant.port, "label": variant.label,
-                "size_bytes": variant.weights_bytes, "media": list(variant.media), "downloaded": local_dir is not None,
-                "local_dir": str(local_dir) if local_dir else None, "revisions": revisions, "basal_json": basal_json,
-                "quantisation": catalog.quantisation(variant, basal_json, config_json),
-                "shipped_calibration": shipped_calibration, "readme": readme,
-                "assessment": {"mode": assessment.mode, "runnable": assessment.runnable,
-                               "reason": assessment.reason,
-                               "reason_code": catalog.message_fields(assessment.reason, "")[0],
-                               "reason_params": catalog.message_fields(assessment.reason, "")[1],
-                               "est_memory_bytes": assessment.est_memory_bytes,
-                               "fit": assessment.fit, "fit_now": assessment.fit_now},
-                "modes": load_options.available_modes(variant, hw(), assessment), "loaded": loaded}
+        return {
+            "id": variant.id,
+            "repo": variant.repo,
+            "url": f"https://huggingface.co/{variant.repo}",
+            "author": variant.author,
+            "community": variant.community,
+            "base_repo": variant.base_repo,
+            "base_revision": variant.base_revision,
+            "family": variant.family,
+            "tier": variant.tier,
+            "port": variant.port,
+            "label": variant.label,
+            "size_bytes": variant.weights_bytes,
+            "media": list(variant.media),
+            "downloaded": local_dir is not None,
+            "local_dir": str(local_dir) if local_dir else None,
+            "revisions": revisions,
+            "basal_json": basal_json,
+            "quantisation": catalog.quantisation(variant, basal_json, config_json),
+            "shipped_calibration": shipped_calibration,
+            "readme": readme,
+            "assessment": {
+                "mode": assessment.mode,
+                "runnable": assessment.runnable,
+                "reason": assessment.reason,
+                "reason_code": catalog.message_fields(assessment.reason, "")[0],
+                "reason_params": catalog.message_fields(assessment.reason, "")[1],
+                "est_memory_bytes": assessment.est_memory_bytes,
+                "fit": assessment.fit,
+                "fit_now": assessment.fit_now,
+            },
+            "modes": load_options.available_modes(variant, hw(), assessment),
+            "loaded": loaded,
+        }
 
     @app.get("/api/updates")
     def get_updates():
@@ -528,14 +637,26 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         variants, source = catalog_fn(cache_dir=settings_mod.models_dir())
         # only the hub catalog is the whole catalog: the cache fallback would seed (or report) a partial list
         new_models = settings_mod.update_seen_ids(v.id for v in variants) if source == "hub" else []
-        return {"enabled": enabled, "installed": installed, "latest": latest,
-                "url": f"https://github.com/{updates.UI_REPO}/releases/tag/v{latest}" if latest else None,
-                "newer": newer(latest, installed), "error": error, "new_models": new_models, "catalog": source,
-                "engine": {**engine_status, "latest": engine_latest, "error": engine_error,
-                           "newer": newer(engine_latest, engine_status["version"]),
-                           "latest_supported": engine_latest is not None and engine.supported(engine_latest),
-                           "url": (f"https://github.com/{updates.ENGINE_REPO}/releases/tag/v{engine_latest}"
-                                   if engine_latest else None)}}
+        return {
+            "enabled": enabled,
+            "installed": installed,
+            "latest": latest,
+            "url": f"https://github.com/{updates.UI_REPO}/releases/tag/v{latest}" if latest else None,
+            "newer": newer(latest, installed),
+            "error": error,
+            "new_models": new_models,
+            "catalog": source,
+            "engine": {
+                **engine_status,
+                "latest": engine_latest,
+                "error": engine_error,
+                "newer": newer(engine_latest, engine_status["version"]),
+                "latest_supported": engine_latest is not None and engine.supported(engine_latest),
+                "url": (
+                    f"https://github.com/{updates.ENGINE_REPO}/releases/tag/v{engine_latest}" if engine_latest else None
+                ),
+            },
+        }
 
     @app.post("/api/updates/seen")
     def mark_updates_seen():
@@ -561,15 +682,26 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         think_code, think_params = load_options.option_message_fields(think_reason)
         adapter_reason = load_options.adapter_unavailable()
         adapter_code, adapter_params = load_options.option_message_fields(adapter_reason)
-        return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
-                "saved": bool(saved), "defaults": load_options.DEFAULTS,
-                "media_modes": load_options.available_media_modes(assessment, current),
-                "mlx_packed_reason": packed_reason, "mlx_packed_reason_code": packed_code,
-                "mlx_packed_reason_params": packed_params,
-                "adapter_reason": adapter_reason, "adapter_reason_code": adapter_code,
-                "adapter_reason_params": adapter_params,
-                "think": {"model": family_ok, "vllm": "vllm" in current.engines, "reason": think_reason,
-                          "reason_code": think_code, "reason_params": think_params}}
+        return {
+            "modes": load_options.available_modes(variant, current, assessment),
+            "options": merged,
+            "saved": bool(saved),
+            "defaults": load_options.DEFAULTS,
+            "media_modes": load_options.available_media_modes(assessment, current),
+            "mlx_packed_reason": packed_reason,
+            "mlx_packed_reason_code": packed_code,
+            "mlx_packed_reason_params": packed_params,
+            "adapter_reason": adapter_reason,
+            "adapter_reason_code": adapter_code,
+            "adapter_reason_params": adapter_params,
+            "think": {
+                "model": family_ok,
+                "vllm": "vllm" in current.engines,
+                "reason": think_reason,
+                "reason_code": think_code,
+                "reason_params": think_params,
+            },
+        }
 
     @app.put("/api/models/options")
     def put_model_options(body: dict = Body(...)):
@@ -655,9 +787,12 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             raise HTTPException(409, str(exc)) from exc
         except httpx.HTTPError as exc:
             raise HTTPException(502, f"basal-serve: {exc}") from exc
-        return Response(r.content, status_code=r.status_code,
-                        headers={k: r.headers[k] for k in ("x-request-id", "x-typesafe-request-id") if k in r.headers},
-                        media_type=r.headers.get("content-type", "application/json"))
+        return Response(
+            r.content,
+            status_code=r.status_code,
+            headers={k: r.headers[k] for k in ("x-request-id", "x-typesafe-request-id") if k in r.headers},
+            media_type=r.headers.get("content-type", "application/json"),
+        )
 
     @app.get("/api/stats")
     def get_stats():
@@ -691,17 +826,20 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         try:
             runner = fleet.ready(model_id)
             if kind == "benchmark":
-                return fleet.start_model_job("benchmark", model_id, label, bench.benchmark_job, fleet, model_id, paths,
-                                        label)
+                return fleet.start_model_job(
+                    "benchmark", model_id, label, bench.benchmark_job, fleet, model_id, paths, label
+                )
             try:
-                params = bench.loadtest_params(body.get("params") or {}, kind,
-                                               (runner.models_entry or {}).get("early_exit") or [])
+                params = bench.loadtest_params(
+                    body.get("params") or {}, kind, (runner.models_entry or {}).get("early_exit") or []
+                )
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc
             if params["synthetic"]:
                 label = f"synthetic {params['synthetic']} tokens"
-            return fleet.start_model_job("benchmark", model_id, f"{kind}: {label}", bench.loadtest_job, fleet, model_id,
-                                    label, paths, params)
+            return fleet.start_model_job(
+                "benchmark", model_id, f"{kind}: {label}", bench.loadtest_job, fleet, model_id, label, paths, params
+            )
         except KeyError as exc:
             raise HTTPException(404, f"model {model_id!r} is not loaded") from exc
         except RuntimeError as exc:
@@ -715,8 +853,12 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         current = hw()
         assessment = catalog.assess(variant, current)
         options = load_options.validate(settings_mod.load_options(variant.id), assessment.mode)
-        return local_dir, assessment, options, bench.comparison_modes(
-            load_options.available_modes(variant, current, assessment))
+        return (
+            local_dir,
+            assessment,
+            options,
+            bench.comparison_modes(load_options.available_modes(variant, current, assessment)),
+        )
 
     def start_modes(model_id, body):
         from . import bench
@@ -739,8 +881,19 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
         try:
-            return fleet.jobs.start("benchmark", variant.id, f"modes: {', '.join(modes)}", bench.modes_job, fleet,
-                                    variant, local_dir, modes, n, lat_n, options)
+            return fleet.jobs.start(
+                "benchmark",
+                variant.id,
+                f"modes: {', '.join(modes)}",
+                bench.modes_job,
+                fleet,
+                variant,
+                local_dir,
+                modes,
+                n,
+                lat_n,
+                options,
+            )
         except RuntimeError as exc:
             fleet.release("modes")
             raise HTTPException(409, str(exc)) from exc
@@ -761,13 +914,17 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     def effective_revision(variant):
         with fleet.lock:
             runner = fleet.runners.get(variant.id)
-        return (runner.options.get("revision") if runner is not None and runner.status()["state"] == "ready"
-                else served_revision(variant))
+        return (
+            runner.options.get("revision")
+            if runner is not None and runner.status()["state"] == "ready"
+            else served_revision(variant)
+        )
 
     def resolve_shipped_calibration(variant, local_dir, assessment):
-        from . import calibration
         from basal.prompt import model_layout
         from basal.server import MODES
+
+        from . import calibration
 
         with fleet.lock:
             runner = fleet.runners.get(variant.id)
@@ -779,10 +936,17 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         preset, adapter_dir = options.get("vllm_preset"), options.get("adapter")
         layout = options.get("layout") or model_layout(local_dir)
         path = calibration.shipped_file(local_dir, mode, preset, quant, layout, adapter_dir)
-        context = {"revision": (runner.options.get("revision") if active else options.get("revision"))
-                   or variant.base_revision or "default", "mode": mode, "quant": quant,
-                   "preset": preset if mode == "vllm" else None, "layout": layout,
-                   "adapter": adapter_dir, "active": active}
+        context = {
+            "revision": (runner.options.get("revision") if active else options.get("revision"))
+            or variant.base_revision
+            or "default",
+            "mode": mode,
+            "quant": quant,
+            "preset": preset if mode == "vllm" else None,
+            "layout": layout,
+            "adapter": adapter_dir,
+            "active": active,
+        }
         return path, context
 
     def downloaded(variant):
@@ -809,17 +973,35 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         advanced = body.get("advanced") or {}
         if not isinstance(advanced, dict):
             raise HTTPException(400, "advanced must be an object")
-        allowed = {"strict", "reference", "min_per_type", "min_blend", "min_family", "min_per_set", "concurrency",
-                   "compare", "save_rows", "report_only"}
+        allowed = {
+            "strict",
+            "reference",
+            "min_per_type",
+            "min_blend",
+            "min_family",
+            "min_per_set",
+            "concurrency",
+            "compare",
+            "save_rows",
+            "report_only",
+        }
         if set(advanced) - allowed:
             raise HTTPException(400, f"unknown advanced calibration option: {min(set(advanced) - allowed)}")
         for key in ("strict", "save_rows", "report_only"):
             if key in advanced and not isinstance(advanced[key], bool):
                 raise HTTPException(400, f"{key} must be a boolean")
-        for key, minimum in (("min_per_type", 1), ("min_blend", 0), ("min_family", 1), ("min_per_set", 1),
-                             ("concurrency", 1)):
-            if key in advanced and (type(advanced[key]) is not int or advanced[key] < minimum or
-                                    (key == "concurrency" and advanced[key] > 256)):
+        for key, minimum in (
+            ("min_per_type", 1),
+            ("min_blend", 0),
+            ("min_family", 1),
+            ("min_per_set", 1),
+            ("concurrency", 1),
+        ):
+            if key in advanced and (
+                type(advanced[key]) is not int
+                or advanced[key] < minimum
+                or (key == "concurrency" and advanced[key] > 256)
+            ):
                 raise HTTPException(400, f"{key} must be an integer >= {minimum}")
         reference = advanced.get("reference")
         if reference is not None and not isinstance(reference, str):
@@ -870,13 +1052,27 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             raise HTTPException(409, str(exc)) from exc
         engine_args = None
         if in_process and not from_rows:
-            engine_args = calibration.engine_flags(catalog.serve_args(
-                variant, local_dir, assessment.mode, platform=hw().platform) + load_options.args(options))
+            engine_args = calibration.engine_flags(
+                catalog.serve_args(variant, local_dir, assessment.mode, platform=hw().platform)
+                + load_options.args(options)
+            )
         advanced["reserve"] = reserve
         try:
-            return fleet.jobs.start("calibrate", variant.id, label, calibration.run_calibration, fleet, assessment,
-                                    local_dir, source, out, [str(float(t)) for t in targets], options, engine_args,
-                                    advanced)
+            return fleet.jobs.start(
+                "calibrate",
+                variant.id,
+                label,
+                calibration.run_calibration,
+                fleet,
+                assessment,
+                local_dir,
+                source,
+                out,
+                [str(float(t)) for t in targets],
+                options,
+                engine_args,
+                advanced,
+            )
         except RuntimeError as exc:
             if reserve:
                 fleet.release("calibrate")
@@ -905,8 +1101,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                     shipped["error"] = str(exc)
             except (OSError, ValueError, KeyError) as exc:
                 shipped = {"error": str(exc)}
-        return {"selected": settings_mod.calibration_selection().get(variant.id),
-                "files": calibration.listing(variant.id, settings_mod, local_dir), "shipped": shipped}
+        return {
+            "selected": settings_mod.calibration_selection().get(variant.id),
+            "files": calibration.listing(variant.id, settings_mod, local_dir),
+            "shipped": shipped,
+        }
 
     @app.post("/api/calibrations/import")
     def import_calibration(body: dict = Body(...)):
@@ -981,8 +1180,9 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
         def start(job):
             try:
-                return inspector.start(job, variant, local_dir, current, cal, orders,
-                                       on_exit=lambda: fleet.release("inspect"))
+                return inspector.start(
+                    job, variant, local_dir, current, cal, orders, on_exit=lambda: fleet.release("inspect")
+                )
             except BaseException:
                 fleet.release("inspect")
                 raise
@@ -1011,7 +1211,9 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         model_id = body.get("id")
         source = body.get("input")
         if not isinstance(source, str) or not source.strip():
-            raise HTTPException(400, "input must be the path of a JSONL file (docs/SERVING.md#inference-on-a-jsonl-file)")
+            raise HTTPException(
+                400, "input must be the path of a JSONL file (docs/SERVING.md#inference-on-a-jsonl-file)"
+            )
         source = Path(source).expanduser()
         try:
             lines = [line for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -1023,8 +1225,11 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
             except ValueError:
                 item = None
             if not isinstance(item, dict) or not ("questions" in item or "options" in item):
-                raise HTTPException(400, f"{source.name}: line {n} is neither a simple item (state, question, "
-                                         "options) nor a /v1/systemone request")
+                raise HTTPException(
+                    400,
+                    f"{source.name}: line {n} is neither a simple item (state, question, "
+                    "options) nor a /v1/systemone request",
+                )
         if not lines:
             raise HTTPException(400, f"{source} has no lines")
         out = Path(body["output"]).expanduser() if body.get("output") else batch.default_output(source)
@@ -1044,11 +1249,25 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         early_exit = body.get("early_exit")
         levels = (runner.models_entry or {}).get("early_exit") or []
         if early_exit is not None and early_exit not in levels:
-            raise HTTPException(400, f"early_exit must be one of {levels} for {model_id}" if levels else
-                                f"{model_id} has no early exits (basal-serve --mode fast-exit)")
+            raise HTTPException(
+                400,
+                f"early_exit must be one of {levels} for {model_id}"
+                if levels
+                else f"{model_id} has no early exits (basal-serve --mode fast-exit)",
+            )
         try:
-            return fleet.start_model_job("batch", model_id, f"{model_id} on {source.name}", batch.run_batch, fleet,
-                                    model_id, source, out, concurrency, early_exit)
+            return fleet.start_model_job(
+                "batch",
+                model_id,
+                f"{model_id} on {source.name}",
+                batch.run_batch,
+                fleet,
+                model_id,
+                source,
+                out,
+                concurrency,
+                early_exit,
+            )
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc
 
@@ -1079,12 +1298,26 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         return stats.snapshot()["benchmarks"]
 
     @app.get("/api/history")
-    def get_history(model: str | None = None, source: str | None = None, q: str | None = None, limit: int = 100,
-                    before: str | None = None, after: str | None = None, order: str = "desc"):
+    def get_history(
+        model: str | None = None,
+        source: str | None = None,
+        q: str | None = None,
+        limit: int = 100,
+        before: str | None = None,
+        after: str | None = None,
+        order: str = "desc",
+    ):
         if order not in ("asc", "desc"):
             raise HTTPException(400, "order must be asc or desc")
-        items = history.list(model=model or None, source=source or None, q=q or None,
-                             limit=max(1, min(limit, 500)), before=before, after=after, order=order)
+        items = history.list(
+            model=model or None,
+            source=source or None,
+            q=q or None,
+            limit=max(1, min(limit, 500)),
+            before=before,
+            after=after,
+            order=order,
+        )
         return {"items": items, "models": history.models()}
 
     @app.get("/api/history/{record_id}")
@@ -1111,19 +1344,20 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         job_logs = [key for key in buffers if key.startswith("job:")]
         gone = [key for key in buffers if key != "basal-ui" and key not in runners and key not in job_logs]
         sources += [{"id": key, "state": runners[key].state} for key in loaded]
-        sources += [{"id": key, "state": "running" if jobs.get(key[4:], {}).get("running") else "done"}
-                    for key in job_logs]
+        sources += [
+            {"id": key, "state": "running" if jobs.get(key[4:], {}).get("running") else "done"} for key in job_logs
+        ]
         sources += [{"id": key, "state": "gone"} for key in gone]
         buffer = buffers[source]
         changed = generation is not None and generation != buffer.generation
-        return {"sources": sources, "generation": buffer.generation,
-                "lines": buffer.since(0 if changed else after)}
+        return {"sources": sources, "generation": buffer.generation, "lines": buffer.since(0 if changed else after)}
 
     return app
 
 
 def main():
     from .engine import check
+
     engine = check()
     ap = argparse.ArgumentParser(description="basal browser UI: hardware check, model choice, playground")
     ap.add_argument("--host", default="127.0.0.1")
@@ -1131,13 +1365,15 @@ def main():
     a = ap.parse_args()
     if engine["experimental"]:
         commit = f"@{engine['commit'][:7]}" if engine["commit"] else ""
-        print(f"basal-ui: experimental engine {engine['version']}{commit} (supported: {engine['supported']})",
-              flush=True)
+        print(
+            f"basal-ui: experimental engine {engine['version']}{commit} (supported: {engine['supported']})", flush=True
+        )
     wildcard = a.host in ("0.0.0.0", "::")
     allowed = ["*"] if wildcard else ["127.0.0.1", "localhost", "::1", a.host]
     if wildcard:
         print("WARNING: basal-ui has no authentication; it is exposed to all network hosts.", flush=True)
     import uvicorn
+
     print(f"basal-ui -> http://{a.host}:{a.port}", flush=True)
     uvicorn.run(create_app(allowed_hosts=allowed), host=a.host, port=a.port, log_level="warning")
 

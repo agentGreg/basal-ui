@@ -1,5 +1,6 @@
 """Several loaded models: the API server on one port (keys, model routing, both request shapes, MCP), the memory
 budget, statistics, history, logs, restart and unload."""
+
 import httpx
 import pytest
 
@@ -40,11 +41,24 @@ def test_two_models_answer_behind_one_api_port_with_a_key(ui, text_model, second
         r = api.post("/v1/systemone", json={"model": model_id, **CHOICE}, headers={"x-request-id": f"e2e-{i}"})
         assert r.status_code == 200 and r.headers["x-request-id"] == f"e2e-{i}"
         answer = r.json()["answers"]["dept"]
-        assert answer["choice"] in ("cards", "loans", "online") and abs(sum(answer["probabilities"].values()) - 1) < 1e-3
-    decision = api.post("/v1/decisions", json={
-        "model": a, "input": CHOICE["state"],
-        "questions": [{"type": "choice", "name": "dept", "instructions": "Do którego działu?",
-                       "choices": [{"value": "cards"}, {"value": "loans"}]}]})
+        assert (
+            answer["choice"] in ("cards", "loans", "online") and abs(sum(answer["probabilities"].values()) - 1) < 1e-3
+        )
+    decision = api.post(
+        "/v1/decisions",
+        json={
+            "model": a,
+            "input": CHOICE["state"],
+            "questions": [
+                {
+                    "type": "choice",
+                    "name": "dept",
+                    "instructions": "Do którego działu?",
+                    "choices": [{"value": "cards"}, {"value": "loans"}],
+                }
+            ],
+        },
+    )
     assert decision.status_code == 200, decision.text
     assert api.get("/v1/stats").status_code == 403  # a user key does not read the statistics
 
@@ -65,11 +79,21 @@ def test_two_models_answer_behind_one_api_port_with_a_key(ui, text_model, second
             return r.json()["result"]
 
         # basal-serve 2.4.1's MCP tools take no model argument: the API server answers with the first loaded model
-        answer = rpc("tools/call", {"name": "decide", "arguments": {"state": CHOICE["state"], "type": "noul",
-                                                                    "question": "Czy klient prosi o odblokowanie?"}})
-        assert not answer.get("isError") and answer["structuredContent"]["model"] == ui.status()["models"][0]["id"], answer
+        answer = rpc(
+            "tools/call",
+            {
+                "name": "decide",
+                "arguments": {"state": CHOICE["state"], "type": "noul", "question": "Czy klient prosi o odblokowanie?"},
+            },
+        )
+        assert not answer.get("isError") and answer["structuredContent"]["model"] == ui.status()["models"][0]["id"], (
+            answer
+        )
         assert 0 <= answer["structuredContent"]["noul"] <= 1
-        assert any(r["source"] == "mcp" for r in ui.get("/api/history", params={"model": answer["structuredContent"]["model"]})["items"])
+        assert any(
+            r["source"] == "mcp"
+            for r in ui.get("/api/history", params={"model": answer["structuredContent"]["model"]})["items"]
+        )
 
 
 def test_memory_budget_refuses_a_load_that_does_not_fit(ui, text_model, second_model, hardware):

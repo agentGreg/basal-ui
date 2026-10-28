@@ -1,5 +1,6 @@
 """Load options: the engine modes this machine offers, options reaching basal-serve, the context policy, basal-serve's
 own refusals, and options remembered for a model."""
+
 from tests.e2e.support import CHOICE, context_of, long_state
 
 
@@ -43,7 +44,8 @@ def test_invalid_unavailable_and_refused_combinations(ui, text_model):
     assert "unknown load option" in ui.detail("POST", "/api/restart", {"id": model_id, "options": {"x": 1}}, 400)
     unavailable = next(m["mode"] for m in options_of(ui, model_id)["modes"] if not m["available"])
     assert ui.detail("POST", "/api/restart", {"id": model_id, "options": {"mode": unavailable}}, 400).startswith(
-        f"--mode {unavailable}:")
+        f"--mode {unavailable}:"
+    )
     # basal-serve's own refusal reaches the model's row (on every engine: prefix cache with --deterministic)
     ui.post("/api/restart", {"id": model_id, "options": {"deterministic": True, "prefix_cache": True}})
     m = ui.wait_model(model_id)
@@ -59,7 +61,9 @@ def test_remembered_options_are_used_by_a_plain_load(ui, text_model):
         ui.unload(model_id)
         ui.post("/api/load", {"id": model_id})  # no options: the remembered ones
         m = ui.wait_model(model_id)
-        assert m["state"] == "ready" and m["options"] == {"max_batch": 16} and m["command"][-2:] == ["--max-batch", "16"]
+        assert (
+            m["state"] == "ready" and m["options"] == {"max_batch": 16} and m["command"][-2:] == ["--max-batch", "16"]
+        )
     finally:
         ui.put("/api/models/options", {"id": model_id, "options": {}})
     assert options_of(ui, model_id)["saved"] is False

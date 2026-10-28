@@ -1,5 +1,6 @@
 """basal-ui runs on a supported engine release; anything else is refused with the install command, unless the user
 opts in to an experimental engine."""
+
 import importlib.util
 import re
 import subprocess
@@ -21,8 +22,12 @@ def fake_engine(monkeypatch, version, commit=None):
 def test_a_supported_release_runs_as_is(monkeypatch):
     fake_engine(monkeypatch, engine.PINNED_RELEASE)
     monkeypatch.delenv(engine.UNCHECKED_ENV, raising=False)
-    assert engine.check() == {"version": engine.PINNED_RELEASE, "commit": None, "supported": engine.SUPPORTED_RANGE,
-                              "experimental": False}
+    assert engine.check() == {
+        "version": engine.PINNED_RELEASE,
+        "commit": None,
+        "supported": engine.SUPPORTED_RANGE,
+        "experimental": False,
+    }
 
 
 @pytest.mark.parametrize("version", ["2.5.0", "2.4.0", "not-a-version"])
@@ -37,8 +42,12 @@ def test_an_engine_outside_the_range_is_refused_unless_unchecked(monkeypatch, ve
 
 def test_a_branch_install_in_the_range_is_experimental(monkeypatch):
     fake_engine(monkeypatch, engine.PINNED_RELEASE, "0123456789abcdef")
-    assert engine.check() == {"version": engine.PINNED_RELEASE, "commit": "0123456789abcdef",
-                              "supported": engine.SUPPORTED_RANGE, "experimental": True}
+    assert engine.check() == {
+        "version": engine.PINNED_RELEASE,
+        "commit": "0123456789abcdef",
+        "supported": engine.SUPPORTED_RANGE,
+        "experimental": True,
+    }
 
 
 def test_a_missing_engine_or_the_unrelated_pypi_basal_names_the_install(monkeypatch):
@@ -54,9 +63,12 @@ def test_the_command_refuses_before_importing_the_engine(tmp_path):
     (fake / "server.py").parent.mkdir()
     (fake / "__init__.py").write_text('__version__ = "9.0.0"\n')
     (fake / "server.py").write_text("raise RuntimeError('basal_ui.app imported the engine')\n")
-    result = subprocess.run([sys.executable, "-m", "basal_ui"], capture_output=True, text=True,
-                            env={"PYTHONPATH": f"{tmp_path}:{engine.__file__.rsplit('/basal_ui/', 1)[0]}",
-                                 "PATH": "/usr/bin:/bin"})
+    result = subprocess.run(
+        [sys.executable, "-m", "basal_ui"],
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": f"{tmp_path}:{engine.__file__.rsplit('/basal_ui/', 1)[0]}", "PATH": "/usr/bin:/bin"},
+    )
     assert result.returncode == 1
     assert f"basal-ui supports engine {engine.SUPPORTED_RANGE}, found 9.0.0" in result.stderr
 

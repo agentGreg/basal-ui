@@ -1,6 +1,7 @@
 """Measurements of one model from basal-ui: the benchmark preset (latency, throughput and accuracy over the bundled
 examples or a custom JSONL set, docs/BENCHMARK_SETS.md), configurable load tests and determinism checks (basal-loadtest
 against the model's basal-serve) and engine-mode comparisons (basal-bench); the engine's tools run as subprocesses."""
+
 import asyncio
 import json
 import statistics
@@ -9,7 +10,6 @@ import time
 from pathlib import Path
 
 import httpx
-
 from basal.bench import DEFAULT_QUESTIONS
 from basal.loadtest import body
 
@@ -32,18 +32,23 @@ def load_items(paths) -> list[dict]:
                 item = json.loads(line)
             except ValueError as exc:
                 raise ValueError(f"{path}:{number}: not JSON ({exc})") from exc
-            if isinstance(item, dict) and isinstance(item.get("options"), list) and len(item["options"]) >= 2 \
-                    and isinstance(item.get("state"), (str, dict)) and isinstance(item.get("question"), str):
+            if (
+                isinstance(item, dict)
+                and isinstance(item.get("options"), list)
+                and len(item["options"]) >= 2
+                and isinstance(item.get("state"), (str, dict))
+                and isinstance(item.get("question"), str)
+            ):
                 items.append({**item, "_file": path.stem})
     return items
 
 
 def resolve_set(spec) -> tuple[str, list[str]]:
-    """"bundled" or a path to a .jsonl file or a directory of them -> (label, files); ValueError says why not."""
+    """ "bundled" or a path to a .jsonl file or a directory of them -> (label, files); ValueError says why not."""
     if spec in (None, "", "bundled"):
         return "bundled", list(DEFAULT_QUESTIONS)
     if not isinstance(spec, str):
-        raise ValueError("set must be \"bundled\" or a path")
+        raise ValueError('set must be "bundled" or a path')
     path = Path(spec).expanduser()
     if not path.exists():
         raise ValueError(f"{path} does not exist")
@@ -55,8 +60,10 @@ def resolve_set(spec) -> tuple[str, list[str]]:
     except OSError as exc:
         raise ValueError(f"cannot read {exc.filename}: {exc.strerror}") from exc
     if len(items) < MIN_ITEMS:
-        raise ValueError(f"{path}: {len(items)} items with state, question and options; a benchmark set needs at "
-                         f"least {MIN_ITEMS} (docs/BENCHMARK_SETS.md)")
+        raise ValueError(
+            f"{path}: {len(items)} items with state, question and options; a benchmark set needs at "
+            f"least {MIN_ITEMS} (docs/BENCHMARK_SETS.md)"
+        )
     return str(path), [str(f) for f in files]
 
 
@@ -97,6 +104,7 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
             scored[index] = result
 
     async with httpx.AsyncClient(timeout=300) as client:
+
         async def ask(index):
             check()
             t0 = time.perf_counter()
@@ -105,7 +113,9 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
                 key = str(response.status_code)
                 error_statuses[key] = error_statuses.get(key, 0) + 1
                 if error_statuses[key] == 1:
-                    job.log.append(f"HTTP {key}: {response.text[:1000]} [request {response.headers.get('x-request-id', 'unavailable')}]")
+                    job.log.append(
+                        f"HTTP {key}: {response.text[:1000]} [request {response.headers.get('x-request-id', 'unavailable')}]"
+                    )
             return time.perf_counter() - t0, response
 
         for done, index in enumerate(order[:WARMUP]):
@@ -114,7 +124,7 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
             response.raise_for_status()
             score(index, response)
         latencies = []
-        for done, index in enumerate(order[WARMUP:WARMUP + n_seq]):
+        for done, index in enumerate(order[WARMUP : WARMUP + n_seq]):
             progress("sequential", done, n_seq)
             seconds, response = await ask(index)
             response.raise_for_status()
@@ -136,7 +146,7 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
 
         progress("concurrent", 0, n_conc)
         t0 = time.perf_counter()
-        results = await asyncio.gather(*[one(i) for i in order[WARMUP + n_seq:]])
+        results = await asyncio.gather(*[one(i) for i in order[WARMUP + n_seq :]])
         wall = time.perf_counter() - t0
     check()  # a cancel during the last in-flight requests must not store a result
     ok, tokens = 0, 0
@@ -153,15 +163,24 @@ async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120
     for index, correct in scored.items():
         by_file.setdefault(items[index]["_file"], []).append(correct)
     values = list(scored.values())
-    return {"model": model_id, "set": label, "items": len(items), "when": time.time(),
-            "p50_ms": statistics.median(latencies) if latencies else None,
-            "p95_ms": latencies[min(len(latencies) - 1, int(0.95 * len(latencies)))] if latencies else None,
-            "mean_ms": statistics.fmean(latencies) if latencies else None,
-            "decisions_per_s": ok / wall if wall else None, "questions_per_s": ok / wall if wall else None,
-            "input_tokens_per_s": tokens / wall if wall else None, "errors": len(results) - ok,
-            "error_statuses": error_statuses,
-            "accuracy": {"overall": sum(values) / len(values) if values else None,
-                         "by_file": {stem: sum(v) / len(v) for stem, v in sorted(by_file.items())}}}
+    return {
+        "model": model_id,
+        "set": label,
+        "items": len(items),
+        "when": time.time(),
+        "p50_ms": statistics.median(latencies) if latencies else None,
+        "p95_ms": latencies[min(len(latencies) - 1, int(0.95 * len(latencies)))] if latencies else None,
+        "mean_ms": statistics.fmean(latencies) if latencies else None,
+        "decisions_per_s": ok / wall if wall else None,
+        "questions_per_s": ok / wall if wall else None,
+        "input_tokens_per_s": tokens / wall if wall else None,
+        "errors": len(results) - ok,
+        "error_statuses": error_statuses,
+        "accuracy": {
+            "overall": sum(values) / len(values) if values else None,
+            "by_file": {stem: sum(v) / len(v) for stem, v in sorted(by_file.items())},
+        },
+    }
 
 
 def benchmark_job(job, fleet, model_id, paths, label):
@@ -172,8 +191,17 @@ def benchmark_job(job, fleet, model_id, paths, label):
     return result
 
 
-LOADTEST_DEFAULTS = {"synthetic": None, "long_frac": 0.0, "seed": 0, "questions_per_request": 1, "n_seq": 200,
-                     "n_conc": 1000, "concurrency": 32, "early_exit": None, "determinism": 0}
+LOADTEST_DEFAULTS = {
+    "synthetic": None,
+    "long_frac": 0.0,
+    "seed": 0,
+    "questions_per_request": 1,
+    "n_seq": 200,
+    "n_conc": 1000,
+    "concurrency": 32,
+    "early_exit": None,
+    "determinism": 0,
+}
 
 
 def _int(params, key, lo, hi=None):
@@ -205,16 +233,32 @@ def loadtest_params(params, kind, early_exit_levels) -> dict:
     if isinstance(p["long_frac"], bool) or not isinstance(p["long_frac"], (int, float)) or not 0 <= p["long_frac"] <= 1:
         raise ValueError("long_frac must be between 0 and 1")
     if p["early_exit"] is not None and p["early_exit"] not in early_exit_levels:
-        raise ValueError(f"early_exit must be one of {early_exit_levels}" if early_exit_levels else
-                         "the model has no early exits (basal-serve --mode fast-exit)")
+        raise ValueError(
+            f"early_exit must be one of {early_exit_levels}"
+            if early_exit_levels
+            else "the model has no early exits (basal-serve --mode fast-exit)"
+        )
     return p
 
 
 def loadtest_args(url, paths, params) -> list[str]:
     """basal-loadtest's flags for the parameters (loadtest_params) against `url`."""
-    args = ["--url", url, "--questions", *map(str, paths), "--seed", params["seed"],
-            "--questions-per-request", params["questions_per_request"], "--n-seq", params["n_seq"],
-            "--n-conc", params["n_conc"], "--concurrency", params["concurrency"]]
+    args = [
+        "--url",
+        url,
+        "--questions",
+        *map(str, paths),
+        "--seed",
+        params["seed"],
+        "--questions-per-request",
+        params["questions_per_request"],
+        "--n-seq",
+        params["n_seq"],
+        "--n-conc",
+        params["n_conc"],
+        "--concurrency",
+        params["concurrency"],
+    ]
     if params["synthetic"] is not None:
         args += ["--synthetic", params["synthetic"], "--long-frac", params["long_frac"]]
     if params["early_exit"] is not None:
@@ -230,8 +274,12 @@ def loadtest_job(job, fleet, model_id, label, paths, params):
     job.progress("running")
     with tempfile.TemporaryDirectory(prefix="basal-ui-loadtest-") as tmp:
         out_path = Path(tmp) / "out.json"
-        out = run_tool(job, "loadtest", [*loadtest_args(runner.base_url + "/v1/systemone", paths, params),
-                                         "--out", str(out_path)], out_path)
+        out = run_tool(
+            job,
+            "loadtest",
+            [*loadtest_args(runner.base_url + "/v1/systemone", paths, params), "--out", str(out_path)],
+            out_path,
+        )
     kind = "determinism" if params["determinism"] else "loadtest"
     out.pop("url", None)
     result = {"kind": kind, "model": model_id, "set": label, "params": params, "when": time.time(), **out}
@@ -259,8 +307,20 @@ def comparison_memory(modes, est_memory_bytes) -> int:
 
 def bench_args(local_dir, modes, n, lat_n, gguf, options) -> list[str]:
     """basal-bench's flags: the modes in order on the downloaded model, the bundled examples."""
-    args = ["--model", str(local_dir), "--modes", *modes, "--n", str(n), "--lat-n", str(lat_n),
-            "--ollama-url", options["ollama_url"], "--llamacpp-url", options["llamacpp_url"]]
+    args = [
+        "--model",
+        str(local_dir),
+        "--modes",
+        *modes,
+        "--n",
+        str(n),
+        "--lat-n",
+        str(lat_n),
+        "--ollama-url",
+        options["ollama_url"],
+        "--llamacpp-url",
+        options["llamacpp_url"],
+    ]
     if gguf:
         args += ["--gguf", gguf]
     if options.get("ollama_model"):
@@ -283,7 +343,7 @@ def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
             run_modes = ([ref_mode] if ref_mode else []) + pending
             measured = []
 
-            def row(r, run_modes=run_modes, measured=measured):
+            def row(r, run_modes=run_modes, measured=measured, rows=rows, ref_mode=ref_mode):
                 if r.get("mode") not in run_modes:
                     return
                 measured.append(r)
@@ -303,7 +363,7 @@ def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
             rows += new
             if ref_mode is None and new:
                 ref_mode = new[0]["mode"]
-            pending = pending[len(new):]
+            pending = pending[len(new) :]
             if not pending:
                 break
             if error is None:
@@ -319,8 +379,14 @@ def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
     finally:
         fleet.release("modes")
     items = next((r["n"] for r in rows if "n" in r), n)
-    result = {"kind": "modes", "model": variant.id, "set": "bundled", "items": items, "when": time.time(),
-              "modes": rows}
+    result = {
+        "kind": "modes",
+        "model": variant.id,
+        "set": "bundled",
+        "items": items,
+        "when": time.time(),
+        "modes": rows,
+    }
     if fleet.stats is not None:
         fleet.stats.add_benchmark(variant.id, result)
     return result

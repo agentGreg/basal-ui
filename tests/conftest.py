@@ -28,8 +28,10 @@ def child():
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.seen, server.gate, server.url = seen, gate, f"http://127.0.0.1:{server.server_address[1]}"
-    server.reply = {"answers": {"q": {"type": "choice", "probabilities": {"0": 0.8, "1": 0.2}, "confidence": 0.8}},
-                    "usage": {"latency_ms": 1.5}}
+    server.reply = {
+        "answers": {"q": {"type": "choice", "probabilities": {"0": 0.8, "1": 0.2}, "confidence": 0.8}},
+        "usage": {"latency_ms": 1.5},
+    }
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield server
     gate.set()

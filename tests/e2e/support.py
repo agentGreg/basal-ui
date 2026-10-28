@@ -1,4 +1,5 @@
 """Helpers of the end-to-end tests (tests/e2e/conftest.py): a basal-ui process and its HTTP API, model picking."""
+
 import json
 import os
 import signal
@@ -53,8 +54,13 @@ class UI:
         self.http = httpx.Client(base_url=self.url, timeout=600)
         log = open(self.root / "basal-ui.log", "a")  # noqa: SIM115 — kept open for the process
         env = {**os.environ, "BASAL_UI_CONFIG": str(self.settings)}
-        self.proc = subprocess.Popen([sys.executable, "-m", "basal_ui.app", "--port", str(self.port)], cwd=ROOT,
-                                     env=env, stdout=log, stderr=subprocess.STDOUT)
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "basal_ui.app", "--port", str(self.port)],
+            cwd=ROOT,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             if self.proc.poll() is not None:
@@ -201,8 +207,9 @@ def pick(ui, env, predicate, why, prefer=lambda m: 0):
         if m is None or not m["downloaded"]:
             pytest.fail(f"{env}={named} is not a downloaded model of the catalog")
         return m
-    found = sorted((m for m in models if m["downloaded"] and predicate(m)),
-                   key=lambda m: (prefer(m), m["weights_bytes"] or 0))
+    found = sorted(
+        (m for m in models if m["downloaded"] and predicate(m)), key=lambda m: (prefer(m), m["weights_bytes"] or 0)
+    )
     if found:
         return found[0]
     fallback = next((m for m in models if m["id"] == FALLBACK_MODEL), None)
@@ -219,10 +226,16 @@ def advanced_requests():
     return [json.loads(line) for line in ADVANCED.read_text().splitlines() if line.strip()]
 
 
-CHOICE = {"state": "Klient pisze, że karta została zablokowana po trzech błędnych PIN-ach i prosi o odblokowanie.",
-          "questions": {"dept": {"type": "choice", "instructions": "Do którego działu skierować zgłoszenie?",
-                                 "criteria": {"cards": "karty płatnicze", "loans": "kredyty",
-                                              "online": "bankowość internetowa"}}}}
+CHOICE = {
+    "state": "Klient pisze, że karta została zablokowana po trzech błędnych PIN-ach i prosi o odblokowanie.",
+    "questions": {
+        "dept": {
+            "type": "choice",
+            "instructions": "Do którego działu skierować zgłoszenie?",
+            "criteria": {"cards": "karty płatnicze", "loans": "kredyty", "online": "bankowość internetowa"},
+        }
+    },
+}
 
 
 def long_state(tokens):

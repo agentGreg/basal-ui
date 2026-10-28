@@ -3,8 +3,10 @@
 
 def main():
     from .engine import check
+
     check()
     from .app import main as app_main
+
     app_main()
 
 

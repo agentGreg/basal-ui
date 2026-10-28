@@ -9,19 +9,24 @@ from fastapi.testclient import TestClient
 
 from basal_ui import bench, catalog, settings
 from basal_ui.app import create_app
-from basal_ui.fleet import Fleet, Runner
 from basal_ui.catalog import Variant
-from basal_ui.jobs import Cancelled, Job, LogBuffer
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
+from basal_ui.jobs import Cancelled, Job, LogBuffer
 from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 
 
 def write_set(path, golds):
-    path.write_text("\n".join(json.dumps({"state": f"s{i}", "question": "q?", "options": ["a", "b"], "gold": g})
-                              for i, g in enumerate(golds)) + "\n")
+    path.write_text(
+        "\n".join(
+            json.dumps({"state": f"s{i}", "question": "q?", "options": ["a", "b"], "gold": g})
+            for i, g in enumerate(golds)
+        )
+        + "\n"
+    )
     return path
 
 
@@ -34,8 +39,14 @@ class AnswersOptionOne:
     async def adecide(self, model_id, body, path="/v1/systemone", source="api", client=None):
         self.sources.append(source)
         await asyncio.sleep(0.001)
-        return httpx.Response(200, json={"answers": {"q0": {"probabilities": {"option_1": 0.7, "option_2": 0.3}}},
-                                         "usage": {"input_tokens": 10}}, request=httpx.Request("POST", "http://x"))
+        return httpx.Response(
+            200,
+            json={
+                "answers": {"q0": {"probabilities": {"option_1": 0.7, "option_2": 0.3}}},
+                "usage": {"input_tokens": 10},
+            },
+            request=httpx.Request("POST", "http://x"),
+        )
 
 
 def test_run_benchmark_measures_latency_throughput_and_accuracy(tmp_path):
@@ -48,7 +59,9 @@ def test_run_benchmark_measures_latency_throughput_and_accuracy(tmp_path):
     assert result["accuracy"] == {"overall": 0.5, "by_file": {"two": 0.5}}
     assert (result["model"], result["set"], result["items"], result["errors"]) == ("m", "two", 2, 0)
     assert 0 < result["p50_ms"] <= result["p95_ms"] and result["mean_ms"] > 0
-    assert result["decisions_per_s"] > 0 and result["input_tokens_per_s"] == pytest.approx(result["decisions_per_s"] * 10)
+    assert result["decisions_per_s"] > 0 and result["input_tokens_per_s"] == pytest.approx(
+        result["decisions_per_s"] * 10
+    )
     assert set(fleet.sources) == {"benchmark"} and len(fleet.sources) == bench.WARMUP + 4 + 10
     assert phases[0] == "warm-up" and "sequential" in phases and phases[-1] == "concurrent"
 
@@ -56,9 +69,11 @@ def test_run_benchmark_measures_latency_throughput_and_accuracy(tmp_path):
 def test_bundled_set_and_custom_set_validation(tmp_path):
     label, paths = bench.resolve_set("bundled")
     assert label == "bundled" and len(bench.load_items(paths)) == 44
-    for spec, reason in ((str(tmp_path / "missing.jsonl"), "does not exist"),
-                         (str(write_set(tmp_path / "small.jsonl", [0, 1, 0])), "3 items"),
-                         (str(tmp_path), "at least 10")):
+    for spec, reason in (
+        (str(tmp_path / "missing.jsonl"), "does not exist"),
+        (str(write_set(tmp_path / "small.jsonl", [0, 1, 0])), "3 items"),
+        (str(tmp_path), "at least 10"),
+    ):
         with pytest.raises(ValueError, match=reason):
             bench.resolve_set(spec)
     (tmp_path / "bad.jsonl").write_text('{"state": "x"\n')
@@ -67,8 +82,9 @@ def test_bundled_set_and_custom_set_validation(tmp_path):
     (tmp_path / "set").mkdir()
     write_set(tmp_path / "set" / "one.jsonl", [0] * 6)
     write_set(tmp_path / "set" / "two.jsonl", [1] * 6)
-    assert bench.resolve_set(str(tmp_path / "set"))[1] == [str(tmp_path / "set" / f) for f in ("one.jsonl",
-                                                                                               "two.jsonl")]
+    assert bench.resolve_set(str(tmp_path / "set"))[1] == [
+        str(tmp_path / "set" / f) for f in ("one.jsonl", "two.jsonl")
+    ]
 
 
 def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monkeypatch):
@@ -85,17 +101,25 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
 
     monkeypatch.setattr(bench, "run_benchmark", fake_run)
     stats = Stats(tmp_path / "stats.json")
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: HW, stats=stats,
-        history=History(tmp_path / "h.jsonl"))
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: HW,
+        stats=stats,
+        history=History(tmp_path / "h.jsonl"),
+    )
     runner = Runner()
     runner.state, runner.model = "ready", "mini"
     fleet.runners["mini"] = runner
-    app = create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet, stats=stats,
-                     history=fleet.history)
+    app = create_app(
+        catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet, stats=stats, history=fleet.history
+    )
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/benchmark", json={"id": "nope"}).status_code == 404
-        too_small = client.post("/api/benchmark", json={"id": "mini", "set": str(write_set(
-            tmp_path / "s.jsonl", [0, 1]))})
+        too_small = client.post(
+            "/api/benchmark", json={"id": "mini", "set": str(write_set(tmp_path / "s.jsonl", [0, 1]))}
+        )
         assert too_small.status_code == 400 and "at least 10" in too_small.json()["detail"]
         started = client.post("/api/benchmark", json={"id": "mini"})
         assert started.status_code == 202 and started.json()["running"] is True
@@ -104,6 +128,7 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
 
         def job():
             return client.get("/api/status").json()["jobs"]["benchmark"]
+
         deadline = time.monotonic() + 3
         while job()["phase"] != "sequential" and time.monotonic() < deadline:
             time.sleep(0.01)
@@ -127,13 +152,24 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
 
 def make_app(tmp_path, monkeypatch, hw=HW, variants=(), base_url="http://child"):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: hw,
-                  stats=Stats(tmp_path / "stats.json"), history=History(tmp_path / "h.jsonl"))
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: hw,
+        stats=Stats(tmp_path / "stats.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
     runner = Runner()
     runner.state, runner.model, runner.base_url, runner.models_entry = "ready", "mini", base_url, {"early_exit": []}
     fleet.runners["mini"] = runner
-    app = create_app(catalog_fn=lambda **_: (list(variants), "test"), hardware_fn=lambda: hw, fleet=fleet,
-                     stats=fleet.stats, history=fleet.history)
+    app = create_app(
+        catalog_fn=lambda **_: (list(variants), "test"),
+        hardware_fn=lambda: hw,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     return app, fleet
 
 
@@ -151,10 +187,14 @@ def test_load_test_and_determinism_check_against_the_model(tmp_path, monkeypatch
     with TestClient(app, base_url="http://127.0.0.1") as client:
         bad = client.post("/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": {"n_seq": 0}})
         assert bad.status_code == 400 and "n_seq" in bad.json()["detail"]
-        no_exit = client.post("/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": {"early_exit": "0.99"}})
+        no_exit = client.post(
+            "/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": {"early_exit": "0.99"}}
+        )
         assert no_exit.status_code == 400 and "no early exits" in no_exit.json()["detail"]
         params = {"n_seq": 4, "n_conc": 6, "concurrency": 3}
-        assert client.post("/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": params}).status_code == 202
+        assert (
+            client.post("/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": params}).status_code == 202
+        )
         result = finished(client)["result"]
         assert result["kind"] == "loadtest" and result["errors"] == 0 and result["p50_ms"] > 0
         assert result["decisions_per_s"] > 0 and result["params"]["n_seq"] == 4
@@ -173,7 +213,7 @@ def test_mode_comparison_runs_basal_bench_and_reserves_its_memory(tmp_path, monk
     built, reserved = [], []
 
     def fake_bench(job, module, argv, out_path=None, on_json=None):  # basal-bench: one row per mode, in order
-        modes = argv[argv.index("--modes") + 1:argv.index("--n")]
+        modes = argv[argv.index("--modes") + 1 : argv.index("--n")]
         for i, mode in enumerate(modes):
             if mode == "ollama":
                 raise RuntimeError("basal-bench exited (1): no Ollama server")
@@ -201,5 +241,7 @@ def test_mode_comparison_runs_basal_bench_and_reserves_its_memory(tmp_path, monk
         assert over.status_code == 409 and over.json()["detail"].startswith("over memory budget")
         assert client.post("/api/benchmark", json={**body, "modes": ["eager", "ollama"]}).status_code == 202
         rows = finished(client)["result"]["modes"]
-        assert rows[0]["mode"] == "eager" and rows[1] == {"mode": "ollama",
-                                                           "error": "basal-bench exited (1): no Ollama server"}
+        assert rows[0]["mode"] == "eager" and rows[1] == {
+            "mode": "ollama",
+            "error": "basal-bench exited (1): no Ollama server",
+        }

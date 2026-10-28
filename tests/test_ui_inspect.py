@@ -7,28 +7,38 @@ from fastapi.testclient import TestClient
 
 from basal_ui import catalog, inspect, settings
 from basal_ui.app import create_app
-from basal_ui.fleet import Fleet
 from basal_ui.catalog import Variant
+from basal_ui.fleet import Fleet
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
 from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 BF16 = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
-MLX = Variant("mini-mlx", "Remek/basal-2.0-mini-MLX-8bit", "basal-2.0", "mini", "MLX-8bit", "MLX 8-bit", None, 100,
-              False)
+MLX = Variant(
+    "mini-mlx", "Remek/basal-2.0-mini-MLX-8bit", "basal-2.0", "mini", "MLX-8bit", "MLX 8-bit", None, 100, False
+)
 
-OMNI_BF16 = Variant("omni-mini", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None, 100,
-                    True)
-OMNI_FP8 = Variant("omni-mini-fp8", "Remek/basal-omni-1.0-mini-FP8", "basal-omni-1.0", "mini", "FP8", "FP8", None,
-                   100, True)
-OMNI_GGUF = Variant("omni-mini-gguf", "Remek/basal-omni-1.0-GGUF", "basal-omni-1.0", "mini", "GGUF", "GGUF", None,
-                    100, True)
-OMNI_MLX = Variant("omni-mini-mlx", "Remek/basal-omni-1.0-mini-MLX-8bit", "basal-omni-1.0", "mini", "MLX-8bit",
-                   "MLX 8-bit", None, 100, True)
+OMNI_BF16 = Variant("omni-mini", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None, 100, True)
+OMNI_FP8 = Variant(
+    "omni-mini-fp8", "Remek/basal-omni-1.0-mini-FP8", "basal-omni-1.0", "mini", "FP8", "FP8", None, 100, True
+)
+OMNI_GGUF = Variant(
+    "omni-mini-gguf", "Remek/basal-omni-1.0-GGUF", "basal-omni-1.0", "mini", "GGUF", "GGUF", None, 100, True
+)
+OMNI_MLX = Variant(
+    "omni-mini-mlx",
+    "Remek/basal-omni-1.0-mini-MLX-8bit",
+    "basal-omni-1.0",
+    "mini",
+    "MLX-8bit",
+    "MLX 8-bit",
+    None,
+    100,
+    True,
+)
 
-PICO = Variant("pico", "Remek/basal-omni-pico", "basal-omni", "pico", "bf16", "bf16", None, 100, True,
-               recurrent=True)
+PICO = Variant("pico", "Remek/basal-omni-pico", "basal-omni", "pico", "bf16", "bf16", None, 100, True, recurrent=True)
 
 
 @pytest.mark.parametrize("viz_gemma4", [True, False])
@@ -51,8 +61,15 @@ def test_models_api_reports_why_a_variant_cannot_be_inspected(client):
 class StubExplainer:
     def __init__(self, a):
         self.a = a
-        self.info = {"model": "stub", "device": a.device, "layers": 2, "mode": "eager", "orders": 2,
-                     "temperatures": {"choice": 1.1}, "temperature_per_bucket": {}}
+        self.info = {
+            "model": "stub",
+            "device": a.device,
+            "layers": 2,
+            "mode": "eager",
+            "orders": 2,
+            "temperatures": {"choice": 1.1},
+            "temperature_per_bucket": {},
+        }
         workers = self.workers = []
 
         class Srv:
@@ -74,10 +91,21 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     monkeypatch.setattr(inspect, "Explainer", StubExplainer)
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
-                  hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
-    app = create_app(catalog_fn=lambda **_: ([BF16, MLX, PICO], "test"), hardware_fn=lambda: HW, fleet=fleet,
-                     stats=fleet.stats, history=fleet.history)
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: HW,
+        stats=Stats(tmp_path / "s.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
+    app = create_app(
+        catalog_fn=lambda **_: ([BF16, MLX, PICO], "test"),
+        hardware_fn=lambda: HW,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     with TestClient(app, base_url="http://127.0.0.1") as c:
         c.fleet = fleet
         yield c
@@ -93,8 +121,16 @@ def test_inspector_serves_basal_viz_for_a_bf16_model_and_stops(client):
     while client.get("/api/inspect").json()["state"] != "ready" and time.monotonic() < deadline:
         time.sleep(0.01)
     assert client.get("/api/inspect").json() == {
-        "model": "mini", "state": "ready", "error": None, "mode": "eager", "device": "cpu", "orders": 2,
-        "calibration": None, "temperatures": {"choice": 1.1}, "temperature_per_bucket": {}}
+        "model": "mini",
+        "state": "ready",
+        "error": None,
+        "mode": "eager",
+        "device": "cpu",
+        "orders": 2,
+        "calibration": None,
+        "temperatures": {"choice": 1.1},
+        "temperature_per_bucket": {},
+    }
     assert client.get("/viz/api/info").json()["model"] == "mini"  # the variant's id
     explained = client.post("/viz/api/explain", json={"state": "s", "questions": {}})
     assert explained.json() == {"questions": [], "state": "s", "served": {}}

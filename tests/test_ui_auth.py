@@ -14,10 +14,16 @@ def fixture(tmp_path, keys=True, cors=()):
     secret, admin = "bsl_test-secret", "bsl_admin-secret"
     path = tmp_path / "keys.json"
     if keys:
-        path.write_text(json.dumps({"keys": [{"name": "user", "sha256": hashlib.sha256(secret.encode()).hexdigest(),
-                                              "admin": False},
-                                             {"name": "admin", "sha256": hashlib.sha256(admin.encode()).hexdigest(),
-                                              "admin": True}]}))
+        path.write_text(
+            json.dumps(
+                {
+                    "keys": [
+                        {"name": "user", "sha256": hashlib.sha256(secret.encode()).hexdigest(), "admin": False},
+                        {"name": "admin", "sha256": hashlib.sha256(admin.encode()).hexdigest(), "admin": True},
+                    ]
+                }
+            )
+        )
 
     async def endpoint(_):
         return JSONResponse({"ok": True})
@@ -26,10 +32,12 @@ def fixture(tmp_path, keys=True, cors=()):
         async def chunks():
             yield b"a"
             yield b"b"
+
         return StreamingResponse(chunks())
 
-    app = Starlette(routes=[Route("/data", endpoint), Route("/stream", stream), Route("/mcp", stream),
-                            Route("/health", endpoint)])
+    app = Starlette(
+        routes=[Route("/data", endpoint), Route("/stream", stream), Route("/mcp", stream), Route("/health", endpoint)]
+    )
     return TestClient(protect(app, ApiKeys(path) if keys else None, cors)), path, secret, admin
 
 
@@ -66,6 +74,7 @@ def test_key_file_reloads_after_two_seconds_even_with_same_signature(tmp_path, m
 
     path = tmp_path / "keys.json"
     old_key, new_key = "old-secret", "new-secret"
+
     def contents(key):
         return json.dumps({"keys": [{"name": "user", "sha256": hashlib.sha256(key.encode()).hexdigest()}]})
 

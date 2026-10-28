@@ -1,4 +1,5 @@
 """API-key authentication, CORS and request ids of basal-ui's API server."""
+
 import hashlib
 import hmac
 import json
@@ -29,10 +30,15 @@ class ApiKeys:
             with open(self.path, encoding="utf-8") as f:
                 data = json.load(f)
             records = data["keys"]
-            if not isinstance(records, list) or any(not isinstance(k, dict) or
-                    not isinstance(k.get("name"), str) or not isinstance(k.get("sha256"), str) or
-                    len(k["sha256"]) != 64 or any(c not in "0123456789abcdefABCDEF" for c in k["sha256"])
-                    or not isinstance(k.get("admin", False), bool) for k in records):
+            if not isinstance(records, list) or any(
+                not isinstance(k, dict)
+                or not isinstance(k.get("name"), str)
+                or not isinstance(k.get("sha256"), str)
+                or len(k["sha256"]) != 64
+                or any(c not in "0123456789abcdefABCDEF" for c in k["sha256"])
+                or not isinstance(k.get("admin", False), bool)
+                for k in records
+            ):
                 raise ValueError("invalid API key file")
             self._signature, self._records, self._warned = signature, records, False
             self._loaded_at = now
@@ -58,19 +64,20 @@ class ApiKeys:
 
     def usage(self):
         with self._lock:
-            return [{"name": key["name"], "last_used": self._usage.get(key["name"])}
-                    for key in self._load()]
+            return [{"name": key["name"], "last_used": self._usage.get(key["name"])} for key in self._load()]
 
 
 async def _json(send, status, body, headers=()):
     data = json.dumps(body).encode()
-    await send({"type": "http.response.start", "status": status,
-                "headers": [(b"content-type", b"application/json"), *headers]})
+    await send(
+        {"type": "http.response.start", "status": status, "headers": [(b"content-type", b"application/json"), *headers]}
+    )
     await send({"type": "http.response.body", "body": data})
 
 
 def protect(app, keys, cors_origins=()):
     """Protect HTTP routes without consuming request or response streams."""
+
     async def auth_app(scope, receive, send):
         if scope["type"] != "http":
             await app(scope, receive, send)
@@ -86,8 +93,14 @@ def protect(app, keys, cors_origins=()):
             record = keys.check(secret) if secret else None
             if record is None:
                 if path in ("/v1/decisions", "/decisions"):
-                    body = {"error": {"message": "missing or invalid API key", "type": "authentication_error",
-                                      "param": None, "code": "UNAUTHORIZED"}}
+                    body = {
+                        "error": {
+                            "message": "missing or invalid API key",
+                            "type": "authentication_error",
+                            "param": None,
+                            "code": "UNAUTHORIZED",
+                        }
+                    }
                 else:
                     body = {"error": "missing or invalid API key", "code": "UNAUTHORIZED"}
                 await _json(send, 401, body, ((b"www-authenticate", b"Bearer"),))
@@ -104,15 +117,27 @@ def protect(app, keys, cors_origins=()):
 
     if cors_origins:
         from starlette.middleware.cors import CORSMiddleware
-        return CORSMiddleware(auth_app, allow_origins=list(cors_origins), allow_methods=["GET", "POST", "OPTIONS"],
-                              allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-Id", "Mcp-Session-Id",
-                                             "Mcp-Protocol-Version"], expose_headers=["Mcp-Session-Id", "x-request-id",
-                                                                                    "x-typesafe-request-id"])
+
+        return CORSMiddleware(
+            auth_app,
+            allow_origins=list(cors_origins),
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-API-Key",
+                "X-Request-Id",
+                "Mcp-Session-Id",
+                "Mcp-Protocol-Version",
+            ],
+            expose_headers=["Mcp-Session-Id", "x-request-id", "x-typesafe-request-id"],
+        )
     return auth_app
 
 
 def request_ids(app):
     """Echo X-Request-Id (or a generated req_<hex>) as x-request-id and x-typesafe-request-id on every response."""
+
     async def with_request_id(scope, receive, send):
         if scope["type"] != "http":
             await app(scope, receive, send)
@@ -124,7 +149,11 @@ def request_ids(app):
             if message["type"] == "http.response.start":
                 message = dict(message)
                 message["headers"] = list(message.get("headers", [])) + [
-                    (b"x-request-id", request_id.encode()), (b"x-typesafe-request-id", request_id.encode())]
+                    (b"x-request-id", request_id.encode()),
+                    (b"x-typesafe-request-id", request_id.encode()),
+                ]
             await send(message)
+
         await app(scope, receive, send_with_id)
+
     return with_request_id

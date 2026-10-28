@@ -1,5 +1,6 @@
 """The decisions basal-ui answered (playground, API, MCP) with their requests and responses, newest kept: a JSONL file
 <settings stem>.history.jsonl next to the settings file (0600; media bytes are replaced by their size)."""
+
 import json
 import os
 import threading
@@ -16,8 +17,10 @@ PREVIEW = 160
 def _strip_media(value):
     """Media bytes -> their size: `data` fields of basal media and data: URLs (OpenAI input_image.image_url)."""
     if isinstance(value, dict):
-        return {k: (f"<{len(v)} bytes>" if k == "data" and isinstance(v, str) else _strip_media(v))
-                for k, v in value.items()}
+        return {
+            k: (f"<{len(v)} bytes>" if k == "data" and isinstance(v, str) else _strip_media(v))
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_strip_media(v) for v in value]
     if isinstance(value, str) and value.startswith("data:") and len(value) > 64:
@@ -49,16 +52,24 @@ def make_record(model, source, body, status, response_json, latency_ms) -> dict:
     usage = response_json.get("usage") if isinstance(response_json, dict) else None
     questions = body.get("questions")
     items = answer_items(answers)
-    return {"id": "h_" + uuid.uuid4().hex, "ts": time.time(), "model": model, "source": source, "status": status,
-            "latency_ms": round(latency_ms, 2),
-            "input_tokens": usage.get("input_tokens") if isinstance(usage, dict) else None,
-            "questions": len(questions) if isinstance(questions, (dict, list)) else None,
-            "state_preview": _preview(body),
-            "answers": {name: {"type": a.get("type"), "best": _best(a), "confidence": best_probability(a)}
-                        for name, a in items},
-            "deferred": any(a.get("deferred") is True for _, a in items),
-            "truncated": bool(usage.get("truncated")) if isinstance(usage, dict) else False,
-            "request": _strip_media(body), "response": response_json}
+    return {
+        "id": "h_" + uuid.uuid4().hex,
+        "ts": time.time(),
+        "model": model,
+        "source": source,
+        "status": status,
+        "latency_ms": round(latency_ms, 2),
+        "input_tokens": usage.get("input_tokens") if isinstance(usage, dict) else None,
+        "questions": len(questions) if isinstance(questions, (dict, list)) else None,
+        "state_preview": _preview(body),
+        "answers": {
+            name: {"type": a.get("type"), "best": _best(a), "confidence": best_probability(a)} for name, a in items
+        },
+        "deferred": any(a.get("deferred") is True for _, a in items),
+        "truncated": bool(usage.get("truncated")) if isinstance(usage, dict) else False,
+        "request": _strip_media(body),
+        "response": response_json,
+    }
 
 
 def _summary(record: dict) -> dict:
@@ -74,18 +85,30 @@ def replay_fields(request: dict) -> dict:
     def redacted(value, media=False):
         if isinstance(value, dict):
             media = media or value.get("type") in ("input_image", "input_audio")
-            return any((media and k in ("data", "image_url", "audio_url") and isinstance(v, str) and
-                        re.fullmatch(r"<\d+ bytes>", v)) or redacted(v, media or k in ("media", "images", "audio"))
-                       for k, v in value.items())
+            return any(
+                (
+                    media
+                    and k in ("data", "image_url", "audio_url")
+                    and isinstance(v, str)
+                    and re.fullmatch(r"<\d+ bytes>", v)
+                )
+                or redacted(v, media or k in ("media", "images", "audio"))
+                for k, v in value.items()
+            )
         if isinstance(value, list):
             return any(redacted(v, media) for v in value)
         return False
 
     if not isinstance(request, dict):
-        return {"replay_request": None, "replay_error": "This recorded request is not a JSON object and cannot be replayed."}
+        return {
+            "replay_request": None,
+            "replay_error": "This recorded request is not a JSON object and cannot be replayed.",
+        }
     if redacted(request):
-        return {"replay_request": None,
-                "replay_error": "History removed the original media attachments. Add them again before sending this request."}
+        return {
+            "replay_request": None,
+            "replay_error": "History removed the original media attachments. Add them again before sending this request.",
+        }
     try:
         if "input" in request:
             replay, _, _ = decision_body(request)
@@ -138,7 +161,7 @@ class History:
 
         def write():
             if self.lines + 1 > self.keep + 500:
-                kept = [*self._read_file(), record][-self.keep:]
+                kept = [*self._read_file(), record][-self.keep :]
                 settings._write_private(self.path, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept))
                 self.lines = len(kept)
                 return
@@ -157,16 +180,18 @@ class History:
             records = list(self.records)
         ids = [r["id"] for r in records]
         if before is not None:
-            records = records[:ids.index(before)] if before in ids else []
+            records = records[: ids.index(before)] if before in ids else []
         if after is not None:
-            records = records[ids.index(after) + 1:] if after in ids else records
+            records = records[ids.index(after) + 1 :] if after in ids else records
         needle = q.lower() if q else None
         out = []
         for record in records if order == "asc" else reversed(records):
             if model and record.get("model") != model or source and record.get("source") != source:
                 continue
-            if needle and needle not in (str(record.get("state_preview", "")) + " " +
-                                         str(record.get("model", ""))).lower():
+            if (
+                needle
+                and needle not in (str(record.get("state_preview", "")) + " " + str(record.get("model", ""))).lower()
+            ):
                 continue
             out.append(_summary(record))
             if len(out) >= limit:

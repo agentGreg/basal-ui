@@ -1,12 +1,21 @@
 """Decision safety: the certified thresholds and context policy a model reports, deferral under max_error, a state
 truncated to the context, and the History flags of both."""
+
 from tests.e2e.support import context_of, long_state
 
 NO_CERTIFICATE = "no certified threshold for this type at this max_error"
-AMBIGUOUS = {"state": "Klient pisze: coś mi nie działa, nie wiem co.",
-             "questions": {"refund": {"type": "act", "instructions": "Czy zwrócić klientowi pieniądze?",
-                                      "criteria": {"refund": "należy się zwrot", "keep": "zwrot się nie należy"},
-                                      "costs": {"wrong": 10, "defer": 1}, "max_error": 0.01}}}
+AMBIGUOUS = {
+    "state": "Klient pisze: coś mi nie działa, nie wiem co.",
+    "questions": {
+        "refund": {
+            "type": "act",
+            "instructions": "Czy zwrócić klientowi pieniądze?",
+            "criteria": {"refund": "należy się zwrot", "keep": "zwrot się nie należy"},
+            "costs": {"wrong": 10, "defer": 1},
+            "max_error": 0.01,
+        }
+    },
+}
 
 
 def test_the_models_entry_carries_its_certified_thresholds_and_context_policy(ui, text_model):

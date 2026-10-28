@@ -3,6 +3,7 @@ option orders, batching, caching, scheduling, context policy, the CUDA graph eng
 eager forward, calibration strictness, thinking, early exit). DEFAULTS are basal-serve's own defaults, and args()
 emits only the options that differ from them. Incompatible combinations are not re-checked here: the child refuses
 them with basal-serve's own message, shown on the model's row and in its log."""
+
 import re
 from types import SimpleNamespace
 
@@ -16,49 +17,150 @@ from .catalog import _cuda_graph
 # basal-omni-pico and other Qwen3.5 models (Variant.recurrent), basal-serve 2.4 (engine.recurrent_refused, gdn_graph)
 
 DEFAULTS = {
-    "mode": None, "quant": None, "revision": None, "attn": "auto", "gemma_attn": "auto", "deterministic": False, "orders": None,
-    "auto_tau": 0.6, "auto_band": [0.2, 0.8], "soam": True, "max_batch": 64, "wait_ms": 0.0, "batch_window_ms": 3.0,
-    "state_cache_gb": 0.0, "prefix_cache": False, "scheduler": "auto", "long_lane": False, "long_tokens": 2048,
-    "long_share": 0.5, "long_slice_ms": 10.0, "context_overflow": "truncate", "truncate_head": 1 / 3, "max_len": None,
-    "vllm_preset": "default", "gpu_memory": 0.6, "ollama_url": "http://127.0.0.1:11434", "ollama_model": None,
-    "llamacpp_url": "http://127.0.0.1:8080", "http_parallel": 1, "device": None, "think": False, "think_tokens": 256,
-    "think_python": None, "think_url": None, "early_exit": "off", "mlx_packed": False, "layout": None, "adapter": None,
+    "mode": None,
+    "quant": None,
+    "revision": None,
+    "attn": "auto",
+    "gemma_attn": "auto",
+    "deterministic": False,
+    "orders": None,
+    "auto_tau": 0.6,
+    "auto_band": [0.2, 0.8],
+    "soam": True,
+    "max_batch": 64,
+    "wait_ms": 0.0,
+    "batch_window_ms": 3.0,
+    "state_cache_gb": 0.0,
+    "prefix_cache": False,
+    "scheduler": "auto",
+    "long_lane": False,
+    "long_tokens": 2048,
+    "long_share": 0.5,
+    "long_slice_ms": 10.0,
+    "context_overflow": "truncate",
+    "truncate_head": 1 / 3,
+    "max_len": None,
+    "vllm_preset": "default",
+    "gpu_memory": 0.6,
+    "ollama_url": "http://127.0.0.1:11434",
+    "ollama_model": None,
+    "llamacpp_url": "http://127.0.0.1:8080",
+    "http_parallel": 1,
+    "device": None,
+    "think": False,
+    "think_tokens": 256,
+    "think_python": None,
+    "think_url": None,
+    "early_exit": "off",
+    "mlx_packed": False,
+    "layout": None,
+    "adapter": None,
     # the CUDA graph engine's kernel switches
-    "merge": "auto", "lean": "off", "tree": "dense", "batches": "auto", "readout_layer": "off", "template_prefix": "auto",
+    "merge": "auto",
+    "lean": "off",
+    "tree": "dense",
+    "batches": "auto",
+    "readout_layer": "off",
+    "template_prefix": "auto",
     "fp8_accum": "fast",
     # --mode eager with a Gemma 4 model (basal-omni)
-    "eager_attn": "math", "eager_forward": None, "ple_offload": False,
-    "vllm_fast_prefill": "auto", "dtype": "bfloat16", "exit_heads": None, "strict_calibration": False,
-    "think_calibration": None, "think_model": None, "think_adapter": None, "think_memory": 0.3, "think_max_len": 8192,
+    "eager_attn": "math",
+    "eager_forward": None,
+    "ple_offload": False,
+    "vllm_fast_prefill": "auto",
+    "dtype": "bfloat16",
+    "exit_heads": None,
+    "strict_calibration": False,
+    "think_calibration": None,
+    "think_model": None,
+    "think_adapter": None,
+    "think_memory": 0.3,
+    "think_max_len": 8192,
     "think_log": "basal-think-vllm.log",
 }
 CHOICES = {
-    "quant": (None, "fp8", "nvfp4", "q8"), "attn": ("auto", "fa2", "fa3", "fa4", "cudnn"),
-    "gemma_attn": ("auto", "math", "flex", "fa3", "fa3+math"), "scheduler": ("auto", "on", "off"),
-    "context_overflow": ("truncate", "refuse"), "vllm_preset": tuple(VLLM_PRESETS), "device": (None, "cuda", "mps", "cpu"),
+    "quant": (None, "fp8", "nvfp4", "q8"),
+    "attn": ("auto", "fa2", "fa3", "fa4", "cudnn"),
+    "gemma_attn": ("auto", "math", "flex", "fa3", "fa3+math"),
+    "scheduler": ("auto", "on", "off"),
+    "context_overflow": ("truncate", "refuse"),
+    "vllm_preset": tuple(VLLM_PRESETS),
+    "device": (None, "cuda", "mps", "cpu"),
     "early_exit": ("off", "0.999", "0.995", "0.99", "0.98"),
-    "merge": ("auto", "on", "off"), "lean": ("auto", "on", "pass2", "off"), "tree": ("auto", "dense", "flex"),
-    "batches": ("auto", "compact", "default", "fine"), "readout_layer": ("auto", "on", "off"),
-    "template_prefix": ("auto", "on", "off"), "fp8_accum": ("fast", "full"), "eager_forward": (None, "basal", "hf"),
-    "vllm_fast_prefill": ("auto", "off"), "dtype": ("bfloat16", "float16", "float32"), "layout": (None, *LAYOUTS),
+    "merge": ("auto", "on", "off"),
+    "lean": ("auto", "on", "pass2", "off"),
+    "tree": ("auto", "dense", "flex"),
+    "batches": ("auto", "compact", "default", "fine"),
+    "readout_layer": ("auto", "on", "off"),
+    "template_prefix": ("auto", "on", "off"),
+    "fp8_accum": ("fast", "full"),
+    "eager_forward": (None, "basal", "hf"),
+    "vllm_fast_prefill": ("auto", "off"),
+    "dtype": ("bfloat16", "float16", "float32"),
+    "layout": (None, *LAYOUTS),
 }
-BOOLS = ("deterministic", "soam", "prefix_cache", "long_lane", "think", "ple_offload", "strict_calibration", "mlx_packed")
+BOOLS = (
+    "deterministic",
+    "soam",
+    "prefix_cache",
+    "long_lane",
+    "think",
+    "ple_offload",
+    "strict_calibration",
+    "mlx_packed",
+)
 # key: (minimum, maximum, integer, minimum excluded)
 NUMBERS = {
-    "auto_tau": (0, 1, False, False), "max_batch": (1, None, True, False), "wait_ms": (0, None, False, False),
-    "batch_window_ms": (0, None, False, False), "state_cache_gb": (0, None, False, False),
-    "long_tokens": (1, None, True, False), "long_share": (0, 1, False, False), "long_slice_ms": (0, None, False, False),
-    "truncate_head": (0, 1, False, False), "gpu_memory": (0, 1, False, True), "http_parallel": (1, None, True, False),
-    "think_tokens": (1, None, True, False), "think_memory": (0, 1, False, True), "think_max_len": (512, None, True, False),
+    "auto_tau": (0, 1, False, False),
+    "max_batch": (1, None, True, False),
+    "wait_ms": (0, None, False, False),
+    "batch_window_ms": (0, None, False, False),
+    "state_cache_gb": (0, None, False, False),
+    "long_tokens": (1, None, True, False),
+    "long_share": (0, 1, False, False),
+    "long_slice_ms": (0, None, False, False),
+    "truncate_head": (0, 1, False, False),
+    "gpu_memory": (0, 1, False, True),
+    "http_parallel": (1, None, True, False),
+    "think_tokens": (1, None, True, False),
+    "think_memory": (0, 1, False, True),
+    "think_max_len": (512, None, True, False),
 }
-TEXTS = ("ollama_url", "ollama_model", "llamacpp_url", "think_python", "think_url", "exit_heads", "think_calibration",
-         "think_model", "think_adapter", "think_log", "adapter")
+TEXTS = (
+    "ollama_url",
+    "ollama_model",
+    "llamacpp_url",
+    "think_python",
+    "think_url",
+    "exit_heads",
+    "think_calibration",
+    "think_model",
+    "think_adapter",
+    "think_log",
+    "adapter",
+)
 ORDERS = re.compile(r"1|2|auto|2le(?:[2-9]|[1-9]\d*)\Z")
 KERNELS = "sdpa|efficient|cudnn|fa3|fa4"
 EAGER_ATTN = re.compile(rf"math|auto|sliding=({KERNELS}),full=({KERNELS})\Z")
 # the order of the Engine section; the GPU graph modes first
-MODE_ORDER = ("fast", "fast-nocompile", "fast-exit", "fp8", "nvfp4", "eager", "vllm", "sglang", "mlx", "mlx-q8", "mps",
-              "gguf", "strix", "tpu", "ollama", "llamacpp")
+MODE_ORDER = (
+    "fast",
+    "fast-nocompile",
+    "fast-exit",
+    "fp8",
+    "nvfp4",
+    "eager",
+    "vllm",
+    "sglang",
+    "mlx",
+    "mlx-q8",
+    "mps",
+    "gguf",
+    "strix",
+    "tpu",
+    "ollama",
+    "llamacpp",
+)
 
 
 def _number(key, value):
@@ -66,8 +168,10 @@ def _number(key, value):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or (integer and int(value) != value):
         raise ValueError(f"load option {key} must be {'an integer' if integer else 'a number'}")
     if (value <= lo if open_lo else value < lo) or (hi is not None and value > hi):
-        raise ValueError(f"load option {key} must be {'above' if open_lo else 'at least'} {lo}"
-                         + (f" and at most {hi}" if hi is not None else ""))
+        raise ValueError(
+            f"load option {key} must be {'above' if open_lo else 'at least'} {lo}"
+            + (f" and at most {hi}" if hi is not None else "")
+        )
     return int(value) if integer else float(value)
 
 
@@ -108,6 +212,7 @@ def validate(options: dict | None, default_mode: str | None = None) -> dict:
                 if reason:
                     raise ValueError(f"load option adapter: {reason}")
                 from basal import adapter as adapter_module
+
                 try:
                     adapter_module.validate(value)
                 except SystemExit as exc:  # basal-serve's own message
@@ -116,12 +221,18 @@ def validate(options: dict | None, default_mode: str | None = None) -> dict:
             if value is not None and not (isinstance(value, str) and ORDERS.fullmatch(value)):
                 raise ValueError("load option orders must be 1, 2, auto or 2le<N> (N >= 2)")
         elif key == "auto_band":
-            if (not isinstance(value, list) or len(value) != 2 or any(isinstance(x, bool) or not isinstance(x, (int, float))
-                                                                      for x in value) or not 0 <= value[0] <= value[1] <= 1):
+            if (
+                not isinstance(value, list)
+                or len(value) != 2
+                or any(isinstance(x, bool) or not isinstance(x, (int, float)) for x in value)
+                or not 0 <= value[0] <= value[1] <= 1
+            ):
                 raise ValueError("load option auto_band must be [low, high] with 0 <= low <= high <= 1")
             value = [float(x) for x in value]
         elif key == "max_len":
-            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 512 <= value <= 131072):
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or not 512 <= value <= 131072
+            ):
                 raise ValueError("load option max_len must be an integer between 512 and 131072")
         elif key == "eager_attn" and not (isinstance(value, str) and EAGER_ATTN.fullmatch(value)):
             raise ValueError(f"load option eager_attn must be math, auto or sliding=K,full=K with K in {KERNELS}")
@@ -163,36 +274,57 @@ def args(options: dict) -> list[str]:
     return flags
 
 
-
-
-
 def available_modes(v, hw, assessment) -> list[dict]:
     """Every basal-serve mode in MODE_ORDER with whether this machine can serve the variant with it and why not."""
     graph = _cuda_graph(v, hw)
     cap = hw.cuda_capability or (0, 0)
     mlx_port = v.port.startswith("MLX") or v.port == "bf16"
     reasons = {
-        "fast": graph, "fast-nocompile": graph,
+        "fast": graph,
+        "fast-nocompile": graph,
         "fast-exit": graph or (None if v.family == "basal-1.0" else OPTION_TEMPLATES["mode_exit_heads"]),
         "fp8": graph or fp8_unavailable(hw),
         "nvfp4": graph or (None if cap >= (10, 0) else OPTION_TEMPLATES["mode_nvfp4_blackwell"]),
         "eager": None if v.port == "bf16" else OPTION_TEMPLATES["mode_eager_format"].format(port=v.port),
-        "vllm": (OPTION_TEMPLATES["mode_vllm_install"] if "vllm" not in hw.engines
-                 else None if hw.platform == "cuda" else OPTION_TEMPLATES["mode_vllm_hardware"]),
-        "sglang": (OPTION_TEMPLATES["mode_sglang_install"] if "sglang" not in hw.engines
-                   else None if hw.platform == "cuda" else OPTION_TEMPLATES["mode_sglang_hardware"]),
-        "mlx": (OPTION_TEMPLATES["mode_mlx_device"] if hw.platform != "apple" else
-                OPTION_TEMPLATES["mode_mlx_install"] if "mlx" not in hw.engines else
-                None if mlx_port else OPTION_TEMPLATES["mode_mlx_format"].format(port=v.port)),
+        "vllm": (
+            OPTION_TEMPLATES["mode_vllm_install"]
+            if "vllm" not in hw.engines
+            else None
+            if hw.platform == "cuda"
+            else OPTION_TEMPLATES["mode_vllm_hardware"]
+        ),
+        "sglang": (
+            OPTION_TEMPLATES["mode_sglang_install"]
+            if "sglang" not in hw.engines
+            else None
+            if hw.platform == "cuda"
+            else OPTION_TEMPLATES["mode_sglang_hardware"]
+        ),
+        "mlx": (
+            OPTION_TEMPLATES["mode_mlx_device"]
+            if hw.platform != "apple"
+            else OPTION_TEMPLATES["mode_mlx_install"]
+            if "mlx" not in hw.engines
+            else None
+            if mlx_port
+            else OPTION_TEMPLATES["mode_mlx_format"].format(port=v.port)
+        ),
         "mps": None if v.port == "bf16" else OPTION_TEMPLATES["mode_mps_format"].format(port=v.port),
-        "gguf": (OPTION_TEMPLATES["mode_gguf_install"] if "gguf" not in hw.engines
-                 else None if v.port == "GGUF" else OPTION_TEMPLATES["mode_gguf_variant"]),
+        "gguf": (
+            OPTION_TEMPLATES["mode_gguf_install"]
+            if "gguf" not in hw.engines
+            else None
+            if v.port == "GGUF"
+            else OPTION_TEMPLATES["mode_gguf_variant"]
+        ),
         "strix": None if "strix" in hw.engines else OPTION_TEMPLATES["mode_strix"],
         "tpu": None if "tpu" in hw.engines else OPTION_TEMPLATES["mode_tpu"],
-        "ollama": None, "llamacpp": None,  # external services: their URL fields are required then
+        "ollama": None,
+        "llamacpp": None,  # external services: their URL fields are required then
     }
-    reasons["mlx-q8"] = reasons["mlx"] or (None if v.port in ("bf16", "MLX") else
-                                           OPTION_TEMPLATES["mode_mlx_q8"].format(port=v.port))
+    reasons["mlx-q8"] = reasons["mlx"] or (
+        None if v.port in ("bf16", "MLX") else OPTION_TEMPLATES["mode_mlx_q8"].format(port=v.port)
+    )
     if v.recurrent:
         for m in ("fast", "fast-nocompile"):
             reasons[m] = reasons[m] or (None if "fla" in hw.engines else FLA_REASON)
@@ -200,10 +332,17 @@ def available_modes(v, hw, assessment) -> list[dict]:
             reasons[m] = gdn_refused(m, device=False)
         reasons["fast-exit"] = reasons["mps"] = RECURRENT_REASON
         reasons["mlx"] = reasons["mlx-q8"] = MLX_RECURRENT_REASON
-    return [{"mode": m, "available": reasons[m] is None, "reason": reasons[m],
-             "reason_code": _availability_message(reasons[m])[0],
-             "reason_params": _availability_message(reasons[m])[1], "default": m == assessment.mode}
-            for m in MODE_ORDER]
+    return [
+        {
+            "mode": m,
+            "available": reasons[m] is None,
+            "reason": reasons[m],
+            "reason_code": _availability_message(reasons[m])[0],
+            "reason_params": _availability_message(reasons[m])[1],
+            "default": m == assessment.mode,
+        }
+        for m in MODE_ORDER
+    ]
 
 
 def _availability_message(text):
@@ -214,14 +353,27 @@ def available_media_modes(assessment, hw) -> list[dict]:
     """The modes of a load with media (--media on): eager wherever basal[media] is installed, vLLM on CUDA with
     basal[vllm] (basal-serve refuses the checkpoints vLLM reads differently, basal-omni-1.1-max)."""
     reason = assessment.media_reason if assessment.media_mode is None else None
-    vllm = reason or (None if hw.platform == "cuda" and "vllm" in hw.engines else
-                      OPTION_TEMPLATES["mode_vllm_media"])
+    vllm = reason or (None if hw.platform == "cuda" and "vllm" in hw.engines else OPTION_TEMPLATES["mode_vllm_media"])
     eager = _availability_message(reason)
     vllm_message = _availability_message(vllm)
-    return [{"mode": "eager", "available": reason is None, "reason": reason,
-             "reason_code": eager[0], "reason_params": eager[1], "default": True},
-            {"mode": "vllm", "available": vllm is None, "reason": vllm,
-             "reason_code": vllm_message[0], "reason_params": vllm_message[1], "default": False}]
+    return [
+        {
+            "mode": "eager",
+            "available": reason is None,
+            "reason": reason,
+            "reason_code": eager[0],
+            "reason_params": eager[1],
+            "default": True,
+        },
+        {
+            "mode": "vllm",
+            "available": vllm is None,
+            "reason": vllm,
+            "reason_code": vllm_message[0],
+            "reason_params": vllm_message[1],
+            "default": False,
+        },
+    ]
 
 
 OPTION_TEMPLATES = {
@@ -265,6 +417,7 @@ def option_message_fields(text):
     if text is None:
         return None, None
     from .catalog import message_fields
+
     code, params = message_fields(text, "")
     if code is not None:
         return code, params
@@ -301,6 +454,7 @@ def mlx_packed_unavailable(v, hw):
 def adapter_unavailable():
     """Why the adapter load option cannot be used, None when the engine takes --adapter (feature probe)."""
     from .engine import feature
+
     return None if feature("adapter") else OPTION_TEMPLATES["adapter_engine"]
 
 
@@ -325,16 +479,29 @@ def check_combination(v, hw, options, default_mode, media=False):
         raise ValueError("--batches compact/fine needs the CUDA graph engine")
     if options["layout"] not in (None, "canonical"):  # basal-serve 2.4.1: the caches hold the canonical prompt only
         try:
-            refuse_layout_caches(options["layout"], SimpleNamespace(
-                state_cache_gb=options["state_cache_gb"], prefix_cache="on" if options["prefix_cache"] else "off"))
+            refuse_layout_caches(
+                options["layout"],
+                SimpleNamespace(
+                    state_cache_gb=options["state_cache_gb"], prefix_cache="on" if options["prefix_cache"] else "off"
+                ),
+            )
         except SystemExit as exc:  # basal-serve's own message
             raise ValueError(str(exc)) from None
     kind, mode_quant, compiled = MODES[mode]
     quant = options["quant"] or mode_quant
     if v.recurrent and kind == "graph":  # basal-serve 2.4: Qwen3.5 in the graph engine runs bf16 plain/branched rows
         lean, tree = lean_tree(options["lean"], options["tree"], kind, compiled, quant)
-        reason = gdn_refused(quant, options["state_cache_gb"], options["prefix_cache"], options["batches"],
-                             lean_arg(lean), tree, options["readout_layer"], options["template_prefix"], device=False)
+        reason = gdn_refused(
+            quant,
+            options["state_cache_gb"],
+            options["prefix_cache"],
+            options["batches"],
+            lean_arg(lean),
+            tree,
+            options["readout_layer"],
+            options["template_prefix"],
+            device=False,
+        )
         if not reason and options["long_lane"]:
             reason = "--long-lane is not available for Qwen3.5 (Gated DeltaNet) models"
         if reason:

@@ -17,14 +17,25 @@ HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 @pytest.fixture
 def client(tmp_path, monkeypatch, child):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
-                  hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: HW,
+        stats=Stats(tmp_path / "s.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
     runner = Runner()
     runner.state, runner.model, runner.base_url = "ready", "mini", child.url
     runner.models_entry = {"early_exit": []}
     fleet.runners["mini"] = runner
-    app = create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats,
-                     history=fleet.history)
+    app = create_app(
+        catalog_fn=lambda **_: ([], "test"),
+        hardware_fn=lambda: HW,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     with TestClient(app, base_url="http://127.0.0.1") as c:
         yield c
 
@@ -39,8 +50,13 @@ def wait_batch(client, timeout=30):
 def test_batch_answers_every_line_and_serves_the_rows_and_the_file(client, child, tmp_path):
     """basal-run runs as a subprocess against the model's child; its summary is the job's result."""
     source = tmp_path / "items.jsonl"
-    source.write_text("\n".join(json.dumps({"id": f"i{n}", "state": "s", "question": "q?", "options": ["a", "b"],
-                                            "gold": g}) for n, g in enumerate([0, 1, 0])) + "\n")
+    source.write_text(
+        "\n".join(
+            json.dumps({"id": f"i{n}", "state": "s", "question": "q?", "options": ["a", "b"], "gold": g})
+            for n, g in enumerate([0, 1, 0])
+        )
+        + "\n"
+    )
     assert client.get("/api/batch/rows").status_code == 404
     started = client.post("/api/batch", json={"id": "mini", "input": str(source), "concurrency": 2})
     assert started.status_code == 202
@@ -80,13 +96,16 @@ def test_cancelling_a_batch_stops_basal_run_and_writes_no_output(client, child, 
     assert not (tmp_path / "items.answers.jsonl").exists()
 
 
-@pytest.mark.parametrize("body, status, message", [
-    ({"id": "mini", "input": "/nonexistent/x.jsonl"}, 400, "cannot read"),
-    ({"id": "mini", "input": "BAD"}, 400, "line 1"),
-    ({"id": "other", "input": "GOOD"}, 404, "not loaded"),
-    ({"id": "mini", "input": "GOOD", "early_exit": "0.99"}, 400, "no early exits"),
-    ({"id": "mini", "input": "GOOD", "output": "/nonexistent/dir/out.jsonl"}, 400, "cannot write"),
-])
+@pytest.mark.parametrize(
+    "body, status, message",
+    [
+        ({"id": "mini", "input": "/nonexistent/x.jsonl"}, 400, "cannot read"),
+        ({"id": "mini", "input": "BAD"}, 400, "line 1"),
+        ({"id": "other", "input": "GOOD"}, 404, "not loaded"),
+        ({"id": "mini", "input": "GOOD", "early_exit": "0.99"}, 400, "no early exits"),
+        ({"id": "mini", "input": "GOOD", "output": "/nonexistent/dir/out.jsonl"}, 400, "cannot write"),
+    ],
+)
 def test_batch_refuses_bad_input(client, tmp_path, body, status, message):
     good, bad = tmp_path / "good.jsonl", tmp_path / "bad.jsonl"
     good.write_text('{"state": "s", "question": "q?", "options": ["a", "b"]}\n')

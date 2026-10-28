@@ -1,4 +1,5 @@
 """Local hardware detection for the UI."""
+
 import importlib.util
 import os
 import platform as host_platform
@@ -33,11 +34,17 @@ def _windows_memory() -> tuple[int, int] | None:
     import ctypes
 
     class MEMORYSTATUSEX(ctypes.Structure):
-        _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
 
     status = MEMORYSTATUSEX()
     status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
@@ -86,6 +93,7 @@ def _ram() -> int | None:
 def _tpu() -> bool:
     try:
         from basal.tpu import tpu_available
+
         return bool(tpu_available())
     except Exception:  # noqa: BLE001 — a broken JAX counts as no TPU, as for basal-serve's default mode
         return False
@@ -101,11 +109,13 @@ def _static() -> Hardware:
         engines.add("tpu")
     try:
         import torch
+
         if torch.cuda.is_available():
             props = torch.cuda.get_device_properties(0)
             capability = torch.cuda.get_device_capability(0)
             engines.add("cuda")
             from basal.engine import gemma_fast_kernels
+
             if gemma_fast_kernels() is not None:
                 engines.add("gemma-fast")
             if getattr(torch.version, "hip", None):  # ROCm PyTorch; Strix Halo = gfx1151 (Radeon 8060S)
@@ -129,6 +139,7 @@ def _static() -> Hardware:
     if sys.platform == "darwin" and host_platform.machine() == "arm64":
         try:
             import mlx.core as mx
+
             info = mx.device_info()
             name = info.get("device_name", "Apple Silicon")
             budget = int(info.get("max_recommended_working_set_size", 0))
@@ -138,11 +149,17 @@ def _static() -> Hardware:
             engines.add("mlx")
         if importlib.util.find_spec("llama_cpp"):
             engines.add("gguf")
-        return Hardware("apple", name, budget or int((ram or 0) * .7), ram, None, frozenset(engines))
+        return Hardware("apple", name, budget or int((ram or 0) * 0.7), ram, None, frozenset(engines))
     if importlib.util.find_spec("llama_cpp"):
         engines.add("gguf")
-    return Hardware("cpu", host_platform.processor() or host_platform.machine(), int((ram or 0) * .6), ram, None,
-                    frozenset(engines))
+    return Hardware(
+        "cpu",
+        host_platform.processor() or host_platform.machine(),
+        int((ram or 0) * 0.6),
+        ram,
+        None,
+        frozenset(engines),
+    )
 
 
 def detect() -> Hardware:
@@ -152,6 +169,7 @@ def detect() -> Hardware:
         return replace(static, available_bytes=_available_bytes())
     try:
         import torch
+
         return replace(static, available_bytes=int(torch.cuda.mem_get_info(0)[0]))
     except Exception:  # noqa: BLE001 — memory probing may fail on a disappearing device
         return static
@@ -160,9 +178,11 @@ def detect() -> Hardware:
 def free_engine_memory() -> None:
     """Release cached allocations held by the supported model engines."""
     import gc
+
     gc.collect()
     try:
         import torch
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         elif torch.backends.mps.is_available():
@@ -171,6 +191,7 @@ def free_engine_memory() -> None:
         pass
     try:
         import mlx.core as mx
+
         mx.clear_cache()
     except ImportError:
         pass

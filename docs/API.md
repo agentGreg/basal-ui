@@ -186,10 +186,18 @@ result = client.decisions.create(
     model="Remek/basal-2.0-mini-MLX-8bit",
     input="Export fails in Safari but works in Chrome.",
     questions=[
-        {"type": "score", "name": "severity", "instructions": "How severe is the issue?",
-         "levels": [{"label": "minor"}, {"label": "major"}, {"label": "blocking"}]},
-        {"type": "choice", "name": "team", "instructions": "Which team should investigate?",
-         "choices": [{"value": "frontend"}, {"value": "backend"}]},
+        {
+            "type": "score",
+            "name": "severity",
+            "instructions": "How severe is the issue?",
+            "levels": [{"label": "minor"}, {"label": "major"}, {"label": "blocking"}],
+        },
+        {
+            "type": "choice",
+            "name": "team",
+            "instructions": "Which team should investigate?",
+            "choices": [{"value": "frontend"}, {"value": "backend"}],
+        },
     ],
 )
 ```
@@ -206,14 +214,22 @@ Python SDK, both request formats (LiteLLM translates the OpenAI shape to System 
 ```python
 import litellm
 
-r = litellm.systemone(model="hosted_vllm/basal-2.0-mini", api_base="http://127.0.0.1:8000", api_key="<secret>",
-                      state="Customer: charged twice, wants a refund today.",
-                      questions={"refund": {"type": "noul", "instructions": "Is this a refund request?"}})
+r = litellm.systemone(
+    model="hosted_vllm/basal-2.0-mini",
+    api_base="http://127.0.0.1:8000",
+    api_key="<secret>",
+    state="Customer: charged twice, wants a refund today.",
+    questions={"refund": {"type": "noul", "instructions": "Is this a refund request?"}},
+)
 print(r.answers["refund"].noul)
 
-d = litellm.decisions(model="hosted_vllm/basal-2.0-mini", api_base="http://127.0.0.1:8000", api_key="<secret>",
-                      input="Customer: charged twice, wants a refund today.",
-                      questions=[{"type": "predicate", "name": "refund", "instructions": "Is this a refund request?"}])
+d = litellm.decisions(
+    model="hosted_vllm/basal-2.0-mini",
+    api_base="http://127.0.0.1:8000",
+    api_key="<secret>",
+    input="Customer: charged twice, wants a refund today.",
+    questions=[{"type": "predicate", "name": "refund", "instructions": "Is this a refund request?"}],
+)
 print(d.answers[0].probability)
 ```
 

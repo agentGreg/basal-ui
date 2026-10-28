@@ -47,7 +47,13 @@ mcp = ["mcp>=2.3,<3"]
 e2e = ["playwright>=1.48"]
 
 [dependency-groups]
-dev = ["basal", "torch", "pytest", "ruff>=0.17"]  # basal: the newest engine release in the supported range
+dev = [
+    "basal",
+    "torch",
+    "pytest",
+    "ruff>=0.17",
+    "pre-commit>=4.6.2",
+]  # basal: the newest engine release in the supported range
 
 [project.scripts]
 basal-ui = "basal_ui.__main__:main"  # checks the engine before basal_ui.app imports it
@@ -77,4 +83,8 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E9", "F63", "F7", "F82"]  # the fork's pre-commit selection: syntax errors and undefined names
+select = ["F", "I", "B", "UP", "SIM"]
+ignore = ["B008"]  # FastAPI's Body(...) / Query(...) defaults
+
+[tool.ruff.lint.isort]
+known-first-party = ["basal_ui", "tests"]

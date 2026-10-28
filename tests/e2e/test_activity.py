@@ -1,9 +1,12 @@
 """Browser regressions for oldest-first history draining and log-buffer restarts."""
+
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from tests.e2e.test_pages import browser
+from tests.e2e import test_pages
+
+browser = test_pages.browser  # pytest fixture shared with test_pages
 
 
 @pytest.fixture
@@ -18,9 +21,18 @@ def page(browser, ui):
 
 
 def summary(index):
-    return {"id": f"h{index}", "ts": 1, "model": "test", "source": "api", "status": 200,
-            "latency_ms": 1, "state_preview": f"state {index}", "answers": {}, "deferred": False,
-            "truncated": False}
+    return {
+        "id": f"h{index}",
+        "ts": 1,
+        "model": "test",
+        "source": "api",
+        "status": 200,
+        "latency_ms": 1,
+        "state_preview": f"state {index}",
+        "answers": {},
+        "deferred": False,
+        "truncated": False,
+    }
 
 
 def test_history_poll_drains_more_than_one_oldest_first_page(page):
@@ -56,8 +68,13 @@ def test_logs_clear_old_lines_when_source_buffer_generation_changes(page):
         params = parse_qs(urlparse(route.request.url).query)
         restarted = params.get("generation") == ["first"]
         generation, text = ("second", "new buffer line") if restarted else ("first", "old buffer line")
-        route.fulfill(json={"sources": [{"id": "basal-ui", "state": "ui"}], "generation": generation,
-                            "lines": [{"seq": 1, "ts": 1, "text": text}]})
+        route.fulfill(
+            json={
+                "sources": [{"id": "basal-ui", "state": "ui"}],
+                "generation": generation,
+                "lines": [{"seq": 1, "ts": 1, "text": text}],
+            }
+        )
 
     page.route("**/api/logs?**", logs)
     page.click('.side-nav [data-view="logs"]')

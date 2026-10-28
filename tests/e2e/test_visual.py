@@ -1,4 +1,5 @@
 """Responsive and accessible presentation checks for basal-ui's server-rendered pages."""
+
 import pytest
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="install basal[e2e] and run: playwright install chromium")

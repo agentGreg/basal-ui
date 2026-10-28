@@ -1,4 +1,5 @@
 """System One request validation and OpenAI Decisions translation for basal-ui's API server."""
+
 import base64
 import re
 import time
@@ -30,8 +31,11 @@ def systemone_error_body(status, message, code):
 def _error_args(e):
     """(status, message, code, param) of a refused request: the ValueError((status, message, code[, param])) raised
     here, else 422 INVALID_REQUEST with the exception's text."""
-    error = e.args[0] if isinstance(e, ValueError) and e.args and isinstance(e.args[0], tuple) else (
-        422, str(e), "INVALID_REQUEST")
+    error = (
+        e.args[0]
+        if isinstance(e, ValueError) and e.args and isinstance(e.args[0], tuple)
+        else (422, str(e), "INVALID_REQUEST")
+    )
     return error[0], error[1], error[2], error[3] if len(error) > 3 else None
 
 
@@ -119,7 +123,11 @@ def systemone_media(body):
     if len(media) + len(image_values) + len(audio_values) > 8:
         raise ValueError((422, "at most 8 media items", "INVALID_REQUEST"))
     for item in media:
-        if not isinstance(item, dict) or item.get("type") not in ("image", "audio") or not isinstance(item.get("data"), str):
+        if (
+            not isinstance(item, dict)
+            or item.get("type") not in ("image", "audio")
+            or not isinstance(item.get("data"), str)
+        ):
             raise ValueError((422, "invalid media item", "INVALID_REQUEST"))
         value = item["data"]
         if value.startswith("data:"):
@@ -164,8 +172,9 @@ def validate_systemone(body):
                     try:
                         int(question[field])
                     except (TypeError, ValueError, OverflowError):
-                        raise ValueError(f"question {name!r}: {field} must convert to an integer, "
-                                         f"got {question[field]!r}") from None
+                        raise ValueError(
+                            f"question {name!r}: {field} must convert to an integer, got {question[field]!r}"
+                        ) from None
 
 
 def decision_body(body):
@@ -211,9 +220,15 @@ def decision_body(body):
         permitted = {"type", "name", "instructions", "choices", "levels"}
         if set(question) - permitted:
             field = sorted(set(question) - permitted)[0]
-            raise ValueError((400, f"unsupported question field: {field}", "unsupported_parameter", f"questions[{i}].{field}"))
+            raise ValueError(
+                (400, f"unsupported question field: {field}", "unsupported_parameter", f"questions[{i}].{field}")
+            )
         kind, instructions, name = question.get("type"), question.get("instructions"), question.get("name")
-        if not isinstance(instructions, str) or not instructions.strip() or kind not in ("predicate", "choice", "score"):
+        if (
+            not isinstance(instructions, str)
+            or not instructions.strip()
+            or kind not in ("predicate", "choice", "score")
+        ):
             raise ValueError((400, "question needs a supported type and non-empty instructions", "INVALID_REQUEST"))
         if name is not None and (not isinstance(name, str) or name in names):
             raise ValueError((400, "question names must be unique strings", "INVALID_REQUEST"))
@@ -242,12 +257,20 @@ def decision_body(body):
             values[key] = vals
         else:
             levels = question.get("levels")
-            if not isinstance(levels, list) or not 2 <= len(levels) <= 10 or any(not isinstance(x, dict) or not isinstance(x.get("label"), str) for x in levels):
+            if (
+                not isinstance(levels, list)
+                or not 2 <= len(levels) <= 10
+                or any(not isinstance(x, dict) or not isinstance(x.get("label"), str) for x in levels)
+            ):
                 raise ValueError((400, "levels must contain 2 to 10 labeled entries", "INVALID_REQUEST"))
             labels = [x["label"] for x in levels]
             if len(set(labels)) != len(labels):
                 raise ValueError((400, "score level labels must be unique", "INVALID_REQUEST"))
-            criteria = {x["label"]: x.get("description") for x in levels} if any(x.get("description") is not None for x in levels) else labels
+            criteria = (
+                {x["label"]: x.get("description") for x in levels}
+                if any(x.get("description") is not None for x in levels)
+                else labels
+            )
             score_keys = list(criteria) if isinstance(criteria, dict) else [str(i) for i in range(len(criteria))]
             converted[key] = {"type": "score", "instructions": instructions, "criteria": criteria}
             values[key] = {"labels": [x["label"] for x in levels], "keys": score_keys}
@@ -267,16 +290,41 @@ def decision_response(result, spec, values):
         if typ == "predicate":
             answers.append({"type": typ, "name": name, "probability": ans["noul"]})
         elif typ == "choice":
-            probs = [{"value": v, "probability": ans["probabilities"][str(v).lower() if isinstance(v, bool) else str(v)]}
-                     for v in values[key]]
+            probs = [
+                {"value": v, "probability": ans["probabilities"][str(v).lower() if isinstance(v, bool) else str(v)]}
+                for v in values[key]
+            ]
             chosen = max(probs, key=lambda p: p["probability"])["value"]
-            answers.append({"type": typ, "name": name, "choice": chosen, "probabilities": probs, "confidence": ans["confidence"]})
+            answers.append(
+                {"type": typ, "name": name, "choice": chosen, "probabilities": probs, "confidence": ans["confidence"]}
+            )
         else:
-            probs = [{"value": i, "label": label, "probability": ans["probabilities"][values[key]["keys"][i]]}
-                     for i, label in enumerate(values[key]["labels"])]
-            answers.append({"type": typ, "name": name, "score": ans["score"], "probabilities": probs, "confidence": ans["confidence"]})
+            probs = [
+                {"value": i, "label": label, "probability": ans["probabilities"][values[key]["keys"][i]]}
+                for i, label in enumerate(values[key]["labels"])
+            ]
+            answers.append(
+                {
+                    "type": typ,
+                    "name": name,
+                    "score": ans["score"],
+                    "probabilities": probs,
+                    "confidence": ans["confidence"],
+                }
+            )
     usage = result.get("usage", {})
     total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-    return {"id": "dec_" + uuid.uuid4().hex, "object": "decision", "created": int(time.time()), "model": result["model"],
-            "answers": answers, "usage": {"input_tokens": usage.get("input_tokens", 0), "input_tokens_details": {"cached_tokens": 0},
-            "output_tokens": usage.get("output_tokens", 0), "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": total}}
+    return {
+        "id": "dec_" + uuid.uuid4().hex,
+        "object": "decision",
+        "created": int(time.time()),
+        "model": result["model"],
+        "answers": answers,
+        "usage": {
+            "input_tokens": usage.get("input_tokens", 0),
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens": usage.get("output_tokens", 0),
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": total,
+        },
+    }

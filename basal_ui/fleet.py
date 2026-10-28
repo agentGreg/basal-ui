@@ -1,4 +1,5 @@
 """The loaded models: one basal-serve child per Runner, owned by the Fleet with their downloads, logs, jobs, statistics and history."""
+
 import dataclasses
 import hashlib
 import os
@@ -44,8 +45,7 @@ def rss_by_pgid() -> dict[int, int]:
     if os.name != "posix":
         return {}
     try:
-        out = subprocess.run(["ps", "-eo", "pgid=,rss="], capture_output=True, text=True, timeout=5,
-                             check=True).stdout
+        out = subprocess.run(["ps", "-eo", "pgid=,rss="], capture_output=True, text=True, timeout=5, check=True).stdout
     except (OSError, subprocess.SubprocessError):
         return {}
     totals: dict[int, int] = {}
@@ -59,6 +59,7 @@ def rss_by_pgid() -> dict[int, int]:
 class Downloads:
     """Model downloads by repository, shared by the runners and the Download button. A download outlives the load that
     started it (an unload leaves it finishing into the cache); a failed one stays reported for ERROR_KEEP_S."""
+
     ERROR_KEEP_S = 60
 
     def __init__(self, event=None):
@@ -71,8 +72,14 @@ class Downloads:
             record = self.records.get(variant.repo)
             if record and record["thread"].is_alive():
                 return record
-            record = {"bar": _byte_counter(), "total": variant.weights_bytes or 0, "path": None, "error": None,
-                      "ended": None, "revision": revision}
+            record = {
+                "bar": _byte_counter(),
+                "total": variant.weights_bytes or 0,
+                "path": None,
+                "error": None,
+                "ended": None,
+                "revision": revision,
+            }
             record["thread"] = threading.Thread(target=self._run, args=(record, variant, cache_dir), daemon=True)
             self.records[variant.repo] = record
             record["thread"].start()
@@ -81,8 +88,7 @@ class Downloads:
 
     def _run(self, record, variant, cache_dir):
         try:
-            record["path"] = catalog.download(variant, cache_dir, tqdm_class=record["bar"],
-                                              revision=record["revision"])
+            record["path"] = catalog.download(variant, cache_dir, tqdm_class=record["bar"], revision=record["revision"])
             self.event("info", f"download finished: {variant.repo}")
         except Exception as exc:  # reported in the UI and re-raised by a waiting load
             record["error"] = exc
@@ -106,8 +112,11 @@ class Downloads:
                 failed = record["error"] is not None and now - record["ended"] < self.ERROR_KEEP_S
                 if record["thread"].is_alive() or failed:
                     done = record["bar"].done
-                    out[repo] = {"done_bytes": done, "total_bytes": max(record["total"], done),
-                                 "error": str(record["error"]) if record["error"] is not None else None}
+                    out[repo] = {
+                        "done_bytes": done,
+                        "total_bytes": max(record["total"], done),
+                        "error": str(record["error"]) if record["error"] is not None else None,
+                    }
                 else:
                     del self.records[repo]
         return out
@@ -123,8 +132,15 @@ class Runner:
     """One model: idle -> downloading -> starting -> ready, or error. Every load or unload starts a new generation; a
     background load that finds its generation outdated stops instead of touching the state."""
 
-    def __init__(self, models_dir_fn=settings.models_dir, platform_fn=lambda: hardware.detect().platform,
-                 settings_mod=settings, downloads=None, log=None, event=None):
+    def __init__(
+        self,
+        models_dir_fn=settings.models_dir,
+        platform_fn=lambda: hardware.detect().platform,
+        settings_mod=settings,
+        downloads=None,
+        log=None,
+        event=None,
+    ):
         self.models_dir_fn = models_dir_fn
         self.platform_fn = platform_fn
         self.settings_mod = settings_mod
@@ -180,23 +196,57 @@ class Runner:
                 self.state = "error"
                 self.error = f"basal-serve exited ({self.process.returncode}): {self.log.last() or ''}"
                 self.event("error", f"{self.model}: {self.error}")
-            if self.state == "ready" and self.base_url and not self.health_polling and time.monotonic() - self.health_checked >= 1:
+            if (
+                self.state == "ready"
+                and self.base_url
+                and not self.health_polling
+                and time.monotonic() - self.health_checked >= 1
+            ):
                 self.health_checked, self.health_polling = time.monotonic(), True
                 threading.Thread(target=self._poll_health, args=(self.gen, self.base_url), daemon=True).start()
-            restart_required = (self.state == "ready" and self.serve_snapshot is not None and not self.temporary
-                                and self.serve_snapshot != _child_settings(
-                                    self.settings_mod.serve_settings(),
-                                    self.settings_mod.calibration_selection().get(self.model)))
-            return {"id": self.model, "model": self.model, "repo": self.model_repo, "state": self.state,
-                    "mode": self.mode, "command": self.command, "progress": self.progress, "error": self.error,
-                    "media_requested": self.media_requested, "media": self.media,
-                    "restart_required": restart_required, "est_memory_bytes": self.est_memory_bytes,
-                    "rss_bytes": self.rss_bytes, "base_url": self.base_url, "entry": self.models_entry,
-                    "generation": self.generation, "options": dict(self.options), "health": dict(self.health) if self.state == "ready" else
-                    {"reachable": None, "running": None, "queued": None}}
+            restart_required = (
+                self.state == "ready"
+                and self.serve_snapshot is not None
+                and not self.temporary
+                and self.serve_snapshot
+                != _child_settings(
+                    self.settings_mod.serve_settings(), self.settings_mod.calibration_selection().get(self.model)
+                )
+            )
+            return {
+                "id": self.model,
+                "model": self.model,
+                "repo": self.model_repo,
+                "state": self.state,
+                "mode": self.mode,
+                "command": self.command,
+                "progress": self.progress,
+                "error": self.error,
+                "media_requested": self.media_requested,
+                "media": self.media,
+                "restart_required": restart_required,
+                "est_memory_bytes": self.est_memory_bytes,
+                "rss_bytes": self.rss_bytes,
+                "base_url": self.base_url,
+                "entry": self.models_entry,
+                "generation": self.generation,
+                "options": dict(self.options),
+                "health": dict(self.health)
+                if self.state == "ready"
+                else {"reachable": None, "running": None, "queued": None},
+            }
 
-    def load(self, assessment, media=False, options=None, extra_args=(), temporary=False,
-             local_only=False, snapshot=None, remember=True):
+    def load(
+        self,
+        assessment,
+        media=False,
+        options=None,
+        extra_args=(),
+        temporary=False,
+        local_only=False,
+        snapshot=None,
+        remember=True,
+    ):
         """options: load options (basal_ui/options.py; their mode replaces the assessment's, except with media);
         temporary: a private child for a job (basal-calibrate): no API key (it is reached on loopback without one),
         no calibration selected in basal-ui, not remembered for auto-load; extra_args go to basal-serve last."""
@@ -249,10 +299,20 @@ class Runner:
 
     def _build_command(self, v, path, assessment, media, port, serve):
         """The child is private: loopback and a free port only basal-ui knows."""
-        command = [sys.executable, "-m", "basal.server",
-                   *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None,
-                                       platform=self.platform_fn()),
-                   "--name", v.id, "--host", "127.0.0.1", "--port", str(port)]
+        command = [
+            sys.executable,
+            "-m",
+            "basal.server",
+            *catalog.serve_args(
+                v, path, assessment.mode, self.platform_fn() if media else None, platform=self.platform_fn()
+            ),
+            "--name",
+            v.id,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ]
         if self._calibration(v):
             command += ["--calibration", self._calibration(v)]
         if serve["log_decisions"] and not self.temporary:
@@ -296,8 +356,11 @@ class Runner:
                 s.bind(("127.0.0.1", 0))
                 port = s.getsockname()[1]
             command = self._build_command(v, path, assessment, media, port, serve)
-            options = ({"start_new_session": True} if os.name == "posix" else
-                       {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)})
+            options = (
+                {"start_new_session": True}
+                if os.name == "posix"
+                else {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+            )
             with self.lock:
                 if gen != self.gen:
                     return
@@ -305,10 +368,20 @@ class Runner:
                 self.state, self.progress, self.command = "starting", None, command
                 self.base_url = f"http://127.0.0.1:{port}"
                 self.serve_snapshot = _child_settings(serve, self._calibration(v))
-                self.process = proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                                       text=True, encoding="utf-8", errors="replace", bufsize=1,
-                                                       env={**os.environ, **({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"} if self.local_only else {})},
-                                                       **options)
+                self.process = proc = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    env={
+                        **os.environ,
+                        **({"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1"} if self.local_only else {}),
+                    },
+                    **options,
+                )
             self.event("info", f"{v.id}: basal-serve starting on 127.0.0.1:{port}: {shlex.join(map(str, command))}")
             threading.Thread(target=self._read_logs, args=(proc,), daemon=True).start()
             deadline = time.monotonic() + START_TIMEOUT_S
@@ -321,8 +394,13 @@ class Runner:
                         entry, media_kinds = self._models_entry(media)
                         if entry is not None and "certified" not in entry:  # basal-serve 2.4.1 does not report them
                             from .calibration import served_certified
-                            entry = {**entry, "certified": served_certified(
-                                entry, path, assessment.mode, self.options, self._calibration(v))}
+
+                            entry = {
+                                **entry,
+                                "certified": served_certified(
+                                    entry, path, assessment.mode, self.options, self._calibration(v)
+                                ),
+                            }
                         with self.lock:
                             if gen != self.gen:
                                 return
@@ -428,13 +506,21 @@ class Fleet:
         config = self.settings_mod.memory_settings()
         hw = self.hardware_fn()
         budget = config["budget_bytes"] or hw.memory_bytes
-        committed = (sum(r.est_memory_bytes or 0 for r in self.runners.values() if r.state not in ("idle", "error"))
-                     + sum(r.est_memory_bytes or 0 for r in self.temporary.values() if r.state not in ("idle", "error"))
-                     + sum(est or 0 for est in self.retiring.values()) + sum(self.reserved.values()))
-        return {"budget_bytes": budget, "reserve_bytes": config["reserve_bytes"],
-                "hardware_budget_bytes": hw.memory_bytes, "available_bytes": hw.available_bytes,
-                "committed_bytes": committed, "rss_bytes": rss_total,
-                "over": committed > budget - config["reserve_bytes"]}
+        committed = (
+            sum(r.est_memory_bytes or 0 for r in self.runners.values() if r.state not in ("idle", "error"))
+            + sum(r.est_memory_bytes or 0 for r in self.temporary.values() if r.state not in ("idle", "error"))
+            + sum(est or 0 for est in self.retiring.values())
+            + sum(self.reserved.values())
+        )
+        return {
+            "budget_bytes": budget,
+            "reserve_bytes": config["reserve_bytes"],
+            "hardware_budget_bytes": hw.memory_bytes,
+            "available_bytes": hw.available_bytes,
+            "committed_bytes": committed,
+            "rss_bytes": rss_total,
+            "over": committed > budget - config["reserve_bytes"],
+        }
 
     def check_budget(self, needed):
         """RuntimeError when `needed` more bytes would go over the memory budget (call under the fleet lock)."""
@@ -444,13 +530,22 @@ class Fleet:
             raise RuntimeError(
                 f"over memory budget: {_fmt(memory['committed_bytes'])} loaded + {_fmt(needed or 0)} needed > "
                 f"{_fmt(limit)} ({_fmt(memory['budget_bytes'])} budget − {_fmt(memory['reserve_bytes'])} kept "
-                "free); unload a model or raise the budget")
+                "free); unload a model or raise the budget"
+            )
 
     def _runner(self, log):
-        return Runner(models_dir_fn=self.models_dir_fn, platform_fn=self.platform_fn, settings_mod=self.settings_mod,
-                      downloads=self.downloads, log=log, event=self.event)
+        return Runner(
+            models_dir_fn=self.models_dir_fn,
+            platform_fn=self.platform_fn,
+            settings_mod=self.settings_mod,
+            downloads=self.downloads,
+            log=log,
+            event=self.event,
+        )
 
-    def start_temporary(self, kind, assessment, log, options=None, extra_args=(), local_only=False, reservation=None) -> Runner:
+    def start_temporary(
+        self, kind, assessment, log, options=None, extra_args=(), local_only=False, reservation=None
+    ) -> Runner:
         """A private, unremembered child for a job (its memory counted in the budget); stop_temporary ends it."""
         with self.lock:
             if kind in self.temporary:
@@ -464,7 +559,13 @@ class Fleet:
             else:
                 self.check_budget(assessment.est_memory_bytes)
             runner = self.temporary[kind] = self._runner(log)
-            runner.load(assessment, options=options, extra_args=extra_args, temporary=True, **({"local_only": True} if local_only else {}))
+            runner.load(
+                assessment,
+                options=options,
+                extra_args=extra_args,
+                temporary=True,
+                **({"local_only": True} if local_only else {}),
+            )
         self.event("info", f"{kind}: temporary basal-serve for {assessment.variant.id}")
         return runner
 
@@ -519,9 +620,10 @@ class Fleet:
         return self.status()
 
     def _prune_logs(self):
-        unloaded = [key for key in self.logs
-                    if key != "basal-ui" and not key.startswith("job:") and key not in self.runners]
-        for key in unloaded[:max(0, len(self.logs) - 1 - MODEL_LOGS_KEPT)]:
+        unloaded = [
+            key for key in self.logs if key != "basal-ui" and not key.startswith("job:") and key not in self.runners
+        ]
+        for key in unloaded[: max(0, len(self.logs) - 1 - MODEL_LOGS_KEPT)]:
             del self.logs[key]
 
     def unload(self, model_id=None, forget=True):
@@ -543,7 +645,7 @@ class Fleet:
                 if forget:
                     self.settings_mod.forget_loaded(i)
             self._prune_logs()
-        for i, (runner, proc) in zip(ids, retiring):
+        for i, (runner, proc) in zip(ids, retiring, strict=True):
             Runner._terminate(proc)
             with self.lock:
                 self.retiring.pop(runner, None)
@@ -602,8 +704,11 @@ class Fleet:
             memory = self._memory(sum(m["rss_bytes"] or 0 for m in models))
             inflight = list(self.inflight.values())
         for m in models:  # what basal-ui is waiting on (Playground, API server, MCP, benchmark), oldest first
-            m["inflight"] = [{"source": source, "seconds": round(now - t0, 1)}
-                             for model, source, t0 in sorted(inflight, key=lambda x: x[2]) if model == m["id"]]
+            m["inflight"] = [
+                {"source": source, "seconds": round(now - t0, 1)}
+                for model, source, t0 in sorted(inflight, key=lambda x: x[2])
+                if model == m["id"]
+            ]
         return {"models": models, "downloads": self.downloads.status(), "memory": memory, "jobs": self.jobs.states()}
 
     def _rss(self):
@@ -634,15 +739,19 @@ class Fleet:
         """The ready models for GET /v1/models: id, the child's own entry, the time it became ready."""
         with self.lock:
             runners = list(self.runners.items())
-        return [{"id": model_id, "entry": runner.models_entry, "created": int(runner.ready_at or 0)}
-                for model_id, runner in runners if runner.status()["state"] == "ready"]
+        return [
+            {"id": model_id, "entry": runner.models_entry, "created": int(runner.ready_at or 0)}
+            for model_id, runner in runners
+            if runner.status()["state"] == "ready"
+        ]
 
     def busy(self, repo) -> bool:
         """A download of the repository is running (also one left in the background by an unload), or a loaded or
         loading model comes from it."""
         with self.lock:
-            return self.downloads.alive(repo) or any(r.model_repo == repo and r.state != "idle"
-                                                     for r in [*self.runners.values(), *self.temporary.values()])
+            return self.downloads.alive(repo) or any(
+                r.model_repo == repo and r.state != "idle" for r in [*self.runners.values(), *self.temporary.values()]
+            )
 
     def while_idle(self, fn):
         """fn() with no model, job child and download running, atomically with load()."""
@@ -693,11 +802,13 @@ class Fleet:
         # Acquire before scheduling: a queued job already owns its model.
         lease = self.lease(model_id)
         lease.__enter__()
+
         def run(job, *values):
             try:
                 return target(job, *values)
             finally:
                 lease.__exit__(None, None, None)
+
         try:
             return self.jobs.start(kind, model_id, label, run, *args)
         except BaseException:
@@ -721,11 +832,25 @@ class Fleet:
             try:
                 response = runner.decide(body, path)
             except httpx.HTTPError as exc:
-                self._record(model_id, body, path, source, 502, {"error": f"basal-serve: {exc}"},
-                             (time.perf_counter() - t0) * 1000)
+                self._record(
+                    model_id,
+                    body,
+                    path,
+                    source,
+                    502,
+                    {"error": f"basal-serve: {exc}"},
+                    (time.perf_counter() - t0) * 1000,
+                )
                 raise
-            self._record(model_id, body, path, source, response.status_code, self._json(response),
-                         (time.perf_counter() - t0) * 1000)
+            self._record(
+                model_id,
+                body,
+                path,
+                source,
+                response.status_code,
+                self._json(response),
+                (time.perf_counter() - t0) * 1000,
+            )
             return response
 
     async def adecide(self, model_id, body, path="/v1/systemone", source="api", client=None):
@@ -734,11 +859,25 @@ class Fleet:
             try:
                 response = await runner.adecide(client, body, path)
             except httpx.HTTPError as exc:
-                self._record(model_id, body, path, source, 502, {"error": f"basal-serve: {exc}"},
-                             (time.perf_counter() - t0) * 1000)
+                self._record(
+                    model_id,
+                    body,
+                    path,
+                    source,
+                    502,
+                    {"error": f"basal-serve: {exc}"},
+                    (time.perf_counter() - t0) * 1000,
+                )
                 raise
-            self._record(model_id, body, path, source, response.status_code, self._json(response),
-                         (time.perf_counter() - t0) * 1000)
+            self._record(
+                model_id,
+                body,
+                path,
+                source,
+                response.status_code,
+                self._json(response),
+                (time.perf_counter() - t0) * 1000,
+            )
             return response
 
     def shutdown(self):

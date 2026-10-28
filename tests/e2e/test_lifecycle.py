@@ -1,4 +1,5 @@
 """Start-up, auto-load and shutdown of a basal-ui process of its own (not the shared session one)."""
+
 import json
 
 from tests.e2e.support import UI

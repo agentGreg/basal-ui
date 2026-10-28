@@ -1,4 +1,5 @@
 """The Engine basal-ui runs on (rkinas/basal): version gate, feature probes, experimental-engine identity."""
+
 import importlib.metadata
 import importlib.util
 import json
@@ -32,6 +33,7 @@ def installed():
     if _spec("basal") is None or _spec("basal.server") is None:
         raise SystemExit(f"basal-ui needs the basal engine (rkinas/basal), not found. Install it: {INSTALL_HINT}")
     import basal
+
     commit = None
     try:
         direct = json.loads(importlib.metadata.distribution("basal").read_text("direct_url.json") or "{}")
@@ -52,16 +54,22 @@ def status():
     """The installed Engine as the UI shows it: version, commit (an install from a git branch), the supported range,
     and whether it is an experimental engine (outside the range, or from a branch rather than a release)."""
     version, commit = installed()
-    return {"version": version, "commit": commit, "supported": SUPPORTED_RANGE,
-            "experimental": not _in_range(version) or commit is not None}
+    return {
+        "version": version,
+        "commit": commit,
+        "supported": SUPPORTED_RANGE,
+        "experimental": not _in_range(version) or commit is not None,
+    }
 
 
 def check():
     """status(); SystemExit for an Engine outside SUPPORTED unless BASAL_UI_ENGINE_UNCHECKED=1."""
     out = status()
     if not _in_range(out["version"]) and os.environ.get(UNCHECKED_ENV) != "1":
-        raise SystemExit(f"basal-ui supports engine {SUPPORTED_RANGE}, found {out['version']}. Install a supported "
-                         f"release ({INSTALL_HINT}) or set {UNCHECKED_ENV}=1 to run anyway.")
+        raise SystemExit(
+            f"basal-ui supports engine {SUPPORTED_RANGE}, found {out['version']}. Install a supported "
+            f"release ({INSTALL_HINT}) or set {UNCHECKED_ENV}=1 to run anyway."
+        )
     return out
 
 

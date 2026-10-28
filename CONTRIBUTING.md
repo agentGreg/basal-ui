@@ -7,7 +7,8 @@ make install                 # uv sync: dev group (engine pinned by [tool.uv.sou
 make engine-pin              # the pinned engine release (basal_ui/engine.py PINNED_RELEASE)
 make engine REF=v2.4.2       # later: another release tag
 make engine REF=feat/engine-adapter-upstream   # or any ref of the fork pawelkiszczak/basal
-make lint                    # ruff check
+make lint                    # ruff check + ruff format --check
+make format                  # ruff format
 make test                    # the unit tests (tests/, not tests/e2e)
 make e2e                     # BASAL_E2E=1: real models on real hardware; docs/E2E.md
 make run                     # start basal-ui
@@ -21,9 +22,9 @@ release it installs. `make engine REF=…` switches to another release-tag archi
 
 ## Code style
 
-- Python: 120 columns; `make lint` runs Ruff with the rules in `pyproject.toml` (`[tool.ruff.lint]`: syntax errors
-  and undefined names). Follow the surrounding code: docstrings that say what a function returns and why, no
-  speculative abstractions.
+- Python: 120 columns; Ruff (`F,I,B,UP,SIM`, `[tool.ruff.lint]` in `pyproject.toml`) and `ruff format`; run
+  `make lint` / `make format`. `uv run --no-sync pre-commit install` (optional; CI runs the same checks). Follow the
+  surrounding code: docstrings that say what a function returns and why, no speculative abstractions.
 - Frontend: plain JavaScript and CSS in `basal_ui/static/` (no build step). Every UI string is English in the code and
   passed through `t()` / `tp()`; its Polish translation goes into `basal_ui/static/i18n.js`.
   `tests/test_ui_i18n.py` fails on a string without one.

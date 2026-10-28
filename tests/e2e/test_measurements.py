@@ -1,5 +1,6 @@
 """Benchmarks of a loaded model (the preset, a load test, a determinism check) and an engine-mode comparison of a
 downloaded bf16 model in basal-ui's process."""
+
 import pytest
 
 EXTERNAL = ("ollama", "llamacpp")  # need a service of their own
@@ -14,7 +15,9 @@ def test_the_benchmark_preset_and_a_load_test(ui, text_model):
     params = {"n_seq": 20, "n_conc": 40, "concurrency": 4, "questions_per_request": 2}
     load = ui.run_job("/api/benchmark", {"id": model_id, "kind": "loadtest", "params": params}, "benchmark")["result"]
     assert load["kind"] == "loadtest" and load["errors"] == 0 and load["params"]["n_seq"] == 20
-    assert 0 < load["p50_ms"] <= load["p95_ms"] and load["questions_per_s"] == pytest.approx(2 * load["decisions_per_s"])
+    assert 0 < load["p50_ms"] <= load["p95_ms"] and load["questions_per_s"] == pytest.approx(
+        2 * load["decisions_per_s"]
+    )
     kinds = [r.get("kind", "benchmark") for r in ui.get("/api/benchmarks")[model_id]]
     assert kinds[-2:] == ["benchmark", "loadtest"]
 
@@ -31,8 +34,11 @@ def test_a_deterministic_model_answers_alone_and_under_load_alike(ui, text_model
 def test_two_engine_modes_agree_and_their_memory_is_released(ui, bf16_model):
     model_id = bf16_model["id"]
     default = next(m["mode"] for m in ui.get("/api/models/options", params={"id": model_id})["modes"] if m["default"])
-    others = [m for m in ui.get("/api/modes", params={"id": model_id})["modes"]
-              if m not in EXTERNAL and m not in ("eager-fp32", default)]
+    others = [
+        m
+        for m in ui.get("/api/modes", params={"id": model_id})["modes"]
+        if m not in EXTERNAL and m not in ("eager-fp32", default)
+    ]
     if not others:
         pytest.skip(f"{model_id}: no in-process mode besides {default} here")
     modes = [default, others[0]]  # the serving engine is the reference

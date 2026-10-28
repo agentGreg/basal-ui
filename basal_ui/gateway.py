@@ -1,6 +1,7 @@
 """basal-ui's API server: one port for every loaded model. Each request names its model (`"model"` in the body); the
 gateway checks API keys and CORS, serves MCP, answers OpenAI Decisions requests, then forwards to that model's
 private basal-serve and counts the decision in the statistics and the history."""
+
 import socket
 import threading
 import time
@@ -19,10 +20,9 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
     from starlette.responses import JSONResponse, Response
     from starlette.routing import Route
 
+    from .app import host_middleware
     from .auth import protect, request_ids
     from .compat import openai_error
-
-    from .app import host_middleware
 
     allowed_hosts = ["*"] if host in ("0.0.0.0", "::") else {host, "127.0.0.1", "localhost", "::1"}
     client: dict = {}
@@ -48,8 +48,9 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
         if not isinstance(model, str) or not model:
             return error(path, 400, f"model is required; loaded models: {loaded_text(loaded)}", "MODEL_REQUIRED")
         if model not in loaded:
-            return error(path, 404, f"model '{model}' is not loaded; loaded models: {loaded_text(loaded)}",
-                         "MODEL_NOT_FOUND")
+            return error(
+                path, 404, f"model '{model}' is not loaded; loaded models: {loaded_text(loaded)}", "MODEL_NOT_FOUND"
+            )
         if path in SYSTEMONE:  # the child's own API has no model field; Decisions translation drops it itself
             body = {k: v for k, v in body.items() if k != "model"}
         upstream = "/v1/systemone" if path in SYSTEMONE else "/v1/decisions"
@@ -59,15 +60,21 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
             return error(path, 409, f"model '{model}' is not ready: {exc}", "MODEL_NOT_READY")
         except httpx.HTTPError as exc:
             return error(path, 502, f"basal-serve: {exc}", "UPSTREAM_ERROR")
-        return Response(r.content, status_code=r.status_code,
-                        media_type=r.headers.get("content-type", "application/json"))
+        return Response(
+            r.content, status_code=r.status_code, media_type=r.headers.get("content-type", "application/json")
+        )
 
     async def models(_):
         entries = fleet.model_entries()
-        return JSONResponse({"object": "list",
-                             "data": [{"id": e["id"], "object": "model", "created": e["created"], "owned_by": "basal"}
-                                      for e in entries],
-                             "models": [e["entry"] or {"name": e["id"]} for e in entries]})
+        return JSONResponse(
+            {
+                "object": "list",
+                "data": [
+                    {"id": e["id"], "object": "model", "created": e["created"], "owned_by": "basal"} for e in entries
+                ],
+                "models": [e["entry"] or {"name": e["id"]} for e in entries],
+            }
+        )
 
     async def health(_):
         return JSONResponse({"status": "ok", "models": fleet.loaded_ids()})
@@ -108,10 +115,16 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
                 await stack.enter_async_context(mcp_run())
             yield
 
-    app = Starlette(routes=[
-        *[Route(p, forward, methods=["POST"]) for p in SYSTEMONE + DECISIONS],
-        Route("/v1/models", models), Route("/health", health), Route("/v1/stats", stats_route), *mcp_routes,
-    ], lifespan=lifespan)
+    app = Starlette(
+        routes=[
+            *[Route(p, forward, methods=["POST"]) for p in SYSTEMONE + DECISIONS],
+            Route("/v1/models", models),
+            Route("/health", health),
+            Route("/v1/stats", stats_route),
+            *mcp_routes,
+        ],
+        lifespan=lifespan,
+    )
     return request_ids(protect(host_middleware(app, allowed_hosts), keys, cors_origins))
 
 
@@ -149,6 +162,7 @@ class Gateway:
                     return self.status()
             if config["mcp"]:
                 from basal.mcp_server import available
+
                 missing = available()
                 if missing:
                     self.error = missing
@@ -204,11 +218,17 @@ class Gateway:
         shown = snapshot or current
         host = shown["host"]
         url_host = host if host != "0.0.0.0" else self.fleet.lan_ip() or "127.0.0.1"
-        return {"running": snapshot is not None, "url": f"http://{url_host}:{shown['port']}" if snapshot else None,
-                "host": host, "port": shown["port"], "require_key": shown["require_key"], "mcp": shown["mcp"],
-                "models": self.fleet.loaded_ids(),
-                "restart_required": (snapshot != current) if config["enabled"] else snapshot is not None,
-                "error": self.error}
+        return {
+            "running": snapshot is not None,
+            "url": f"http://{url_host}:{shown['port']}" if snapshot else None,
+            "host": host,
+            "port": shown["port"],
+            "require_key": shown["require_key"],
+            "mcp": shown["mcp"],
+            "models": self.fleet.loaded_ids(),
+            "restart_required": (snapshot != current) if config["enabled"] else snapshot is not None,
+            "error": self.error,
+        }
 
     def key_usage(self) -> dict:
         keys = self.keys

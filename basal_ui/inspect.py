@@ -1,9 +1,10 @@
 """The Inspect view: basal-viz's Explainer for one downloaded model, loaded into basal-ui's own process (the page reads
 every layer of the PyTorch model) and served at /viz by inspect_app: basal-viz's routes with basal-ui's copy of its
 page (static/viz.html: relative API paths for the /viz mount, requests posted from the Playground)."""
+
 import asyncio
-import json
 import gc
+import json
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,8 +25,11 @@ def explained(body):
     if not isinstance(body, dict) or body.get("facts") != "auto":
         return body
     state = body.get("state")
-    return {**body, "state": inject_facts(state if isinstance(state, str) else json.dumps(state, ensure_ascii=False)),
-            "facts": "off"}
+    return {
+        **body,
+        "state": inject_facts(state if isinstance(state, str) else json.dumps(state, ensure_ascii=False)),
+        "facts": "off",
+    }
 
 
 def inspect_app(explainer_fn, examples_fn, lifespan=None):
@@ -56,18 +60,25 @@ def inspect_app(explainer_fn, examples_fn, lifespan=None):
         except Exception as e:  # noqa: BLE001
             return JSONResponse({"error": str(e)}, status_code=http_status(e))
 
-    return Starlette(routes=[
-        Route("/", lambda _: FileResponse(VIZ_PAGE)),
-        Route("/api/info", info),
-        Route("/api/examples", lambda _: JSONResponse(examples_fn())),
-        Route("/api/explain", explain, methods=["POST"]),
-    ], lifespan=lifespan)
+    return Starlette(
+        routes=[
+            Route("/", lambda _: FileResponse(VIZ_PAGE)),
+            Route("/api/info", info),
+            Route("/api/examples", lambda _: JSONResponse(examples_fn())),
+            Route("/api/explain", explain, methods=["POST"]),
+        ],
+        lifespan=lifespan,
+    )
 
 
-NOT_INSPECTABLE = ("basal-viz reads the bf16 PyTorch weights of basal-1.0, basal-1.5, basal-2.0 and basal-omni; "
-                   "download the bf16 variant")
-OMNI_NEEDS_ENGINE = ("Gemma 4 basal-omni needs an engine whose basal-viz reads it (proposed upstream: "
-                     "rkinas/basal#75); this engine's basal-viz reads basal-1.0, basal-1.5 and basal-2.0")
+NOT_INSPECTABLE = (
+    "basal-viz reads the bf16 PyTorch weights of basal-1.0, basal-1.5, basal-2.0 and basal-omni; "
+    "download the bf16 variant"
+)
+OMNI_NEEDS_ENGINE = (
+    "Gemma 4 basal-omni needs an engine whose basal-viz reads it (proposed upstream: "
+    "rkinas/basal#75); this engine's basal-viz reads basal-1.0, basal-1.5 and basal-2.0"
+)
 
 
 def inspectable(variant) -> str | None:
@@ -120,8 +131,11 @@ class Inspector:
         if job.cancel.is_set():
             raise Cancelled()
         try:
-            ex = Explainer(SimpleNamespace(model=str(local_dir), dtype="bfloat16", device=device(hw), orders=orders,
-                                           calibration=calibration))
+            ex = Explainer(
+                SimpleNamespace(
+                    model=str(local_dir), dtype="bfloat16", device=device(hw), orders=orders, calibration=calibration
+                )
+            )
         except BaseException as exc:
             with self.lock:
                 if gen == self.gen:
@@ -168,6 +182,7 @@ class Inspector:
     def _free_engine_memory():
         try:
             from .hardware import free_engine_memory
+
             free_engine_memory()
         except ImportError:
             pass
@@ -185,13 +200,18 @@ class Inspector:
             gc.collect()
             self._free_engine_memory()
 
-
     def state(self) -> dict:
         """What the Playground's handoff compares with the served model: the engine, option orders and calibration."""
         with self.lock:
             out = {"model": self.model, "state": self.state_name, "error": self.error}
             if self.ex is not None and self.state_name == "ready":
                 info = self.ex.info
-                out.update(mode=info["mode"], device=info["device"], orders=info["orders"], calibration=self.calibration,
-                           temperatures=info["temperatures"], temperature_per_bucket=info["temperature_per_bucket"])
+                out.update(
+                    mode=info["mode"],
+                    device=info["device"],
+                    orders=info["orders"],
+                    calibration=self.calibration,
+                    temperatures=info["temperatures"],
+                    temperature_per_bucket=info["temperature_per_bucket"],
+                )
             return out

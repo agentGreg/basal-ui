@@ -18,12 +18,20 @@ def config(tmp_path, monkeypatch):
 
 
 def test_best_answer_probability_per_question_type(stats):
-    stats.record("m", {"answers": {
-        "c": {"type": "choice", "choice": "a", "confidence": 0.8},
-        "n": {"type": "noul", "noul": 0.1, "confidence": 0.9},
-        "s": {"type": "multi", "selected": ["x"], "set_confidence": 0.5},
-        "t": {"type": "tool", "tool": "search", "probabilities": {"search": 0.6, "none": 0.4}},
-        "u": {"type": "choice", "choice": "b"}}, "usage": {"input_tokens": 30}}, 10.0)
+    stats.record(
+        "m",
+        {
+            "answers": {
+                "c": {"type": "choice", "choice": "a", "confidence": 0.8},
+                "n": {"type": "noul", "noul": 0.1, "confidence": 0.9},
+                "s": {"type": "multi", "selected": ["x"], "set_confidence": 0.5},
+                "t": {"type": "tool", "tool": "search", "probabilities": {"search": 0.6, "none": 0.4}},
+                "u": {"type": "choice", "choice": "b"},
+            },
+            "usage": {"input_tokens": 30},
+        },
+        10.0,
+    )
     stats.record("m", {"answers": [{"type": "predicate", "name": "p", "probability": 0.2}]}, 20.0)
     m = stats.snapshot()["models"]["m"]
     assert (m["requests"], m["questions"], m["errors"], m["input_tokens"]) == (2, 6, 0, 30)
@@ -94,9 +102,11 @@ def test_record_during_reset_remains_in_delta_and_is_not_lost(stats, monkeypatch
 
     def record_before_persist(path, text):
         if not workers:
+
             def record():
                 started.set()
                 stats.record("m", {"answers": {}}, 2.0)
+
             worker = threading.Thread(target=record)
             workers.append(worker)
             worker.start()

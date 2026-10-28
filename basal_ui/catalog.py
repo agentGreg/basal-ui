@@ -3,6 +3,7 @@
 Each repository from the supported basal authors (and each .gguf file of a -GGUF repository) is one Variant. assess()
 reports whether this machine can serve it and whether it fits the memory budget; suggest() selects model cards by fit.
 """
+
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -79,8 +80,11 @@ def _coded(code: str | None, **params) -> tuple[str | None, str | None, dict]:
     if code is None:
         return None, None, {}
     return _format_message(code, params), code, params
+
+
 def _text(code: str, **params) -> str:
     return _format_message(code, params)
+
 
 def _message_fields(text: str | None, codes: tuple[str, ...]) -> tuple[str | None, dict | None]:
     if text is None:
@@ -96,6 +100,7 @@ def _message_fields(text: str | None, codes: tuple[str, ...]) -> tuple[str | Non
             return code, match.groupdict()
     return None, None
 
+
 def message_fields(text: str | None, prefix: str) -> tuple[str | None, dict | None]:
     return _message_fields(text, tuple(code for code in ASSESSMENT_TEMPLATES if code.startswith(prefix)))
 
@@ -103,6 +108,7 @@ def message_fields(text: str | None, prefix: str) -> tuple[str | None, dict | No
 def _suggestion(slot: str, model_id: str, code: str, **params) -> dict:
     text, code, params = _coded(code, **params)
     return {"slot": slot, "id": model_id, "why": text, "why_code": code, "why_params": params}
+
 
 # The basal-omni checkpoints that carry image / audio encoders (docs/OMNI.md); basal-omni-1.1-max is Gemma 4 Unified
 # without them, and the quantised ports drop them.
@@ -178,8 +184,12 @@ def _label(port: str, filename: str | None = None) -> str:
         quant = re.search(r"-(Q\w+|F16|BF16)\.gguf$", filename, re.IGNORECASE)
         return f"GGUF {quant.group(1)}" if quant else "GGUF"
     return {
-        "MLX-8bit": "MLX 8-bit", "MLX-6bit": "MLX 6-bit", "MLX-bf16": "MLX bf16",
-        "MLX-fp4": "MLX fp4", "MLX-oQ6e": "MLX oQ6e (oMLX 6-bit)", "MLX": "MLX 8-bit",
+        "MLX-8bit": "MLX 8-bit",
+        "MLX-6bit": "MLX 6-bit",
+        "MLX-bf16": "MLX bf16",
+        "MLX-fp4": "MLX fp4",
+        "MLX-oQ6e": "MLX oQ6e (oMLX 6-bit)",
+        "MLX": "MLX 8-bit",
     }.get(port, port)
 
 
@@ -206,18 +216,37 @@ def quantisation(v: Variant, basal_json: dict | None, config: dict | None) -> di
     return {"scheme": scheme, "description": basal_json.get("quantization"), "engine": basal_json.get("engine")}
 
 
-def _variants(repo: str, files: dict[str, int | None], author: str = "Remek",
-              base_repo: str | None = None, base_revision: str | None = None) -> list[Variant]:
+def _variants(
+    repo: str,
+    files: dict[str, int | None],
+    author: str = "Remek",
+    base_repo: str | None = None,
+    base_revision: str | None = None,
+) -> list[Variant]:
     """The variants of one repository from its file names and sizes."""
     family, tier, port = parse_repo(repo)
     weights_only = port == "GGUF" and not any(name in files for name in ("tokenizer.json", "CALIBRATION.json"))
     base_repo, base_revision = (base_repo, base_revision) if weights_only and base_repo else (None, None)
 
     def make(filename, size):
-        return Variant(f"{repo}:{filename}" if filename else repo, repo, family, tier, port, _label(port, filename),
-                       filename, size, family.startswith("basal-omni"),
-                       MEDIA_KINDS.get((family, tier), ()) if port == "bf16" else (), author, base_repo,
-                       base_revision, weights_only, (family, tier) in RECURRENT_MODELS)
+        return Variant(
+            f"{repo}:{filename}" if filename else repo,
+            repo,
+            family,
+            tier,
+            port,
+            _label(port, filename),
+            filename,
+            size,
+            family.startswith("basal-omni"),
+            MEDIA_KINDS.get((family, tier), ()) if port == "bf16" else (),
+            author,
+            base_repo,
+            base_revision,
+            weights_only,
+            (family, tier) in RECURRENT_MODELS,
+        )
+
     if port == "GGUF":
         return [make(name, size) for name, size in files.items() if name.lower().endswith(".gguf")]
     sizes = [size for name, size in files.items() if name.endswith(".safetensors") and not _optional(name)]
@@ -227,17 +256,26 @@ def _variants(repo: str, files: dict[str, int | None], author: str = "Remek",
 @lru_cache(maxsize=1)
 def _hub_variants() -> tuple[Variant, ...]:
     from huggingface_hub import HfApi
+
     api = HfApi()
-    repos = [(m.id, author) for author in AUTHORS
-             for m in api.list_models(author=author, search="basal")
-             if m.id.split("/", 1)[0] == author and parse_repo(m.id)]
+    repos = [
+        (m.id, author)
+        for author in AUTHORS
+        for m in api.list_models(author=author, search="basal")
+        if m.id.split("/", 1)[0] == author and parse_repo(m.id)
+    ]
 
     def get(repo, author):
         info = api.model_info(repo, files_metadata=True)
         files = {f.rfilename: f.size for f in info.siblings or []}
         card = getattr(info, "card_data", None)
-        return _variants(repo, files, author, _first(getattr(card, "base_model", None)),
-                         _first(getattr(card, "base_model_revision", None)))
+        return _variants(
+            repo,
+            files,
+            author,
+            _first(getattr(card, "base_model", None)),
+            _first(getattr(card, "base_model_revision", None)),
+        )
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         return tuple(v for group in pool.map(lambda item: get(*item), repos) for v in group)
@@ -252,15 +290,18 @@ def _first(value) -> str | None:
 
 def _front_matter(readme: str, key: str) -> str | None:
     """The first value of `key` in a README's YAML front matter (`key: value`, or the first `- value` of a list)."""
-    match = (re.search(rf"(?m)^{key}:[ \t]*([^\s\[\]-][^\s]*)[ \t]*$", readme)
-             or re.search(rf"(?m)^{key}:[ \t]*\n[ \t]*-[ \t]*([^\s]+)", readme)
-             or re.search(rf"(?m)^{key}:[ \t]*\[[ \t]*([^\s,\]]+)", readme))
+    match = (
+        re.search(rf"(?m)^{key}:[ \t]*([^\s\[\]-][^\s]*)[ \t]*$", readme)
+        or re.search(rf"(?m)^{key}:[ \t]*\n[ \t]*-[ \t]*([^\s]+)", readme)
+        or re.search(rf"(?m)^{key}:[ \t]*\[[ \t]*([^\s,\]]+)", readme)
+    )
     return _first(match.group(1)) if match else None
 
 
 def _cache_variants(cache_dir: Path) -> list[Variant]:
     from huggingface_hub import scan_cache_dir
     from huggingface_hub.errors import CacheNotFound
+
     try:
         cache = scan_cache_dir(cache_dir)
     except (CacheNotFound, OSError, ValueError):
@@ -296,6 +337,7 @@ def list_variants(refresh: bool = False, cache_dir: Path | None = None) -> tuple
     except Exception:  # noqa: BLE001 — cache fallback is expected when the Hub is unavailable
         if cache_dir is None:
             from huggingface_hub.constants import HF_HUB_CACHE
+
             cache_dir = Path(HF_HUB_CACHE)
         return _cache_variants(cache_dir), "cache"
 
@@ -405,6 +447,8 @@ def preferred_format(hw: Hardware) -> str:
     if "gguf" in hw.engines:
         return "GGUF Q8_0"
     return "bf16"
+
+
 def _gb_number(size: int | None) -> float | None:
     return None if size is None else float(f"{size / 1_000_000_000:.1f}")
 
@@ -418,6 +462,7 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
     a slot is left out when nothing qualifies. Only variants that fit both the memory budget and the memory available
     now are candidates, and a comfortable fit wins over a tight one. Where the available memory is unknown, the budget
     fit stands in for it."""
+
     def now(a: Assessment) -> str:
         return a.fit if a.fit_now == "unknown" else a.fit_now
 
@@ -447,29 +492,69 @@ def suggest(items: list[Assessment], hw: Hardware) -> list[dict]:
             available = hw.available_bytes is not None
             memory = _gb_number(hw.available_bytes if available else hw.memory_bytes)
             v = recommended.variant
-            params = {"tier": v.tier, "label": v.label,
-                      "estimate": _gb_number(recommended.est_memory_bytes), "memory": memory}
-            code = "suggest_recommended" if available else "suggest_recommended_budget" if memory is not None else "suggest_recommended_unknown"
-            if (hw.platform == "apple" and "mlx" in hw.engines and v.family in ("basal-1.0", "basal-1.5", "basal-2.0")
-                    and (v.port == "bf16" or v.port.startswith("MLX"))):
-                code = "suggest_packed" if available else "suggest_packed_budget" if memory is not None else "suggest_packed_unknown"
+            params = {
+                "tier": v.tier,
+                "label": v.label,
+                "estimate": _gb_number(recommended.est_memory_bytes),
+                "memory": memory,
+            }
+            code = (
+                "suggest_recommended"
+                if available
+                else "suggest_recommended_budget"
+                if memory is not None
+                else "suggest_recommended_unknown"
+            )
+            if (
+                hw.platform == "apple"
+                and "mlx" in hw.engines
+                and v.family in ("basal-1.0", "basal-1.5", "basal-2.0")
+                and (v.port == "bf16" or v.port.startswith("MLX"))
+            ):
+                code = (
+                    "suggest_packed"
+                    if available
+                    else "suggest_packed_budget"
+                    if memory is not None
+                    else "suggest_packed_unknown"
+                )
             suggestions.append(_suggestion("recommended", v.id, code, **params))
         if best and best is not recommended:
-            suggestions.append(_suggestion("best_quality", best.variant.id, "suggest_best",
-                                           estimate=_gb_number(best.est_memory_bytes)))
+            suggestions.append(
+                _suggestion("best_quality", best.variant.id, "suggest_best", estimate=_gb_number(best.est_memory_bytes))
+            )
         if fastest and fastest not in (recommended, best):
-            suggestions.append(_suggestion("fastest", fastest.variant.id, "suggest_fastest",
-                                           estimate=_gb_number(fastest.est_memory_bytes)))
+            suggestions.append(
+                _suggestion(
+                    "fastest", fastest.variant.id, "suggest_fastest", estimate=_gb_number(fastest.est_memory_bytes)
+                )
+            )
     light = [a for a in fitting if a.runnable and a.variant.recurrent]
     if light:
-        pick = (next((a for a in light if a.variant.label == preferred_format(hw)), None)
-                or next((a for a in light if a.variant.port == "bf16"), light[0]))
-        suggestions.append(_suggestion("lightest", pick.variant.id, "suggest_lightest",
-                                       tier=pick.variant.tier, estimate=_gb_number(pick.est_memory_bytes), mode=pick.mode))
+        pick = next((a for a in light if a.variant.label == preferred_format(hw)), None) or next(
+            (a for a in light if a.variant.port == "bf16"), light[0]
+        )
+        suggestions.append(
+            _suggestion(
+                "lightest",
+                pick.variant.id,
+                "suggest_lightest",
+                tier=pick.variant.tier,
+                estimate=_gb_number(pick.est_memory_bytes),
+                mode=pick.mode,
+            )
+        )
     multimodal = largest([a for a in fitting if a.media_mode is not None])
     if multimodal:
-        suggestions.append(_suggestion("multimodal", multimodal.variant.id, "suggest_multimodal",
-                                       kinds=list(multimodal.variant.media), mode=multimodal.media_mode))
+        suggestions.append(
+            _suggestion(
+                "multimodal",
+                multimodal.variant.id,
+                "suggest_multimodal",
+                kinds=list(multimodal.variant.media),
+                mode=multimodal.media_mode,
+            )
+        )
     return suggestions
 
 
@@ -480,8 +565,7 @@ def _optional(name: str) -> bool:
 
 def download_kwargs(v: Variant, revision: str | None = None) -> dict:
     """snapshot_download filters for one variant and optional pinned revision."""
-    kwargs = ({"allow_patterns": [v.gguf_file, *_BASE_FILES]} if v.port == "GGUF"
-              else {"ignore_patterns": ["think/*"]})
+    kwargs = {"allow_patterns": [v.gguf_file, *_BASE_FILES]} if v.port == "GGUF" else {"ignore_patterns": ["think/*"]}
     if revision is not None:
         kwargs["revision"] = revision
     return kwargs
@@ -492,9 +576,17 @@ def base_dir(v: Variant, cache_dir: Path) -> Path | None:
     if not v.base_repo:
         return None
     from huggingface_hub import snapshot_download
+
     try:
-        path = Path(snapshot_download(v.base_repo, cache_dir=cache_dir, local_files_only=True,
-                                      allow_patterns=list(_BASE_FILES), **_base_revision(v)))
+        path = Path(
+            snapshot_download(
+                v.base_repo,
+                cache_dir=cache_dir,
+                local_files_only=True,
+                allow_patterns=list(_BASE_FILES),
+                **_base_revision(v),
+            )
+        )
     except Exception:  # noqa: BLE001 — an absent or partial snapshot is not downloaded
         return None
     return path if all((path / name).is_file() for name in ("tokenizer.json", "CALIBRATION.json")) else None
@@ -507,25 +599,34 @@ def _base_revision(v: Variant) -> dict:
 def is_downloaded(v: Variant, cache_dir: Path, revision: str | None = None) -> Path | None:
     """The local snapshot directory if the weights and any required base metadata are cached."""
     from huggingface_hub import snapshot_download
+
     try:
-        path = Path(snapshot_download(v.repo, cache_dir=cache_dir, local_files_only=True,
-                                      **download_kwargs(v, revision)))
+        path = Path(
+            snapshot_download(v.repo, cache_dir=cache_dir, local_files_only=True, **download_kwargs(v, revision))
+        )
     except Exception:  # noqa: BLE001 — an absent or partial snapshot is not downloaded
         return None
     weights = [path / v.gguf_file] if v.gguf_file else list(path.glob("*.safetensors"))
-    return path if weights and all(w.exists() for w in weights) and (
-        not v.base_repo or base_dir(v, cache_dir) is not None
-    ) else None
+    return (
+        path
+        if weights and all(w.exists() for w in weights) and (not v.base_repo or base_dir(v, cache_dir) is not None)
+        else None
+    )
 
 
 def download(v: Variant, cache_dir: Path, tqdm_class=None, revision: str | None = None) -> str:
     """Download a variant and, when needed, its base model metadata snapshot."""
     from huggingface_hub import snapshot_download
-    path = snapshot_download(v.repo, cache_dir=cache_dir, tqdm_class=tqdm_class,
-                             **download_kwargs(v, revision))
+
+    path = snapshot_download(v.repo, cache_dir=cache_dir, tqdm_class=tqdm_class, **download_kwargs(v, revision))
     if v.base_repo:
-        snapshot_download(v.base_repo, cache_dir=cache_dir, tqdm_class=tqdm_class,
-                          allow_patterns=list(_BASE_FILES), **_base_revision(v))
+        snapshot_download(
+            v.base_repo,
+            cache_dir=cache_dir,
+            tqdm_class=tqdm_class,
+            allow_patterns=list(_BASE_FILES),
+            **_base_revision(v),
+        )
     return path
 
 
@@ -544,6 +645,7 @@ def delete(v: Variant, cache_dir: Path) -> int:
     variants, so only the variant's .gguf file goes, and the whole repository once no .gguf file is left."""
     from huggingface_hub import scan_cache_dir
     from huggingface_hub.errors import CacheNotFound
+
     try:
         cache = scan_cache_dir(cache_dir)
     except (CacheNotFound, OSError, ValueError):
@@ -584,8 +686,9 @@ def delete(v: Variant, cache_dir: Path) -> int:
     return freed
 
 
-def serve_args(v: Variant, local_dir: Path, mode: str, media_platform: str | None = None,
-               platform: str | None = None) -> list[str]:
+def serve_args(
+    v: Variant, local_dir: Path, mode: str, media_platform: str | None = None, platform: str | None = None
+) -> list[str]:
     """basal-serve arguments; media_platform (the Hardware.platform) serves with images / audio (--media on)."""
     if media_platform:
         if mode == "vllm":

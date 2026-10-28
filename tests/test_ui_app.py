@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import os
 import struct
 import sys
@@ -12,8 +13,8 @@ from fastapi.testclient import TestClient
 
 from basal_ui import calibration, catalog, settings
 from basal_ui.app import create_app
-from basal_ui.fleet import Fleet, Runner, rss_by_pgid
 from basal_ui.catalog import Variant
+from basal_ui.fleet import Fleet, Runner, rss_by_pgid
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
 from basal_ui.jobs import LogBuffer
@@ -21,8 +22,9 @@ from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 MINI = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
-OMNI = Variant("omni", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None, 100, True,
-               ("image", "audio"))
+OMNI = Variant(
+    "omni", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None, 100, True, ("image", "audio")
+)
 SMALL = Variant("small", "Remek/basal-2.0-small", "basal-2.0", "small", "bf16", "bf16", None, 100, False)
 
 
@@ -35,6 +37,7 @@ def config(tmp_path, monkeypatch):
 @pytest.fixture
 def instant_start(monkeypatch):
     """Runner._start reaches ready at once, without a download or a child process."""
+
     def start(self, assessment, gen, media=False, cache_dir=None, serve=None):
         with self.lock:  # remembered before it is reported ready, as Runner._start does
             if gen == self.gen:
@@ -42,6 +45,7 @@ def instant_start(monkeypatch):
                     settings.remember_loaded(assessment.variant.id, media)
                 self.state, self.media, self.ready_at = "ready", (["image", "audio"] if media else []), time.time()
                 self.serve_snapshot = {"log_decisions": "", "max_len": 4096, "calibration": None}
+
     monkeypatch.setattr(Runner, "_start", start)
 
 
@@ -53,15 +57,25 @@ def wait_for(condition, timeout=3):
 
 
 def make_fleet(tmp_path, hw=HW):
-    return Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
-                 hardware_fn=lambda: hw, stats=Stats(tmp_path / "stats.json"),
-                 history=History(tmp_path / "history.jsonl"))
+    return Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: hw,
+        stats=Stats(tmp_path / "stats.json"),
+        history=History(tmp_path / "history.jsonl"),
+    )
 
 
 def app_for(tmp_path, items, hw=HW, fleet=None):
     fleet = fleet or make_fleet(tmp_path, hw)
-    app = create_app(catalog_fn=lambda **_: (items, "hub"), hardware_fn=lambda: hw, fleet=fleet,
-                     stats=fleet.stats, history=fleet.history)
+    app = create_app(
+        catalog_fn=lambda **_: (items, "hub"),
+        hardware_fn=lambda: hw,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     return app, fleet
 
 
@@ -105,8 +119,13 @@ def test_media_examples_inline_their_files_and_carry_element_boxes(tmp_path):
     with TestClient(app, base_url="http://127.0.0.1") as client:
         examples = client.get("/api/examples").json()
     media = [e for e in examples if e["request"].get("media")]
-    assert [e["id"] for e in media] == ["media-01-checkout-elements", "media-02-invoice", "media-03-revenue-chart",
-                                        "media-04-voice-complaint", "media-05-voice-appointment"]
+    assert [e["id"] for e in media] == [
+        "media-01-checkout-elements",
+        "media-02-invoice",
+        "media-03-revenue-chart",
+        "media-04-voice-complaint",
+        "media-05-voice-appointment",
+    ]
     for e in media:
         assert "elements" not in e["request"] and "media_files" not in e["request"]  # only server fields are sent
         assert len(e["media_files"]) == len(e["request"]["media"])
@@ -121,7 +140,7 @@ def test_media_examples_inline_their_files_and_carry_element_boxes(tmp_path):
     raw = base64.b64decode(checkout["request"]["media"][elements["image"]]["data"].split(",", 1)[1])
     w, h = struct.unpack(">II", raw[16:24])  # PNG IHDR
     assert [w, h] == elements["size"]
-    assert all(0 <= x and 0 <= y and x + bw <= w and y + bh <= h for x, y, bw, bh in elements["boxes"].values())
+    assert all(x >= 0 and y >= 0 and x + bw <= w and y + bh <= h for x, y, bw, bh in elements["boxes"].values())
     assert set(elements["boxes"]) == set(checkout["request"]["questions"][elements["question"]]["criteria"])
 
 
@@ -130,7 +149,9 @@ def test_bundled_media_examples_decode():
     pytest.importorskip("PIL.Image")
     pytest.importorskip("soundfile")
     from basal import media
+
     from basal_ui.app import examples
+
     bundled = [e for e in examples() if e["request"].get("media")]
     assert len(bundled) == 5
     for e in bundled:
@@ -165,7 +186,8 @@ def test_model_api_includes_reason_and_suggestion_codes(tmp_path):
     assert unavailable["reason_code"] == "fp8_hardware"
     assert unavailable["reason_params"] == {}
     assert unavailable["reason"] == catalog.ASSESSMENT_TEMPLATES[unavailable["reason_code"]].format(
-        **unavailable["reason_params"])
+        **unavailable["reason_params"]
+    )
     for card in payload["suggestions"]:
         assert card["why"] == catalog.ASSESSMENT_TEMPLATES[card["why_code"]].format(**card["why_params"])
 
@@ -243,8 +265,7 @@ def test_hardware_endpoint_reads_available_memory_each_request(tmp_path):
     item1 = Hardware("cpu", "cpu", 1000, 2000, None, frozenset(), 100)
     item2 = Hardware("cpu", "cpu", 1000, 2000, None, frozenset(), 200)
     values = iter((item1, item2))
-    app = create_app(catalog_fn=lambda **_: ([], "hub"), hardware_fn=lambda: next(values),
-                     fleet=make_fleet(tmp_path))
+    app = create_app(catalog_fn=lambda **_: ([], "hub"), hardware_fn=lambda: next(values), fleet=make_fleet(tmp_path))
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.get("/api/hardware").json()["available_bytes"] == 100
         assert client.get("/api/hardware").json()["available_bytes"] == 200
@@ -299,7 +320,11 @@ def test_download_runs_without_a_model_and_reports_progress_then_errors(tmp_path
         assert status.status_code == 202
         assert status.json()["models"] == []
         wait_for(lambda: client.get("/api/status").json()["downloads"][MINI.repo]["done_bytes"] == 40)
-        assert client.get("/api/status").json()["downloads"][MINI.repo] == {"done_bytes": 40, "total_bytes": 100, "error": None}
+        assert client.get("/api/status").json()["downloads"][MINI.repo] == {
+            "done_bytes": 40,
+            "total_bytes": 100,
+            "error": None,
+        }
         release.set()
         wait_for(lambda: client.get("/api/status").json()["downloads"] == {})
         on_disk[MINI.repo] = tmp_path
@@ -318,9 +343,11 @@ def test_startup_timeout_kills_child_process_group(tmp_path, monkeypatch):
         pytest.skip("process-group lifecycle is POSIX-specific")
     assessment = catalog.assess(MINI, Hardware("cpu", "cpu", 1000, 2000, None, frozenset()))
     pid_file = tmp_path / "grandchild.pid"
-    code = ("import subprocess,sys,time; "
-            f"p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
-            f"open({str(pid_file)!r},'w').write(str(p.pid)); time.sleep(60)")
+    code = (
+        "import subprocess,sys,time; "
+        f"p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)']); "
+        f"open({str(pid_file)!r},'w').write(str(p.pid)); time.sleep(60)"
+    )
     runner = Runner(models_dir_fn=lambda: tmp_path)
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     monkeypatch.setattr(runner, "_build_command", lambda *args: [sys.executable, "-c", code])
@@ -355,9 +382,17 @@ def test_runner_command_is_private_on_loopback_with_model_name(tmp_path):
     model = Variant("model-id", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
     runner = Runner(settings_mod=settings, platform_fn=lambda: "cpu")
     assessment = SimpleNamespace(variant=model, mode="vllm")
-    settings.update_serve({"enabled": True, "host": "0.0.0.0", "port": 8123, "require_key": False,
-                           "cors_origins": ["https://example.com"], "max_len": 8192,
-                           "log_decisions": str(tmp_path / "decisions.jsonl")})
+    settings.update_serve(
+        {
+            "enabled": True,
+            "host": "0.0.0.0",
+            "port": 8123,
+            "require_key": False,
+            "cors_origins": ["https://example.com"],
+            "max_len": 8192,
+            "log_decisions": str(tmp_path / "decisions.jsonl"),
+        }
+    )
     command = runner._build_command(model, tmp_path, assessment, False, 43217, settings.serve_settings())
     assert command[command.index("--name") + 1] == model.id
     assert command[command.index("--host") + 1] == "127.0.0.1"
@@ -373,7 +408,7 @@ def test_runner_command_is_private_on_loopback_with_model_name(tmp_path):
 def test_real_subprocess_answers_through_the_playground_and_records_the_decision(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     app, fleet = app_for(tmp_path, [MINI])
-    code = f"""
+    code = """
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 class Handler(BaseHTTPRequestHandler):
@@ -382,29 +417,37 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body))); self.end_headers()
         self.wfile.write(body)
     def do_GET(self):
-        self.reply(200, b'{{"status":"ok"}}')
+        self.reply(200, b'{"status":"ok"}')
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))  # read first: replying early resets
-        answer = {{'type': 'choice', 'choice': 'a', 'confidence': 0.75}}
-        self.reply(200, json.dumps({{'received': body, 'answers': {{'q': answer}},
-                                     'usage': {{'input_tokens': 12}}}}).encode())
+        answer = {'type': 'choice', 'choice': 'a', 'confidence': 0.75}
+        self.reply(200, json.dumps({'received': body, 'answers': {'q': answer},
+                                     'usage': {'input_tokens': 12}}).encode())
     def log_message(self, *args): pass
 print('child up', flush=True)
 HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever()
 """
-    monkeypatch.setattr(Runner, "_build_command", lambda self, v, path, assessment, media, port, serve:
-                        [sys.executable, "-c", code, str(port)])
+    monkeypatch.setattr(
+        Runner,
+        "_build_command",
+        lambda self, v, path, assessment, media, port, serve: [sys.executable, "-c", code, str(port)],
+    )
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/load", json={"id": MINI.id}).status_code == 202
         deadline = time.monotonic() + 30  # a cold interpreter start on a CI runner
         while states(client)["mini"] not in ("ready", "error") and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert states(client) == {"mini": "ready"}, (client.get("/api/status").json()["models"],
-                                                     client.get("/api/logs", params={"source": "mini"}).json())
+        assert states(client) == {"mini": "ready"}, (
+            client.get("/api/status").json()["models"],
+            client.get("/api/logs", params={"source": "mini"}).json(),
+        )
         runner = fleet.runners["mini"]
         assert httpx.get(runner.base_url + "/health").status_code == 200
-        body = {"state": "hello", "questions": {"q": {"type": "choice", "instructions": "?", "criteria": ["a", "b"]}},
-                "media": [{"type": "image", "data": "aGVsbG8="}]}
+        body = {
+            "state": "hello",
+            "questions": {"q": {"type": "choice", "instructions": "?", "criteria": ["a", "b"]}},
+            "media": [{"type": "image", "data": "aGVsbG8="}],
+        }
         assert client.post("/api/decide", json={"model": "mini", **body}).json()["received"] == body
 
         items = client.get("/api/history").json()["items"]
@@ -415,7 +458,12 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
         assert record["replay_error"] and record["replay_request"] is None
         assert client.get("/api/history/h_missing").status_code == 404
         stats = client.get("/api/stats").json()["models"]["mini"]
-        assert (stats["requests"], stats["questions"], stats["input_tokens"], stats["avg_best_prob"]) == (1, 1, 12, 0.75)
+        assert (stats["requests"], stats["questions"], stats["input_tokens"], stats["avg_best_prob"]) == (
+            1,
+            1,
+            12,
+            0.75,
+        )
 
         logs = client.get("/api/logs", params={"source": "mini"}).json()
         assert "child up" in [line["text"] for line in logs["lines"]]
@@ -441,8 +489,14 @@ def test_api_serve_routes_validate_settings_and_hide_secrets(tmp_path, monkeypat
         assert response.status_code == 200
         assert response.json()["settings"]["port"] == 8000
         assert {"auto_load", "keys", "mcp_available", "mcp_hint", "lan_ip"} <= response.json().keys()
-        for patch in ({"host": "10.0.0.1"}, {"port": 80}, {"port": 70000}, {"max_len": 100},
-                      {"cors_origins": ["bad-origin"]}, {"log_decisions": str(tmp_path / "missing" / "x.log")}):
+        for patch in (
+            {"host": "10.0.0.1"},
+            {"port": 80},
+            {"port": 70000},
+            {"max_len": 100},
+            {"cors_origins": ["bad-origin"]},
+            {"log_decisions": str(tmp_path / "missing" / "x.log")},
+        ):
             assert client.put("/api/serve", json=patch).status_code == 400
         monkeypatch.setattr("basal.mcp_server.available", lambda: "install basal[mcp]")
         assert client.put("/api/serve", json={"mcp": True}).status_code == 400
@@ -523,8 +577,9 @@ def test_auto_load_waiting_on_catalog_is_cancelled_during_shutdown(tmp_path, mon
         return [MINI], "test"
 
     monkeypatch.setattr("basal_ui.app.threading.Event", event_factory)
-    app = create_app(catalog_fn=blocked_catalog, hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats,
-                     history=fleet.history)
+    app = create_app(
+        catalog_fn=blocked_catalog, hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats, history=fleet.history
+    )
     client = TestClient(app, base_url="http://127.0.0.1")
     client.__enter__()
     assert catalog_entered.wait(timeout=2)
@@ -540,8 +595,9 @@ def test_auto_load_waiting_on_catalog_is_cancelled_during_shutdown(tmp_path, mon
 def test_create_app_passes_settings_module_to_default_fleet(tmp_path, monkeypatch):
     import basal_ui.app as app_module
 
-    fake_settings = SimpleNamespace(models_dir=lambda: None, stats_path=lambda: tmp_path / "s.json",
-                                    history_path=lambda: tmp_path / "h.jsonl")
+    fake_settings = SimpleNamespace(
+        models_dir=lambda: None, stats_path=lambda: tmp_path / "s.json", history_path=lambda: tmp_path / "h.jsonl"
+    )
     captured = {}
 
     def fleet_factory(**kwargs):
@@ -557,10 +613,12 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
     import io
 
     runner = Runner(settings_mod=settings)
-    old = SimpleNamespace(variant=Variant("old", "repo/old", "basal-2.0", "mini", "bf16", "bf16",
-                                          None, 100, False), mode="eager")
-    newer = SimpleNamespace(variant=Variant("newer", "repo/newer", "basal-2.0", "mini", "bf16", "bf16",
-                                            None, 100, False), mode="eager")
+    old = SimpleNamespace(
+        variant=Variant("old", "repo/old", "basal-2.0", "mini", "bf16", "bf16", None, 100, False), mode="eager"
+    )
+    newer = SimpleNamespace(
+        variant=Variant("newer", "repo/newer", "basal-2.0", "mini", "bf16", "bf16", None, 100, False), mode="eager"
+    )
     runner.gen = 1
     runner.state, runner.model = "starting", "old"
     monkeypatch.setattr(catalog, "is_downloaded", lambda *args, **kwargs: tmp_path)
@@ -608,8 +666,10 @@ def test_load_over_the_memory_budget_is_refused_until_the_budget_allows_it(tmp_p
     fleet.load(assessment("a"))
     with pytest.raises(RuntimeError) as refused:
         fleet.load(assessment("b"))
-    assert str(refused.value) == ("over memory budget: 10.0 GiB loaded + 10.0 GiB needed > 14.0 GiB (16.0 GiB budget − "
-                                  "2.0 GiB kept free); unload a model or raise the budget")
+    assert str(refused.value) == (
+        "over memory budget: 10.0 GiB loaded + 10.0 GiB needed > 14.0 GiB (16.0 GiB budget − "
+        "2.0 GiB kept free); unload a model or raise the budget"
+    )
     assert list(fleet.runners) == ["a"]
     settings.update_memory({"budget_bytes": 21 * 1024**3})
     with pytest.raises(RuntimeError, match="over memory budget"):
@@ -647,7 +707,9 @@ def test_temporary_runner_memory_stays_committed_until_unload_finishes(tmp_path,
     fleet = make_fleet(tmp_path, Hardware("cpu", "cpu", 16 * 1024**3, None, None, frozenset()))
     assessment = SimpleNamespace(
         variant=Variant("temp", "repo/temp", "basal-2.0", "mini", "bf16", "bf16", None, 100, False),
-        mode="eager", est_memory_bytes=10 * 1024**3)
+        mode="eager",
+        est_memory_bytes=10 * 1024**3,
+    )
     fleet.start_temporary("job", assessment, fleet.logs["basal-ui"])
     started, release = threading.Event(), threading.Event()
 
@@ -662,7 +724,9 @@ def test_temporary_runner_memory_stays_committed_until_unload_finishes(tmp_path,
     assert fleet.status()["memory"]["committed_bytes"] == 10 * 1024**3
     other = SimpleNamespace(
         variant=Variant("other", "repo/other", "basal-2.0", "mini", "bf16", "bf16", None, 100, False),
-        mode="eager", est_memory_bytes=10 * 1024**3)
+        mode="eager",
+        est_memory_bytes=10 * 1024**3,
+    )
     with pytest.raises(RuntimeError, match="over memory budget"):
         fleet.load(other)
     release.set()
@@ -713,7 +777,9 @@ def test_memory_routes_validate_and_report_the_hardware_budget(tmp_path):
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.get("/api/memory").json() == {
             "settings": {"budget_bytes": None, "reserve_bytes": 2 * 1024**3},
-            "hardware_budget_bytes": 16 * 1024**3, "available_bytes": 5}
+            "hardware_budget_bytes": 16 * 1024**3,
+            "available_bytes": 5,
+        }
         assert client.put("/api/memory", json={"budget_bytes": 1024}).status_code == 400
         assert client.put("/api/memory", json={"reserve_bytes": -1}).status_code == 400
         saved = client.put("/api/memory", json={"budget_bytes": 8 * 1024**3, "reserve_bytes": 0}).json()
@@ -742,8 +808,9 @@ def test_benchmark_decisions_leave_statistics_and_history_untouched(tmp_path, mo
     assert [(r["source"], r["answers"]["q"]["best"]) for r in fleet.history.list()] == [("playground", "true")]
 
 
-def test_status_lists_the_requests_being_answered_per_model_until_each_returns_or_fails(tmp_path, monkeypatch,
-                                                                                        instant_start):
+def test_status_lists_the_requests_being_answered_per_model_until_each_returns_or_fails(
+    tmp_path, monkeypatch, instant_start
+):
     release, entered = threading.Event(), threading.Semaphore(0)
     response = httpx.Response(200, json={"answers": {}})
 
@@ -753,6 +820,7 @@ def test_status_lists_the_requests_being_answered_per_model_until_each_returns_o
         if body.get("fail"):
             raise httpx.ConnectError("child gone")
         return response
+
     monkeypatch.setattr(Runner, "decide", decide)
     fleet = make_fleet(tmp_path)
     for variant in (MINI, SMALL):
@@ -762,12 +830,13 @@ def test_status_lists_the_requests_being_answered_per_model_until_each_returns_o
     assert inflight() == {"mini": [], "small": []}  # idle
 
     def call(model, source, fail=False):
-        try:
+        with contextlib.suppress(httpx.HTTPError):
             fleet.decide(model, {"state": "x", "fail": fail}, source=source)
-        except httpx.HTTPError:
-            pass
-    threads = [threading.Thread(target=call, args=args) for args in
-               (("mini", "playground"), ("mini", "api"), ("small", "mcp", True))]
+
+    threads = [
+        threading.Thread(target=call, args=args)
+        for args in (("mini", "playground"), ("mini", "api"), ("small", "mcp", True))
+    ]
     for th in threads:
         th.start()
         entered.acquire(timeout=5)  # in this order: the oldest request is listed first
@@ -779,7 +848,6 @@ def test_status_lists_the_requests_being_answered_per_model_until_each_returns_o
     for th in threads:
         th.join(5)
     assert inflight() == {"mini": [], "small": []}  # answered and failed requests both leave the list
-
 
 
 def test_logs_route_lists_sources_and_reads_incrementally(tmp_path, instant_start):
@@ -800,7 +868,8 @@ def test_logs_route_lists_sources_and_reads_incrementally(tmp_path, instant_star
         assert [line["text"] for line in restarted["lines"]] == ["new generation"]
         fleet.runners["mini"].log.append("a child line")
         assert [line["text"] for line in client.get("/api/logs", params={"source": "mini"}).json()["lines"]] == [
-            "a child line"]
+            "a child line"
+        ]
         assert client.get("/api/logs", params={"source": "nope"}).status_code == 404
 
 
@@ -809,10 +878,16 @@ def test_mutation_origin_requires_matching_scheme_host_and_port(tmp_path):
     with TestClient(app, base_url="http://127.0.0.1") as client:
         accepted = client.post("/api/download", json={"id": "missing"}, headers={"Origin": "http://localhost"})
         assert accepted.status_code == 400
-        assert client.post("/api/download", json={"id": "missing"},
-                           headers={"Origin": "http://localhost:12345"}).status_code == 403
-        assert client.post("/api/download", json={"id": "missing"},
-                           headers={"Origin": "https://localhost"}).status_code == 403
+        assert (
+            client.post(
+                "/api/download", json={"id": "missing"}, headers={"Origin": "http://localhost:12345"}
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post("/api/download", json={"id": "missing"}, headers={"Origin": "https://localhost"}).status_code
+            == 403
+        )
 
 
 def test_shutdown_waits_for_gateway_drain_before_shared_state_teardown(tmp_path, monkeypatch):
@@ -834,8 +909,14 @@ def test_shutdown_waits_for_gateway_drain_before_shared_state_teardown(tmp_path,
     fleet.shutdown = lambda: order.append("fleet")
     fleet.stats.close = lambda: order.append("stats")
     monkeypatch.setattr(settings, "remove_keys_file", lambda: order.append("keys"))
-    app = create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet,
-                     stats=fleet.stats, history=fleet.history, gateway=gateway)
+    app = create_app(
+        catalog_fn=lambda **_: ([], "test"),
+        hardware_fn=lambda: HW,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+        gateway=gateway,
+    )
     with TestClient(app, base_url="http://127.0.0.1"):
         pass
     assert order == ["gateway", "gateway", "fleet", "stats", "keys"]
@@ -847,17 +928,39 @@ def test_presets_validate_and_strip_request_model(tmp_path):
         assert client.get("/api/presets").json() == {"load": {}, "request": {}}
         result = client.put("/api/presets", json={"kind": "load", "name": "cpu", "value": {"mode": "eager"}})
         assert result.status_code == 200 and result.json()["load"]["cpu"] == {"mode": "eager"}  # the non-default ones
-        result = client.put("/api/presets", json={"kind": "request", "name": "hello",
-                                                  "value": {"model": "ignored", "questions": {"q": {"type": "choice"}}}})
+        result = client.put(
+            "/api/presets",
+            json={
+                "kind": "request",
+                "name": "hello",
+                "value": {"model": "ignored", "questions": {"q": {"type": "choice"}}},
+            },
+        )
         assert result.json()["request"]["hello"] == {"questions": {"q": {"type": "choice"}}}
-        assert client.put("/api/presets", json={"kind": "load", "name": "bad", "value": {"unknown": 1}}).status_code == 400
-        assert client.put("/api/presets", json={"kind": "request", "name": "bad", "value": {"questions": {}}}).status_code == 400
+        assert (
+            client.put("/api/presets", json={"kind": "load", "name": "bad", "value": {"unknown": 1}}).status_code == 400
+        )
+        assert (
+            client.put("/api/presets", json={"kind": "request", "name": "bad", "value": {"questions": {}}}).status_code
+            == 400
+        )
         assert client.put("/api/presets", json={"kind": "load", "name": ".hidden", "value": {}}).status_code == 400
 
 
 def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path, monkeypatch):
-    community = Variant("community", "pawelkiszczak/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16",
-                       None, 123, False, (), "pawelkiszczak")
+    community = Variant(
+        "community",
+        "pawelkiszczak/basal-2.0-mini",
+        "basal-2.0",
+        "mini",
+        "bf16",
+        "bf16",
+        None,
+        123,
+        False,
+        (),
+        "pawelkiszczak",
+    )
     snapshot = tmp_path / "snapshot"
     snapshot.mkdir()
     (snapshot / "README.md").write_text("Local model card")
@@ -867,11 +970,19 @@ def test_model_card_reports_downloaded_local_data_and_unknown_directory(tmp_path
     def is_downloaded(variant, cache, revision=None):
         checks.append((variant.id, revision))
         return snapshot if variant.id == community.id else None
+
     monkeypatch.setattr(catalog, "is_downloaded", is_downloaded)
-    monkeypatch.setattr(calibration, "shipped_file", lambda local_dir, mode, *context: modes.append(mode) or snapshot / "none")
+    monkeypatch.setattr(
+        calibration, "shipped_file", lambda local_dir, mode, *context: modes.append(mode) or snapshot / "none"
+    )
     fp8 = {"quantization_config": {"quant_algo": "FP8", "quant_method": "modelopt", "producer": {"version": "0.47.0"}}}
-    monkeypatch.setattr(httpx, "get", lambda url, **k: urls.append(url) or (
-        httpx.Response(200, json=fp8) if url.endswith("config.json") else httpx.Response(404)))
+    monkeypatch.setattr(
+        httpx,
+        "get",
+        lambda url, **k: (
+            urls.append(url) or (httpx.Response(200, json=fp8) if url.endswith("config.json") else httpx.Response(404))
+        ),
+    )
     app, _ = app_for(tmp_path, [community, MINI])
     settings.set_load_options("community", {"mode": "mlx-q8", "revision": "abc"})
     settings.set_load_options("mini", {"revision": "refs/pr/2"})
@@ -894,15 +1005,18 @@ def test_catalog_rows_carry_the_saved_revision(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "downloaded_bytes", lambda variant, cache_dir: None)
     app, _ = app_for(tmp_path, [MINI, SMALL])
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        assert client.put("/api/models/options", json={"id": "mini", "options": {"revision": " abc "}}).status_code == 200
+        assert (
+            client.put("/api/models/options", json={"id": "mini", "options": {"revision": " abc "}}).status_code == 200
+        )
         rows = {m["id"]: m for m in client.get("/api/models").json()["models"]}
     assert rows["mini"]["revision"] == "abc" and rows["small"]["revision"] is None
 
 
 def test_revision_reaches_cached_check_and_download_but_not_child_flags(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(catalog, "is_downloaded",
-                        lambda variant, cache_dir, revision=None: calls.append(("check", revision)) or None)
+    monkeypatch.setattr(
+        catalog, "is_downloaded", lambda variant, cache_dir, revision=None: calls.append(("check", revision)) or None
+    )
 
     class Finished:
         @staticmethod
@@ -920,9 +1034,12 @@ def test_revision_reaches_cached_check_and_download_but_not_child_flags(tmp_path
     runner.options = {"revision": "refs/pr/5"}
     runner._build_command = lambda *args: ["fake"]
     runner._models_entry = lambda media: (None, [])
-    monkeypatch.setattr("basal_ui.fleet.subprocess.Popen",
-                        lambda *args, **kwargs: SimpleNamespace(stdout=__import__("io").StringIO(), poll=lambda: None,
-                                                                returncode=None, pid=0))
+    monkeypatch.setattr(
+        "basal_ui.fleet.subprocess.Popen",
+        lambda *args, **kwargs: SimpleNamespace(
+            stdout=__import__("io").StringIO(), poll=lambda: None, returncode=None, pid=0
+        ),
+    )
     monkeypatch.setattr("basal_ui.fleet.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
     runner._start(assessment, runner.gen, cache_dir=tmp_path)
     assert calls == [("check", "refs/pr/5"), ("download", "refs/pr/5")]

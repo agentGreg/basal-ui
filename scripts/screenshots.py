@@ -5,6 +5,7 @@ captures five views in Chromium (1280x800 at 2x, the default light theme), then 
 in Model manager, ask a question in the Playground) and converts it to a GIF with ffmpeg. `make screenshots`; needs
 the e2e extra, `playwright install chromium` and ffmpeg on PATH. Exits non-zero on any failure.
 """
+
 import os
 import shutil
 import signal
@@ -25,12 +26,23 @@ MODEL = "Remek/basal-2.0-mini"
 LOAD_TIMEOUT_S = 600
 GIF_LIMIT = 3 * 2**20
 # the Playground request of the e2e gate (tests/e2e/support.py CHOICE)
-CHOICE = {"state": "Klient pisze, że karta została zablokowana po trzech błędnych PIN-ach i prosi o odblokowanie.",
-          "questions": {"dept": {"type": "choice", "instructions": "Do którego działu skierować zgłoszenie?",
-                                 "criteria": {"cards": "karty płatnicze", "loans": "kredyty",
-                                              "online": "bankowość internetowa"}}}}
-SHOTS = (("overview", "overview"), ("models", "models"), ("playground", "playground"),
-         ("manager", "model-manager"), ("api", "api-server"))
+CHOICE = {
+    "state": "Klient pisze, że karta została zablokowana po trzech błędnych PIN-ach i prosi o odblokowanie.",
+    "questions": {
+        "dept": {
+            "type": "choice",
+            "instructions": "Do którego działu skierować zgłoszenie?",
+            "criteria": {"cards": "karty płatnicze", "loans": "kredyty", "online": "bankowość internetowa"},
+        }
+    },
+}
+SHOTS = (
+    ("overview", "overview"),
+    ("models", "models"),
+    ("playground", "playground"),
+    ("manager", "model-manager"),
+    ("api", "api-server"),
+)
 READY = "id => (statusCache?.models || []).some(m => m.id === id && m.state === 'ready')"
 
 
@@ -54,8 +66,7 @@ def wait_ready(model_id):
 
 def start(tmp):
     env = {**os.environ, "BASAL_UI_CONFIG": str(Path(tmp) / "settings.json"), "HF_HUB_OFFLINE": "1"}
-    proc = subprocess.Popen([sys.executable, "-m", "basal_ui", "--port", str(PORT)], env=env,
-                            start_new_session=True)
+    proc = subprocess.Popen([sys.executable, "-m", "basal_ui", "--port", str(PORT)], env=env, start_new_session=True)
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         if proc.poll() is not None:
@@ -113,8 +124,11 @@ def screenshots(browser):
 
 def tour(browser, tmp):
     videos = Path(tmp) / "video"
-    context = browser.new_context(viewport={"width": 960, "height": 600}, record_video_dir=str(videos),
-                                  record_video_size={"width": 960, "height": 600})
+    context = browser.new_context(
+        viewport={"width": 960, "height": 600},
+        record_video_dir=str(videos),
+        record_video_size={"width": 960, "height": 600},
+    )
     page = open_page(context)
     page.wait_for_timeout(1500)
     show(page, "models")
@@ -138,9 +152,20 @@ def tour(browser, tmp):
 def gif(webm):
     out = OUT / "tour.gif"
     for fps, width in ((10, 960), (8, 800)):
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(webm), "-vf",
-                        f"fps={fps},scale={width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
-                        str(out)], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(webm),
+                "-vf",
+                f"fps={fps},scale={width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                str(out),
+            ],
+            check=True,
+        )
         if out.stat().st_size < GIF_LIMIT:
             print(f"docs/images/tour.gif ({out.stat().st_size / 2**20:.1f} MiB, {fps} fps, {width} px)")
             return

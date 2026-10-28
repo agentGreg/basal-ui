@@ -1,10 +1,11 @@
 """Check the latest basal-ui and engine releases on GitHub with a small process-local cache."""
+
 import threading
 import time
 
 import httpx
 
-from .engine import ENGINE_REPO
+from .engine import ENGINE_REPO as ENGINE_REPO  # re-exported: app.py and tests read updates.ENGINE_REPO
 
 UI_REPO = "pawelkiszczak/basal-ui"
 _TTL = 6 * 60 * 60

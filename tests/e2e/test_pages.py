@@ -1,5 +1,6 @@
 """The pages of basal-ui in Chromium (Playwright, basal[e2e]): every view renders without a script error, the
 Playground builds, sends and renders every question type, the load options dialog, Batch, History, Logs and Inspect."""
+
 import json
 import re
 
@@ -9,8 +10,18 @@ from tests.e2e.support import CHOICE, EXAMPLES, advanced_requests
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="install basal[e2e] and run: playwright install chromium")
 
-VIEWS = {"backends": "Backends", "overview": "Overview", "models": "Models", "manager": "Model manager", "playground": "Playground",
-         "batch": "Batch", "inspect": "Inspect", "api": "API server", "history": "History", "logs": "Logs"}
+VIEWS = {
+    "backends": "Backends",
+    "overview": "Overview",
+    "models": "Models",
+    "manager": "Model manager",
+    "playground": "Playground",
+    "batch": "Batch",
+    "inspect": "Inspect",
+    "api": "API server",
+    "history": "History",
+    "logs": "Logs",
+}
 WAIT = 120_000  # ms: a decision of a large model, a model start
 
 
@@ -30,8 +41,14 @@ def page(browser, ui, text_model):
     tab = context.new_page()
     errors = []
     tab.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
-    tab.on("console", lambda m: errors.append(f"console: {m.text}") if m.type == "error"
-           and "Failed to load resource" not in m.text else None)  # 4xx answers the page expects are not errors
+    tab.on(
+        "console",
+        lambda m: (
+            errors.append(f"console: {m.text}")
+            if m.type == "error" and "Failed to load resource" not in m.text
+            else None
+        ),
+    )  # 4xx answers the page expects are not errors
     tab.set_default_timeout(WAIT)
     tab.goto(ui.url + "/#overview")
     tab.wait_for_function("() => typeof statusCache !== 'undefined' && statusCache && modelData.length > 0")
@@ -85,6 +102,7 @@ def test_visible_ui_text_meets_wcag_contrast_in_both_themes(page):
             return ratio + .01 < required ? [{text: el.textContent.trim().slice(0,60), ratio, required, fg: style.color, bg}] : [];
           });
         }""")
+
     for theme in ("light", "dark"):
         page.evaluate("theme => applyTheme(theme)", theme)
         page.wait_for_timeout(300)
@@ -122,36 +140,55 @@ def test_the_playground_builds_sends_and_renders_each_question_type(page, text_m
 def test_playground_request_names_media_and_history_replay_are_lossless_until_send(page, text_model):
     view(page, "playground")
     page.evaluate("() => { addQuestion(); addQuestion(); }")
-    assert page.evaluate("() => [...document.querySelectorAll('.q-name')].slice(-2).map(x => x.value)") == ["question2", "question3"]
+    assert page.evaluate("() => [...document.querySelectorAll('.q-name')].slice(-2).map(x => x.value)") == [
+        "question2",
+        "question3",
+    ]
 
     page.evaluate("() => { document.querySelector('.q-name').value = '__proto__'; }")
     assert page.evaluate("() => Object.hasOwn(buildRequest().questions, '__proto__')")
 
-    request = {"model": text_model["id"], "state": "inspect", "questions": {"q": {"type": "choice", "instructions": "Choose",
-               "criteria": {"a": None, "b": None}}}, "media": [{"type": "image", "data": "aGVsbG8="}], "detail": "high"}
+    request = {
+        "model": text_model["id"],
+        "state": "inspect",
+        "questions": {"q": {"type": "choice", "instructions": "Choose", "criteria": {"a": None, "b": None}}},
+        "media": [{"type": "image", "data": "aGVsbG8="}],
+        "detail": "high",
+    }
     page.evaluate("r => setRequest(r)", request)
     assert page.evaluate("() => selectedModel") == text_model["id"]
-    assert page.evaluate("() => [selectedMedia.length, $('#mediaDetail').value, buildRequest().media[0].data]") == [1, "high", "aGVsbG8="]
+    assert page.evaluate("() => [selectedMedia.length, $('#mediaDetail').value, buildRequest().media[0].data]") == [
+        1,
+        "high",
+        "aGVsbG8=",
+    ]
     unsupported = {**request, "vendor_extension": {"keep": True}}
     page.evaluate("r => setRequest(r)", unsupported)
     assert page.locator("#editJsonToggle").is_checked()
     sync_api.expect(page.locator("#mediaError")).to_be_visible()
     assert page.evaluate("() => JSON.parse($('#requestJson').value).vendor_extension") == {"keep": True}
     assert page.evaluate("() => selectedMedia.length") == 0
-    for unsupported_value in ({"media": "opaque"}, {"media": [{"type": "image", "data": "aGVsbG8=", "name": "x.png"}]},
-                              {"lang": "fr"}):
+    for unsupported_value in (
+        {"media": "opaque"},
+        {"media": [{"type": "image", "data": "aGVsbG8=", "name": "x.png"}]},
+        {"lang": "fr"},
+    ):
         page.evaluate("([base,extra]) => setRequest({...base,...extra})", [request, unsupported_value])
         assert page.locator("#editJsonToggle").is_checked()
         assert page.evaluate("() => JSON.parse($('#requestJson').value)") == {**request, **unsupported_value}
 
-    page.evaluate("r => setRequest(r)", {"state": "inspect", "questions": {"q": request["questions"]["q"],
-                  "q2": request["questions"]["q"]}})
+    page.evaluate(
+        "r => setRequest(r)",
+        {"state": "inspect", "questions": {"q": request["questions"]["q"], "q2": request["questions"]["q"]}},
+    )
     page.locator(".q-name").first.fill("same")
     page.locator(".q-name").nth(1).fill("same")
-    decide_calls=[]
+    decide_calls = []
+
     def reject_decision(route):
         decide_calls.append(1)
         route.fulfill(status=500, body="unexpected send")
+
     page.route("**/api/decide", reject_decision)
     page.click("#sendButton")
     sync_api.expect(page.locator("#decideError")).to_contain_text("non-blank and unique")
@@ -162,19 +199,23 @@ def test_playground_request_names_media_and_history_replay_are_lossless_until_se
     page.click("#sendButton")
     sync_api.expect(page.locator("#decideError")).to_contain_text("non-blank and unique")
     assert not decide_calls
-    preset_calls=[]
+    preset_calls = []
+
     def count_presets(route):
-        if route.request.method=="PUT":
+        if route.request.method == "PUT":
             preset_calls.append(route.request.method)
         route.continue_()
+
     page.route("**/api/presets", count_presets)
     page.click("#saveRequestPreset")
     page.fill("#presetName", "invalid")
     page.click("#presetNameSave")
     assert "PUT" not in preset_calls
 
-    page.evaluate("([model,r]) => replayRequest({model,replay_request:r,replay_error:null})",
-                  [text_model["id"], {"state": "replayed", "questions": {"q": request["questions"]["q"]}}])
+    page.evaluate(
+        "([model,r]) => replayRequest({model,replay_request:r,replay_error:null})",
+        [text_model["id"], {"state": "replayed", "questions": {"q": request["questions"]["q"]}}],
+    )
     assert page.locator("#stateInput").input_value() == "replayed"
     assert page.locator("#results article.answer").count() == 0
     assert not decide_calls
@@ -232,13 +273,13 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
         translated = page.evaluate("s => ts(s.why, s.why_code, s.why_params)", card)
         assert translated != card["why"]
         sync_api.expect(page.locator("#suggested .why").filter(has_text=translated).first).to_be_visible()
-    assert "obrazy i audio" in page.evaluate(
-        "s => ts(s.why, s.why_code, s.why_params)", fixture["multimodal"])
-    assert "--mlx-packed" in page.evaluate(
-        "s => ts(s.why, s.why_code, s.why_params)", fixture["packed"])
-    assert page.evaluate("""() => ts('mini in bf16: needs about — of a 8.6 GB budget',
-      'suggest_recommended_budget', {tier: 'mini', label: 'bf16', estimate: null, memory: 8.6})""") \
-      == "mini w formacie bf16: potrzeba około — z budżetu 8.6 GB"
+    assert "obrazy i audio" in page.evaluate("s => ts(s.why, s.why_code, s.why_params)", fixture["multimodal"])
+    assert "--mlx-packed" in page.evaluate("s => ts(s.why, s.why_code, s.why_params)", fixture["packed"])
+    assert (
+        page.evaluate("""() => ts('mini in bf16: needs about — of a 8.6 GB budget',
+      'suggest_recommended_budget', {tier: 'mini', label: 'bf16', estimate: null, memory: 8.6})""")
+        == "mini w formacie bf16: potrzeba około — z budżetu 8.6 GB"
+    )
 
     options_target = page.evaluate("""async () => {
       for (const m of modelData.filter(x => x.runnable)) {
@@ -252,8 +293,9 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
     page.click("#allModelsTab")
     page.locator(f'#modelsTable .options-model[data-id="{options_target["id"]}"]').click()
     sync_api.expect(page.locator("#loadOptions")).to_be_visible()
-    sync_api.expect(page.locator("#loadOptions .option-mode.unavailable small")
-                    .filter(has_text=options_target["text"]).first).to_be_visible()
+    sync_api.expect(
+        page.locator("#loadOptions .option-mode.unavailable small").filter(has_text=options_target["text"]).first
+    ).to_be_visible()
     assert options_target["text"] != options_target["mode"]["reason"]
 
     page.evaluate("localStorage.setItem('basal-ui.lang', 'en')")
@@ -268,8 +310,11 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
     sync_api.expect(page.locator("#suggested .why").filter(has_text=suggestion["why"]).first).to_be_visible()
     page.click("#allModelsTab")
     page.locator(f'#modelsTable .options-model[data-id="{options_target["id"]}"]').click()
-    sync_api.expect(page.locator("#loadOptions .option-mode.unavailable small")
-                    .filter(has_text=options_target["mode"]["reason"]).first).to_be_visible()
+    sync_api.expect(
+        page.locator("#loadOptions .option-mode.unavailable small")
+        .filter(has_text=options_target["mode"]["reason"])
+        .first
+    ).to_be_visible()
 
 
 UNTRANSLATED = """() => {  // visible text and labels that are a key of the Polish dictionary, shown in English
@@ -320,6 +365,7 @@ def test_polish_ui_leaves_no_frontend_text_in_english(page, text_model):
     assert not {k: v for k, v in left.items() if v}, left
     assert page.locator(".side-nav [data-view='manager']").inner_text().strip() == "Menedżer modeli"
 
+
 def test_model_manager_disk_rows_stack_without_overflow_at_mobile_width(page, text_model):
     page.set_viewport_size({"width": 390, "height": 844})
     view(page, "manager")
@@ -362,15 +408,24 @@ def test_media_example_loads_with_a_notice_and_draws_element_probabilities(page,
     assert overlay.locator("rect").count() == 4
     assert "checkout.png" in overlay.get_attribute("aria-label")
     sync_api.expect(overlay.locator("text").first).to_have_text("1 · 70.0%")
-    page.select_option("#examples", str(page.evaluate("() => examples.findIndex(e => e.id === 'media-04-voice-complaint')")))
+    page.select_option(
+        "#examples", str(page.evaluate("() => examples.findIndex(e => e.id === 'media-04-voice-complaint')"))
+    )
     sync_api.expect(page.locator("#mediaItems audio.media-audio")).to_have_count(1)
     assert page.evaluate("() => selectedMedia.map(m => m.file.name)") == ["complaint_pl.wav"]
 
 
-RUBRIC = {"state": "Od wczoraj nie mogę zalogować się do aplikacji.",
-          "questions": {"category": {"type": "classify", "option_keys": "show",
-                                     "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}]},
-                        "dept": {"type": "choice", "instructions": "Który dział?", "criteria": ["it", "sales"]}}}
+RUBRIC = {
+    "state": "Od wczoraj nie mogę zalogować się do aplikacji.",
+    "questions": {
+        "category": {
+            "type": "classify",
+            "option_keys": "show",
+            "labels": [{"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing"}],
+        },
+        "dept": {"type": "choice", "instructions": "Który dział?", "criteria": ["it", "sales"]},
+    },
+}
 
 
 def test_the_builder_keeps_what_it_cannot_write_in_its_own_form(page):
@@ -386,7 +441,10 @@ def test_the_builder_keeps_what_it_cannot_write_in_its_own_form(page):
     assert built["dept"]["criteria"] == ["it", "sales"] and "option_keys" not in built["dept"]
     cards.nth(0).locator('[data-f="labels"]').fill("bug: błąd aplikacji\nbilling: płatności\nother")
     assert page.evaluate("() => buildRequest().questions.category.labels") == [
-        {"name": "bug", "rubric": "błąd aplikacji"}, {"name": "billing", "rubric": "płatności"}, {"name": "other"}]
+        {"name": "bug", "rubric": "błąd aplikacji"},
+        {"name": "billing", "rubric": "płatności"},
+        {"name": "other"},
+    ]
 
 
 def test_no_automation_claim_where_the_certificate_does_not_hold(page, text_model):
@@ -438,8 +496,12 @@ def test_edit_json_rebuilds_the_builder_and_keeps_invalid_json_open(page):
     sync_api.expect(page.locator("#editJsonToggle")).to_be_checked()
     sync_api.expect(page.locator("#editJsonArea")).to_be_visible()
     sync_api.expect(page.locator("#mediaError")).to_contain_text("Invalid request JSON")
-    request = {"state": "builder from edited JSON", "questions": {"priority": {
-        "type": "choice", "criteria": ["low", "high"]}}, "facts": "auto", "lang": "pl"}
+    request = {
+        "state": "builder from edited JSON",
+        "questions": {"priority": {"type": "choice", "criteria": ["low", "high"]}},
+        "facts": "auto",
+        "lang": "pl",
+    }
     page.fill("#requestJson", json.dumps(request))
     page.uncheck("#editJsonToggle")
     sync_api.expect(page.locator("#builder")).to_be_visible()
@@ -481,7 +543,8 @@ def test_safety_strip_and_inspect_button_on_a_decision(page, ui, text_model):
     page.click("#sendButton")
     strip = page.locator("#results .chips.safety")
     sync_api.expect(strip.first).to_contain_text(
-        re.compile("Automatable|Below the certified|No certificate|uncalibrated|calibrated"))
+        re.compile("Automatable|Below the certified|No certificate|uncalibrated|calibrated")
+    )
     sync_api.expect(page.locator("#inspectDecision")).to_be_visible()
     if "context" in (ui.model(text_model["id"])["entry"] or {}):  # the meter needs the engine's context policy
         sync_api.expect(page.locator("#results")).to_contain_text("Longest prompt")
@@ -500,8 +563,9 @@ def test_the_load_options_dialog_lists_the_modes(page, text_model):
     sync_api.expect(dialog.locator("#optExperimentalNote")).not_to_be_empty()
     for key, modes in (("gemma_attn", "fast"), ("eager_attn", "eager"), ("merge", "fast"), ("ple_offload", "eager")):
         field = dialog.locator(f'[data-opt="{key}"]')  # each switch shows for the backend that reads it
-        assert modes in field.get_attribute("data-modes").split() and ("eager" in field.get_attribute(
-            "data-modes").split()) == (modes == "eager")
+        assert modes in field.get_attribute("data-modes").split() and (
+            "eager" in field.get_attribute("data-modes").split()
+        ) == (modes == "eager")
         if text_model["mode"] not in field.get_attribute("data-modes").split():
             sync_api.expect(field).to_be_hidden()
     page.click("#optionsCancel")
@@ -567,7 +631,10 @@ SWITCHED = """lang => typeof LANG !== 'undefined' && typeof statusCache !== 'und
 def test_playground_builder_draft_survives_language_changes_once(page, text_model):
     view(page, "playground")
     request = {
-        "model": text_model["id"], "state": "Review this order", "facts": "auto", "lang": "en",
+        "model": text_model["id"],
+        "state": "Review this order",
+        "facts": "auto",
+        "lang": "en",
         "questions": {
             "decision": {"type": "choice", "instructions": "What next?", "criteria": {"buy": "Buy", "wait": "Wait"}},
             "risk": {"type": "noul", "instructions": "Is it risky?"},
@@ -577,19 +644,19 @@ def test_playground_builder_draft_survives_language_changes_once(page, text_mode
     page.evaluate("r => setRequest(r)", request)
     page.locator('[data-lang-choice="pl"]').click()
     page.wait_for_function(SWITCHED, arg="pl")
-    assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
-        text_model["id"], "Review this order", True, "en"
-    ]
-    assert page.evaluate("() => JSON.parse(buildRequest().questions.decision.criteria ? JSON.stringify(buildRequest().questions.decision.criteria) : '{}')") == {
-        "buy": "Buy", "wait": "Wait"
-    }
+    assert page.evaluate(
+        "() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]"
+    ) == [text_model["id"], "Review this order", True, "en"]
+    assert page.evaluate(
+        "() => JSON.parse(buildRequest().questions.decision.criteria ? JSON.stringify(buildRequest().questions.decision.criteria) : '{}')"
+    ) == {"buy": "Buy", "wait": "Wait"}
     assert page.evaluate("() => selectedMedia.length") == 0
     sync_api.expect(page.locator("#mediaError")).to_contain_text("dołącz media ponownie")
     page.locator('[data-lang-choice="en"]').click()
     page.wait_for_function(SWITCHED, arg="en")
-    assert page.evaluate("() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]") == [
-        text_model["id"], "Review this order", True, "en"
-    ]
+    assert page.evaluate(
+        "() => [selectedModel, $('#stateInput').value, $('#factsToggle').checked, $('#langSelect').value]"
+    ) == [text_model["id"], "Review this order", True, "en"]
     assert page.evaluate("() => buildRequest().questions.decision.criteria") == {"buy": "Buy", "wait": "Wait"}
     assert page.evaluate("() => Object.keys(buildRequest().questions)") == ["decision", "risk"]
     assert page.evaluate("() => selectedMedia.length") == 0
@@ -618,14 +685,22 @@ def test_playground_edit_json_draft_keeps_invalid_text(page):
 def test_playground_incomplete_builder_draft_survives_language_switch_once(page, draft_case):
     view(page, "playground")
     if draft_case == "blank-name":
-        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('first', {type:'choice', criteria:{yes:'Yes'}}); $('.q-name').value = ''; }")
+        page.evaluate(
+            "() => { $('#questions').innerHTML = ''; addQuestion('first', {type:'choice', criteria:{yes:'Yes'}}); $('.q-name').value = ''; }"
+        )
     elif draft_case == "duplicate-names":
-        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('same', {type:'choice', criteria:{yes:'Yes'}}); addQuestion('same', {type:'noul'}); }")
+        page.evaluate(
+            "() => { $('#questions').innerHTML = ''; addQuestion('same', {type:'choice', criteria:{yes:'Yes'}}); addQuestion('same', {type:'noul'}); }"
+        )
     elif draft_case == "invalid-tools":
-        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('tools', {type:'tool', tools:[{name:'lookup'}]}); }")
+        page.evaluate(
+            "() => { $('#questions').innerHTML = ''; addQuestion('tools', {type:'tool', tools:[{name:'lookup'}]}); }"
+        )
         page.fill('.question [data-f="tools"]', '{"unfinished":')
     else:
-        page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('schema', {type:'extract', schema:{type:'object', properties:{}}}); }")
+        page.evaluate(
+            "() => { $('#questions').innerHTML = ''; addQuestion('schema', {type:'extract', schema:{type:'object', properties:{}}}); }"
+        )
         page.fill('.question [data-f="schema"]', '{"unfinished":')
 
     page.locator('[data-lang-choice="pl"]').click()
@@ -648,7 +723,9 @@ def test_playground_incomplete_builder_draft_survives_language_switch_once(page,
 
 def test_playground_language_draft_preserves_blank_act_matrix_rows(page):
     view(page, "playground")
-    page.evaluate("() => { $('#questions').innerHTML = ''; addQuestion('decision', {type:'act', criteria:{buy:'Buy', wait:'Wait'}, costs:{wrong:10}}); }")
+    page.evaluate(
+        "() => { $('#questions').innerHTML = ''; addQuestion('decision', {type:'act', criteria:{buy:'Buy', wait:'Wait'}, costs:{wrong:10}}); }"
+    )
     page.locator('.question [data-cost-mode="matrix"]').click()
     page.locator(".question .cost-action").nth(0).fill("")
     page.locator(".question .cost-action").nth(1).fill("custom")
@@ -658,10 +735,9 @@ def test_playground_language_draft_preserves_blank_act_matrix_rows(page):
     page.locator('[data-lang-choice="pl"]').click()
     page.wait_for_function(SWITCHED, arg="pl")
     assert page.locator(".question .cost-action").evaluate_all("(els) => els.map(el => el.value)") == ["", "custom"]
-    assert page.locator(".question tbody tr").evaluate_all("(rows) => rows.map(row => [...row.querySelectorAll('.cost-cell')].map(cell => cell.value))") == [
-        ["0", "10"], ["17", "23"]
-    ]
-
+    assert page.locator(".question tbody tr").evaluate_all(
+        "(rows) => rows.map(row => [...row.querySelectorAll('.cost-cell')].map(cell => cell.value))"
+    ) == [["0", "10"], ["17", "23"]]
 
 
 def test_history_and_logs_views(page, ui, text_model):
@@ -712,34 +788,64 @@ def test_the_inspect_handoff_names_every_difference_and_refuses_what_it_cannot_e
                                entry: {...served.entry, orders: 2, temperature_per_prim: {choice: 1.2}}}]};
       try { return inspectHandoff({model, ...request}); } finally { statusCache = saved; }
     }"""
-    mixed = {"state": "s", "think": "auto", "early_exit": "0.99", "facts": "auto", "questions": {
-        "dept": {"type": "choice", "criteria": {"a": "A", "b": "B"}},
-        "intent": {"type": "classify", "labels": {"x": "X", "y": "Y"}}}}
+    mixed = {
+        "state": "s",
+        "think": "auto",
+        "early_exit": "0.99",
+        "facts": "auto",
+        "questions": {
+            "dept": {"type": "choice", "criteria": {"a": "A", "b": "B"}},
+            "intent": {"type": "classify", "labels": {"x": "X", "y": "Y"}},
+        },
+    }
     handoff = page.evaluate(probe, [text_model["id"], mixed])
     assert list(handoff["body"]["questions"]) == ["dept"] and handoff["body"]["facts"] == "auto"
     assert not {"model", "think", "early_exit"} & set(handoff["body"])
     notes = " | ".join(handoff["notes"])
-    for part in ("intent: task questions are left out", "engine: served mlx, explained eager on mps",
-                 "option orders: served 2, explained 1", "calibration: the served temperatures differ",
-                 "thinking: explained without the reasoning", "early exit 0.99"):
+    for part in (
+        "intent: task questions are left out",
+        "engine: served mlx, explained eager on mps",
+        "option orders: served 2, explained 1",
+        "calibration: the served temperatures differ",
+        "thinking: explained without the reasoning",
+        "early exit 0.99",
+    ):
         assert part in notes, notes
-    assert "remove the media to inspect this request" in page.evaluate(
-        probe, [text_model["id"], {**mixed, "media": [{"type": "image"}]}])["blocked"]
+    assert (
+        "remove the media to inspect this request"
+        in page.evaluate(probe, [text_model["id"], {**mixed, "media": [{"type": "image"}]}])["blocked"]
+    )
     only_tasks = {"state": "s", "questions": {"intent": mixed["questions"]["intent"]}}
     assert "only task questions" in page.evaluate(probe, [text_model["id"], only_tasks])["blocked"]
-    other = page.evaluate("""([model, request]) => {
+    other = page.evaluate(
+        """([model, request]) => {
       const saved = statusCache; statusCache = {...saved, inspect: {model: 'Remek/basal-1.0-max', state: 'ready'}};
       try { return inspectHandoff({model, ...request}); } finally { statusCache = saved; }
-    }""", [text_model["id"], mixed])
+    }""",
+        [text_model["id"], mixed],
+    )
     assert "the inspector runs Remek/basal-1.0-max" in other["blocked"]
 
 
 def test_the_tool_builder_sets_the_selection_of_several_tools(page):
     view(page, "playground")
     tools = [{"name": "refund", "description": "zwrot"}, {"name": "track", "description": "śledzenie"}]
-    request = {"state": "Chcę zwrotu i numeru przesyłki.", "questions": {"next": {
-        "type": "tool", "tools": tools, "multi": True, "objective": "f1", "min": 1, "max": 2,
-        "exclusive": ["refund"], "fallback": "track", "fallback_threshold": 0.3}}}
+    request = {
+        "state": "Chcę zwrotu i numeru przesyłki.",
+        "questions": {
+            "next": {
+                "type": "tool",
+                "tools": tools,
+                "multi": True,
+                "objective": "f1",
+                "min": 1,
+                "max": 2,
+                "exclusive": ["refund"],
+                "fallback": "track",
+                "fallback_threshold": 0.3,
+            }
+        },
+    }
     page.evaluate("r => setRequest(r)", request)
     assert page.evaluate("() => buildRequest().questions") == request["questions"]
     card = page.locator(".question").first
@@ -776,7 +882,9 @@ def test_the_calibration_view_imports_a_file_fitted_elsewhere(page, ui, text_mod
 def test_theme_toggle_persists_and_sets_the_document_theme(page):
     page.click('[data-theme-choice="dark"]')
     assert page.evaluate("() => [document.documentElement.dataset.theme, localStorage.getItem('basal-ui.theme')]") == [
-        "dark", "dark"]
+        "dark",
+        "dark",
+    ]
 
 
 def test_control_enter_sends_a_playground_decision(page):
@@ -837,7 +945,9 @@ def test_every_modal_opens_centred_in_the_viewport_from_any_view(page, text_mode
         page.evaluate(open_it, text_model["id"])
         page.wait_for_function("s => document.querySelector(s).open", arg=selector)
         page.wait_for_timeout(250)  # the model card and load options fade in
-        assert page.evaluate(CENTRED, selector) == {"open": True, "shown": True, "inside": True, "dx": 0, "dy": 0}, selector
+        assert page.evaluate(CENTRED, selector) == {"open": True, "shown": True, "inside": True, "dx": 0, "dy": 0}, (
+            selector
+        )
         page.evaluate("s => document.querySelector(s).close()", selector)
 
 
@@ -858,11 +968,21 @@ def test_options_dialog_keeps_its_header_and_actions_while_the_options_scroll(pa
     page.set_viewport_size({"width": size[0], "height": size[1]})
     page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
     sync_api.expect(page.locator("#loadOptions")).to_be_visible()
-    page.evaluate("() => document.querySelectorAll('#optionsForm details').forEach(d => { d.open = true; })")  # all expanded
+    page.evaluate(
+        "() => document.querySelectorAll('#optionsForm details').forEach(d => { d.open = true; })"
+    )  # all expanded
     page.wait_for_timeout(500)  # Basecoat animates a <details> opening
-    layout = page.evaluate(DIALOG_LAYOUT, ["#loadOptions", "#optionsForm", "#loadOptions > h3", "#loadOptions .dialog-actions"])
-    assert layout == {"inViewport": True, "centred": True, "dialogScrolls": False, "bodyScrolls": True,
-                      "fixedEnds": True, "footerShown": True}
+    layout = page.evaluate(
+        DIALOG_LAYOUT, ["#loadOptions", "#optionsForm", "#loadOptions > h3", "#loadOptions .dialog-actions"]
+    )
+    assert layout == {
+        "inViewport": True,
+        "centred": True,
+        "dialogScrolls": False,
+        "bodyScrolls": True,
+        "fixedEnds": True,
+        "footerShown": True,
+    }
     switches = [s.bounding_box() for s in page.locator("#optionsForm input[type=checkbox]:visible").all()]
     assert switches and all(s["height"] < 32 for s in switches)  # the compact field sizing leaves the switches alone
     page.click("#optionsCancel")
@@ -876,7 +996,9 @@ def test_model_card_keeps_its_header_while_the_card_scrolls(page, text_model):
     sync_api.expect(page.locator("#modelCardDialog")).to_be_visible()
     page.evaluate("() => document.querySelectorAll('#modelCardBody details').forEach(d => { d.open = true; })")
     page.wait_for_timeout(500)  # Basecoat animates a <details> opening
-    layout = page.evaluate(DIALOG_LAYOUT, ["#modelCardDialog", "#modelCardBody", ".model-card-head", ".model-card-head"])
+    layout = page.evaluate(
+        DIALOG_LAYOUT, ["#modelCardDialog", "#modelCardBody", ".model-card-head", ".model-card-head"]
+    )
     assert layout["inViewport"] and layout["centred"] and not layout["dialogScrolls"]
     assert layout["bodyScrolls"] and layout["fixedEnds"]
     title = page.locator("#modelCardTitle").inner_text()
@@ -884,13 +1006,16 @@ def test_model_card_keeps_its_header_while_the_card_scrolls(page, text_model):
     facts = page.locator(".model-card-facts dt").all_inner_texts()
     assert not {"Family", "Tier", "Port"} & set(facts)
 
+
 OPEN_SECTIONS = "() => [...document.querySelectorAll('#optionsForm details.option-section')].filter(d => d.open).map(d => d.dataset.section)"
 
 
 def test_options_sections_collapse_open_on_changes_and_remember_the_users_choice(page, text_model):
     page.evaluate("id => openLoadOptions(id, false, 'save')", text_model["id"])
     sync_api.expect(page.locator("#loadOptions")).to_be_visible()
-    sections = page.evaluate("() => [...document.querySelectorAll('#optionsForm details.option-section')].map(d => d.dataset.section)")
+    sections = page.evaluate(
+        "() => [...document.querySelectorAll('#optionsForm details.option-section')].map(d => d.dataset.section)"
+    )
     assert len(sections) >= 6 and "Batching" in sections
     assert page.evaluate(OPEN_SECTIONS) == ["Engine"]  # defaults: only the engine is open
     batch = page.locator('#optionsForm details[data-section="Batching"]')
@@ -924,7 +1049,6 @@ def test_model_card_long_blocks_start_collapsed(page, text_model):
     sync_api.expect(page.locator("#modelCardBody .model-card-facts")).to_be_visible()  # the facts stay in view
 
 
-
 def test_model_card_dialog_renders_api_card_data(page):
     page.evaluate("""() => {
       api = async () => ({
@@ -945,9 +1069,12 @@ def test_model_card_dialog_renders_api_card_data(page):
 
 def test_result_views_drop_descriptions_that_only_repeat_the_key(page):
     criteria = {"88412": "88412", "4": "[4] Payment status", "7": "[7]", "9": "[9]x", "none": "Nie podano numeru"}
-    page.evaluate("""c => renderResults({answers: {q: {type: 'choice', choice: '4', confidence: 0.6,
+    page.evaluate(
+        """c => renderResults({answers: {q: {type: 'choice', choice: '4', confidence: 0.6,
       probabilities: {'4': 0.6, '88412': 0.2, '7': 0.1, '9': 0.05, none: 0.05}}}},
-      {questions: {q: {type: 'choice', criteria: c}}})""", criteria)
+      {questions: {q: {type: 'choice', criteria: c}}})""",
+        criteria,
+    )
     sync_api.expect(page.locator("#results .answer .headline")).to_have_text("4 · Payment status")
     bars = page.locator("#results .prob > span").all_inner_texts()
     assert bars == ["4 · Payment status", "88412", "7", "9 · [9]x", "none · Nie podano numeru"]
@@ -981,20 +1108,26 @@ def test_overview_shows_the_inference_in_flight_and_idle_otherwise(page, text_mo
     sync_api.expect(rows.nth(1)).to_contain_text("3 / 10")
     assert rows.nth(1).locator(".progress span").get_attribute("style") == "width:30%"
     assert page.locator("#inferenceNow .status-dot.active").count() == 2
-    sync_api.expect(page.locator(f'#loadedModels .model-row:has-text("{text_model["id"]}") .status-dot.active')).to_have_count(1)
+    sync_api.expect(
+        page.locator(f'#loadedModels .model-row:has-text("{text_model["id"]}") .status-dot.active')
+    ).to_have_count(1)
     sync_api.expect(page.locator("#footerState")).to_contain_text("1 answering")
     assert "active" in page.locator("#footerDot").get_attribute("class")
     # basal-serve's counters not read yet (zeros) while basal-ui waits on requests: the requests are what is shown
-    page.evaluate("""m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
+    page.evaluate(
+        """m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
       x.inflight = [{source: 'playground', seconds: 0.5}, {source: 'playground', seconds: 0.2}];
       x.health = {reachable: true, running: 0, queued: 0}; s.jobs = {}; renderStatus(s); clearTimeout(pollTimer); }""",
-                  text_model["id"])
+        text_model["id"],
+    )
     sync_api.expect(rows).to_have_count(1)
     sync_api.expect(rows.first).to_contain_text("2 requests · Playground 2 · longest 0.5 s")
     assert "running" not in rows.first.inner_text()
-    page.evaluate("""m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
+    page.evaluate(
+        """m => { const s = structuredClone(statusCache); const x = s.models.find(y => y.id === m);
       x.inflight = []; x.health = {reachable: true, running: 0, queued: 0}; s.jobs = {}; renderStatus(s); clearTimeout(pollTimer); }""",
-                  text_model["id"])
+        text_model["id"],
+    )
     sync_api.expect(rows).to_have_count(1)
     sync_api.expect(rows.first).to_contain_text("Idle")
     assert page.locator(".status-dot.active").count() == 0
@@ -1011,15 +1144,19 @@ def test_overview_inference_after_a_decision_and_in_polish(page, ui, text_model)
     page.wait_for_function("() => typeof statusCache !== 'undefined' && statusCache?.models?.length > 0")
     page.evaluate(ANSWERING, [text_model["id"], True])
     rows = page.locator("#inferenceNow .inference-row")
-    sync_api.expect(rows.nth(0)).to_contain_text("2 w toku · 1 w kolejce · Playground 1 · Serwer API 1 · najdłuższe 2.4 s")
+    sync_api.expect(rows.nth(0)).to_contain_text(
+        "2 w toku · 1 w kolejce · Playground 1 · Serwer API 1 · najdłuższe 2.4 s"
+    )
     sync_api.expect(page.locator("#inference .section-index")).to_have_text("WNIOSKOWANIE")
 
 
 def test_a_running_batch_shows_on_the_overview(page, ui, text_model, tmp_path):
     many = tmp_path / "many.jsonl"
     many.write_text((EXAMPLES / "questions.jsonl").read_text() * 50)
-    ui.post("/api/batch", {"id": text_model["id"], "input": str(many), "output": str(tmp_path / "out.jsonl"),
-                           "concurrency": 1})
+    ui.post(
+        "/api/batch",
+        {"id": text_model["id"], "input": str(many), "output": str(tmp_path / "out.jsonl"), "concurrency": 1},
+    )
     try:
         view(page, "overview")
         row = page.locator("#inferenceNow .inference-row", has_text="Batch")
@@ -1062,15 +1199,21 @@ def test_load_preset_save_and_apply_round_trip(page, text_model):
 
 
 def test_revision_option_is_shown_as_a_loaded_model_chip(page, text_model):
-    page.evaluate("""id => {
+    page.evaluate(
+        """id => {
       const model = statusCache.models.find(x => x.id === id);
       model.options ||= {};
       model.options.revision = 'release-1';
       renderLoadedRows(statusCache.models);
-    }""", text_model["id"])
+    }""",
+        text_model["id"],
+    )
     sync_api.expect(page.locator("#loadedModels")).to_contain_text("revision release-1")
     view(page, "models")
-    page.evaluate("""id => renderModels({suggestions: [], models: modelData.map(m => m.id === id
-      ? {...m, revision: 'release-1'} : m)})""", text_model["id"])
+    page.evaluate(
+        """id => renderModels({suggestions: [], models: modelData.map(m => m.id === id
+      ? {...m, revision: 'release-1'} : m)})""",
+        text_model["id"],
+    )
     row = page.locator("#modelsTable tr", has=page.locator(f'[data-id="{text_model["id"]}"]'))
     sync_api.expect(row.first).to_contain_text("revision release-1")

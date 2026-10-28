@@ -1,6 +1,8 @@
 """Per-model statistics of the decisions basal-ui answered (playground, API, MCP) and the benchmark results, kept in
 <settings stem>.stats.json next to the settings file (merged under the settings lock: several basal-ui processes on
 one settings file add up)."""
+
+import contextlib
 import json
 import threading
 import time
@@ -48,9 +50,19 @@ def _percentile(samples, q):
 
 
 def _empty():
-    return {"requests": 0, "questions": 0, "errors": 0, "input_tokens": 0, "latency_ms_sum": 0.0,
-            "latency_samples": [], "best_prob_sum": 0.0, "best_prob_n": 0, "first_used": None, "last_used": None,
-            "by_type": {}}
+    return {
+        "requests": 0,
+        "questions": 0,
+        "errors": 0,
+        "input_tokens": 0,
+        "latency_ms_sum": 0.0,
+        "latency_samples": [],
+        "best_prob_sum": 0.0,
+        "best_prob_n": 0,
+        "first_used": None,
+        "last_used": None,
+        "by_type": {},
+    }
 
 
 def _read(path: Path) -> dict:
@@ -144,6 +156,7 @@ class Stats:
         def change(data):
             runs = data["benchmarks"].get(model_id, [])
             data["benchmarks"][model_id] = [*runs, result][-BENCHMARKS:]
+
         self._update_file(change)
 
     def snapshot(self) -> dict:
@@ -159,6 +172,7 @@ class Stats:
             return merged
 
         merged = settings._locked(read)()
+
         def avg(total, n):
             return total / n if n else None
 
@@ -170,9 +184,11 @@ class Stats:
                 "p50_ms": _percentile(e["latency_samples"], 0.5),
                 "p95_ms": _percentile(e["latency_samples"], 0.95),
                 "avg_best_prob": avg(e["best_prob_sum"], e["best_prob_n"]),
-                "by_type": {kind: {"questions": t["questions"],
-                                   "avg_best_prob": avg(t["best_prob_sum"], t["best_prob_n"])}
-                            for kind, t in e["by_type"].items()}}
+                "by_type": {
+                    kind: {"questions": t["questions"], "avg_best_prob": avg(t["best_prob_sum"], t["best_prob_n"])}
+                    for kind, t in e["by_type"].items()
+                },
+            }
         return {"models": models, "benchmarks": merged["benchmarks"]}
 
     def reset(self, model_id: str | None = None) -> None:
@@ -180,8 +196,13 @@ class Stats:
 
         def go():
             with self.lock:
-                previous = self.delta if model_id is None else {
-                    model_id: self.delta.pop(model_id)} if model_id in self.delta else {}
+                previous = (
+                    self.delta
+                    if model_id is None
+                    else {model_id: self.delta.pop(model_id)}
+                    if model_id in self.delta
+                    else {}
+                )
                 if model_id is None:
                     self.delta = {}
                 try:
@@ -200,7 +221,6 @@ class Stats:
         with self.write_lock:
             settings._locked(go)()
 
-
     def flush(self) -> None:
         with self.lock:
             if not self.delta:
@@ -209,10 +229,8 @@ class Stats:
 
     def _flush_loop(self):
         while not self._stop.wait(FLUSH_S):
-            try:
+            with contextlib.suppress(OSError):  # the delta is kept; the next flush retries
                 self.flush()
-            except OSError:
-                pass  # the delta is kept; the next flush retries
 
     def close(self) -> None:
         self._stop.set()

@@ -4,13 +4,13 @@ import time
 from pathlib import Path
 
 import pytest
+from basal import calibrate
 from fastapi.testclient import TestClient
 
-from basal import calibrate
 from basal_ui import calibration, catalog, engine, settings
 from basal_ui.app import create_app
-from basal_ui.fleet import Fleet, Runner
 from basal_ui.catalog import Variant
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
 from basal_ui.stats import Stats
@@ -18,10 +18,14 @@ from basal_ui.stats import Stats
 APPLE = Hardware("apple", "mps", 1024**4, None, None, frozenset({"mps"}))
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 MINI = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
-FITTED = {"prompt": 2, "temperature_per_prim": {"choice": 1.2}, "engine": "eager",
-          "fitted_on": {"decisions": 20, "per_type": {"choice": 20}},
-          "gates": {"automated_at": {"0.05": 0.4}},
-          "thresholds": {"0.05": {"per_type": {"choice": {"confidence": 0.93}}}}}
+FITTED = {
+    "prompt": 2,
+    "temperature_per_prim": {"choice": 1.2},
+    "engine": "eager",
+    "fitted_on": {"decisions": 20, "per_type": {"choice": 20}},
+    "gates": {"automated_at": {"0.05": 0.4}},
+    "thresholds": {"0.05": {"per_type": {"choice": {"confidence": 0.93}}}},
+}
 
 
 @pytest.fixture(autouse=True)
@@ -38,6 +42,7 @@ def config(tmp_path, monkeypatch):
                 self.state, self.base_url, self.ready_at = "ready", "http://127.0.0.1:1", time.time()
                 self.serve_snapshot = {"log_decisions": "", "max_len": 4096, "calibration": self._calibration(MINI)}
                 self.command = self._build_command(MINI, model, assessment, False, 1, settings.serve_settings())
+
     monkeypatch.setattr(Runner, "_start", start)
     return model
 
@@ -61,10 +66,21 @@ def test_calibrate_fits_against_a_temporary_child_lists_and_selects_the_file(tmp
             json.dump(FITTED, f)
 
     monkeypatch.setattr(calibrate, "main", fake_main)
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
-                  hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
-    app = create_app(catalog_fn=lambda **_: ([MINI], "test"), hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats,
-                     history=fleet.history)
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: HW,
+        stats=Stats(tmp_path / "s.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
+    app = create_app(
+        catalog_fn=lambda **_: ([MINI], "test"),
+        hardware_fn=lambda: HW,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     labelled = tmp_path / "labelled.jsonl"
     labelled.write_text('{"state": "s", "question": "q?", "options": ["a", "b"], "gold": 0}\n')
     with TestClient(app, base_url="http://127.0.0.1") as client:
@@ -99,8 +115,10 @@ def test_calibrate_fits_against_a_temporary_child_lists_and_selects_the_file(tmp
 
         runner = fleet.runners["mini"]
         assert runner.status()["restart_required"] is False
-        assert client.post("/api/calibrations/select", json={"id": "mini", "file": result["file"]}).json()[
-            "selected"] == result["file"]
+        assert (
+            client.post("/api/calibrations/select", json={"id": "mini", "file": result["file"]}).json()["selected"]
+            == result["file"]
+        )
         assert runner.status()["restart_required"] is True  # the running child has the shipped calibration
         command = runner._build_command(MINI, config, catalog.assess(MINI, HW), False, 1, settings.serve_settings())
         assert command[command.index("--calibration") + 1] == result["file"]
@@ -124,10 +142,21 @@ def test_shipped_calibration_resolution_uses_preset_and_layout(tmp_path):
 
 
 def test_calibrate_refuses_an_unknown_model_and_a_model_over_the_budget(tmp_path):
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
-                  hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
-    app = create_app(catalog_fn=lambda **_: ([MINI], "test"), hardware_fn=lambda: HW, fleet=fleet,
-                     stats=fleet.stats, history=fleet.history)
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: "cpu",
+        settings_mod=settings,
+        hardware_fn=lambda: HW,
+        stats=Stats(tmp_path / "s.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
+    app = create_app(
+        catalog_fn=lambda **_: ([MINI], "test"),
+        hardware_fn=lambda: HW,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
     labelled = tmp_path / "labelled.jsonl"
     labelled.write_text('{"state": "s", "question": "q?", "options": ["a", "b"], "gold": 0}\n')
     settings.update_memory({"reserve_bytes": 1024**4})  # nothing fits
@@ -135,14 +164,28 @@ def test_calibrate_refuses_an_unknown_model_and_a_model_over_the_budget(tmp_path
         assert client.post("/api/calibrate", json={"id": "nope", "input": str(labelled)}).status_code == 400
         over = client.post("/api/calibrate", json={"id": "mini", "input": str(labelled)})
         assert over.status_code == 409 and over.json()["detail"].startswith("over memory budget")
-        assert client.post("/api/calibrate", json={"id": "mini", "input": str(labelled), "targets": [2]}).status_code == 400
+        assert (
+            client.post("/api/calibrate", json={"id": "mini", "input": str(labelled), "targets": [2]}).status_code
+            == 400
+        )
 
 
 def make_app(tmp_path, hw=HW):
-    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: hw.platform, settings_mod=settings,
-                  hardware_fn=lambda: hw, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
-    return fleet, create_app(catalog_fn=lambda **_: ([MINI], "test"), hardware_fn=lambda: hw, fleet=fleet,
-                             stats=fleet.stats, history=fleet.history)
+    fleet = Fleet(
+        models_dir_fn=lambda: tmp_path,
+        platform_fn=lambda: hw.platform,
+        settings_mod=settings,
+        hardware_fn=lambda: hw,
+        stats=Stats(tmp_path / "s.json"),
+        history=History(tmp_path / "h.jsonl"),
+    )
+    return fleet, create_app(
+        catalog_fn=lambda **_: ([MINI], "test"),
+        hardware_fn=lambda: hw,
+        fleet=fleet,
+        stats=fleet.stats,
+        history=fleet.history,
+    )
 
 
 @pytest.mark.skipif(not engine.feature("adapter"), reason="needs an engine that takes --adapter (2.5.1)")
@@ -156,8 +199,16 @@ def test_shipped_calibration_context_prefers_running_options_to_saved_options(tm
     adapter_cal.write_text('{"temperature_per_prim":{"choice":1}}')
     model_cal = config / "CALIBRATION.qfirst.json"
     model_cal.write_text('{"temperature_per_prim":{"choice":2}}')
-    settings.set_load_options("mini", {"mode": "vllm", "revision": "saved-rev", "vllm_preset": "deterministic",
-                                        "layout": "canonical", "adapter": str(adapter)})
+    settings.set_load_options(
+        "mini",
+        {
+            "mode": "vllm",
+            "revision": "saved-rev",
+            "vllm_preset": "deterministic",
+            "layout": "canonical",
+            "adapter": str(adapter),
+        },
+    )
     fleet, app = make_app(tmp_path)
     settings.set_models_dir(str(tmp_path))
     (config / "config.json").write_text("{}")
@@ -165,12 +216,22 @@ def test_shipped_calibration_context_prefers_running_options_to_saved_options(tm
     with TestClient(app, base_url="http://127.0.0.1") as client:
         pending = client.get("/api/calibrations", params={"id": "mini"}).json()["shipped"]
         assert pending["file"] == str(adapter_cal)
-        assert pending["context"] == {"revision": "saved-rev", "mode": "vllm", "quant": None,
-                                       "preset": "deterministic", "layout": "canonical", "adapter": str(adapter),
-                                       "active": False}
+        assert pending["context"] == {
+            "revision": "saved-rev",
+            "mode": "vllm",
+            "quant": None,
+            "preset": "deterministic",
+            "layout": "canonical",
+            "adapter": str(adapter),
+            "active": False,
+        }
         runner = Runner(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings)
-        runner.state, runner.model, runner.mode, runner.options = "ready", "mini", "eager", {
-            "mode": "eager", "revision": "active-rev", "layout": "qfirst"}
+        runner.state, runner.model, runner.mode, runner.options = (
+            "ready",
+            "mini",
+            "eager",
+            {"mode": "eager", "revision": "active-rev", "layout": "qfirst"},
+        )
         fleet.runners["mini"] = runner
         active = client.get("/api/calibrations", params={"id": "mini"}).json()["shipped"]
         assert active["file"] == str(model_cal)
@@ -181,8 +242,12 @@ def test_shipped_calibration_context_prefers_running_options_to_saved_options(tm
         assert card["shipped_calibration"]["temperature_per_prim"] == {"choice": 2}
 
 
-TASK = {"state": "The parcel arrived broken.", "questions": {"intent": {
-    "type": "classify", "labels": {"complaint": "a complaint", "praise": "praise"}, "gold": "complaint"}}}
+TASK = {
+    "state": "The parcel arrived broken.",
+    "questions": {
+        "intent": {"type": "classify", "labels": {"complaint": "a complaint", "praise": "praise"}, "gold": "complaint"}
+    },
+}
 
 
 def test_a_bad_input_is_refused_with_its_line_before_any_model_starts(tmp_path, monkeypatch):
@@ -206,22 +271,48 @@ def test_task_questions_calibrate_with_the_engine_in_process_and_reserve_its_mem
         with open(out, "w") as f:
             json.dump({**FITTED, "task_thresholds": {"classify": {"0.05": 0.81}}}, f)
         if "--save-rows" in argv:
-            open(argv[argv.index("--save-rows") + 1], "w").write("{}\n")
+            Path(argv[argv.index("--save-rows") + 1]).write_text("{}\n")
+
     monkeypatch.setattr(calibrate, "main", fake_main)
     fleet, app = make_app(tmp_path, APPLE)
-    settings.set_load_options("mini", {"mode": "eager", "max_batch": 8, "deterministic": True,
-                                       "strict_calibration": True})
+    settings.set_load_options(
+        "mini", {"mode": "eager", "max_batch": 8, "deterministic": True, "strict_calibration": True}
+    )
     labelled = tmp_path / "labelled.jsonl"
     labelled.write_text(json.dumps(TASK) + "\n")
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        assert client.post("/api/calibrate", json={"id": "mini", "input": str(labelled), "advanced": {
-            "strict": True, "reference": "basal-1.5", "min_per_type": 12, "min_blend": 3, "min_family": 4,
-            "min_per_set": 5, "concurrency": 7, "compare": "none", "save_rows": True}}).status_code == 202
+        assert (
+            client.post(
+                "/api/calibrate",
+                json={
+                    "id": "mini",
+                    "input": str(labelled),
+                    "advanced": {
+                        "strict": True,
+                        "reference": "basal-1.5",
+                        "min_per_type": 12,
+                        "min_blend": 3,
+                        "min_family": 4,
+                        "min_per_set": 5,
+                        "concurrency": 7,
+                        "compare": "none",
+                        "save_rows": True,
+                    },
+                },
+            ).status_code
+            == 202
+        )
         job = wait_job(client)
         assert job["phase"] == "done", job["error"]
         argv = calls[0]
-        for flag, value in (("--reference", "basal-1.5"), ("--min-per-type", "12"), ("--min-blend", "3"),
-                            ("--min-family", "4"), ("--min-per-set", "5"), ("--concurrency", "7")):
+        for flag, value in (
+            ("--reference", "basal-1.5"),
+            ("--min-per-type", "12"),
+            ("--min-blend", "3"),
+            ("--min-family", "4"),
+            ("--min-per-set", "5"),
+            ("--concurrency", "7"),
+        ):
             assert argv[argv.index(flag) + 1] == value
         assert "--strict" in argv and "--no-calibration" in argv
         assert "--url" not in argv and argv[argv.index("--mode") + 1] == "eager"
@@ -251,8 +342,10 @@ def test_a_calibration_fitted_elsewhere_is_imported_selectable_and_warned_about(
         done = client.post("/api/calibrations/import", json={"id": "mini", "path": str(elsewhere)}).json()
         entry = next(f for f in done["files"] if f["file"] == done["file"])
         assert entry["imported"] and "fitted on Remek/basal-2.0-max" in entry["warning"]
-        assert client.get("/api/calibrations/report", params={"id": "mini", "file": done["file"]}).json()[
-            "report"] == "their report\n"
+        assert (
+            client.get("/api/calibrations/report", params={"id": "mini", "file": done["file"]}).json()["report"]
+            == "their report\n"
+        )
         selected = client.post("/api/calibrations/select", json={"id": "mini", "file": done["file"]}).json()
         assert selected["selected"] == done["file"]
 
@@ -288,8 +381,10 @@ def test_from_rows_report_only_skips_child_and_memory_reservation(tmp_path, monk
     rows.write_text('{"basal_calibrate_rows":1}\n')
     settings.update_memory({"reserve_bytes": 1024**4})  # nothing fits: a refit runs no engine, so no check
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        response = client.post("/api/calibrate", json={"id": "mini", "input": str(rows), "from_rows": True,
-                                                       "advanced": {"report_only": True}})
+        response = client.post(
+            "/api/calibrate",
+            json={"id": "mini", "input": str(rows), "from_rows": True, "advanced": {"report_only": True}},
+        )
         assert response.status_code == 202
         job = wait_job(client)
     assert job["phase"] == "done", job["error"]
@@ -305,13 +400,15 @@ def test_report_only_on_decision_input_uses_the_temporary_child_and_writes_no_fi
         calls.append(argv)
         children.append(set(fleet.temporary))
         print("report only")
+
     monkeypatch.setattr(calibrate, "main", fake_main)
     fleet, app = make_app(tmp_path)
     labelled = tmp_path / "labelled.jsonl"
     labelled.write_text('{"state": "s", "question": "q?", "options": ["a", "b"], "gold": 0}\n')
     with TestClient(app, base_url="http://127.0.0.1") as client:
-        response = client.post("/api/calibrate", json={"id": "mini", "input": str(labelled),
-                                                       "advanced": {"report_only": True}})
+        response = client.post(
+            "/api/calibrate", json={"id": "mini", "input": str(labelled), "advanced": {"report_only": True}}
+        )
         assert response.status_code == 202
         job = wait_job(client)
     assert job["phase"] == "done", job["error"]
@@ -329,8 +426,9 @@ def test_a_missing_compare_or_reference_file_is_refused_before_the_job(tmp_path,
     with TestClient(app, base_url="http://127.0.0.1") as client:
         for key in ("reference", "compare"):
             missing = str(tmp_path / f"{key}.json")
-            response = client.post("/api/calibrate", json={"id": "mini", "input": str(labelled),
-                                                           "advanced": {key: missing}})
+            response = client.post(
+                "/api/calibrate", json={"id": "mini", "input": str(labelled), "advanced": {key: missing}}
+            )
             assert response.status_code == 400
             assert response.json()["detail"] == f"{key}: {missing} is not a readable file"
         assert not fleet.temporary
@@ -340,6 +438,7 @@ def test_a_file_fitted_on_a_cache_snapshot_belongs_to_the_served_repo(tmp_path):
     """basal-ui passes basal-calibrate the snapshot directory; the file must name the repo id and commit, or
     basal-serve (served with --name <repo>) would call it another model's file and drop its thresholds."""
     from basal.server import calibration_mismatch
+
     snapshot = tmp_path / "models--Remek--basal-2.0-mini" / "snapshots" / "cb81b32ce89b"
     snapshot.mkdir(parents=True)
     path = tmp_path / "fitted.json"

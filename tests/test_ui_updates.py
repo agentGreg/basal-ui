@@ -39,7 +39,11 @@ def test_ui_and_engine_updates_newer_older_unsupported_errors_and_disabled(tmp_p
         assert d["url"] == "https://github.com/pawelkiszczak/basal-ui/releases/tag/v0.2.0"
         engine = d["engine"]
         assert (engine["version"], engine["latest"], engine["newer"], engine["latest_supported"]) == (
-            "2.4.1", "2.4.9", True, True)
+            "2.4.1",
+            "2.4.9",
+            True,
+            True,
+        )
         assert engine["experimental"] is False and engine["supported"] == SUPPORTED_RANGE
         monkeypatch.setattr(updates, "_cached", {})
         latest.update({updates.UI_REPO: "0.0.9", updates.ENGINE_REPO: "2.5.0"})
@@ -51,8 +55,11 @@ def test_ui_and_engine_updates_newer_older_unsupported_errors_and_disabled(tmp_p
         d = client.get("/api/updates").json()
         assert d["error"] == d["engine"]["error"] == "offline"
         client.put("/api/settings", json={"check_updates": False})
-        monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("disabled update check made a request")))
+        monkeypatch.setattr(
+            httpx,
+            "get",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("disabled update check made a request")),
+        )
         disabled = client.get("/api/updates").json()
         assert disabled["enabled"] is False and disabled["latest"] is None and disabled["error"] is None
         assert disabled["engine"]["latest"] is None and disabled["engine"]["version"] == "2.4.1"
@@ -69,6 +76,7 @@ def test_a_failed_check_is_retried_after_ten_minutes_not_six_hours(monkeypatch):
         if isinstance(reply, Exception):
             raise reply
         return Reply(reply)
+
     monkeypatch.setattr(httpx, "get", get)
     assert updates.latest(updates.UI_REPO) == (None, "offline")
     clock[0] += 9 * 60

@@ -3,6 +3,7 @@
 Every change is a read-modify-write of one JSON file under a thread and inter-process lock, written atomically (a private
 temp file renamed over the old one), so concurrent requests and processes never lose each other's changes. The file and
 the basal-serve key file hold SHA-256 digests of API keys only and are readable by the owner alone (0600)."""
+
 import functools
 import hashlib
 import json
@@ -15,8 +16,16 @@ from pathlib import Path
 
 from huggingface_hub.constants import HF_HUB_CACHE
 
-DEFAULT_SERVE = {"enabled": False, "host": "127.0.0.1", "port": 8000, "require_key": False,
-                 "max_len": 4096, "cors_origins": [], "log_decisions": "", "mcp": False}
+DEFAULT_SERVE = {
+    "enabled": False,
+    "host": "127.0.0.1",
+    "port": 8000,
+    "require_key": False,
+    "max_len": 4096,
+    "cors_origins": [],
+    "log_decisions": "",
+    "mcp": False,
+}
 KEY_NAME = re.compile(r"[\w][\w .-]{0,63}\Z")
 _internal_sha256 = None
 _LOCK = threading.RLock()
@@ -46,9 +55,11 @@ def _locked(fn):
             try:
                 if os.name == "posix":
                     import fcntl
+
                     fcntl.flock(fd, fcntl.LOCK_EX)
                 elif os.name == "nt":
                     import msvcrt
+
                     if os.fstat(fd).st_size == 0:
                         os.write(fd, b"\0")
                     os.lseek(fd, 0, os.SEEK_SET)
@@ -65,6 +76,7 @@ def _locked(fn):
                         msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
             finally:
                 os.close(fd)
+
     return wrapper
 
 
@@ -85,8 +97,7 @@ def set_check_updates(enabled: bool) -> bool:
 def presets() -> dict:
     value = load().get("presets")
     value = value if isinstance(value, dict) else {}
-    return {kind: value.get(kind) if isinstance(value.get(kind), dict) else {}
-            for kind in ("load", "request")}
+    return {kind: value.get(kind) if isinstance(value.get(kind), dict) else {} for kind in ("load", "request")}
 
 
 @_locked
@@ -209,8 +220,10 @@ def update_serve(patch: dict) -> dict:
     if type(value["max_len"]) is not int or not 512 <= value["max_len"] <= 131072:
         raise ValueError("max_len must be between 512 and 131072")
     origins = value["cors_origins"]
-    if not isinstance(origins, list) or any(not isinstance(origin, str) or
-            (origin != "*" and not re.fullmatch(r"https?://[^/\s]+", origin)) for origin in origins):
+    if not isinstance(origins, list) or any(
+        not isinstance(origin, str) or (origin != "*" and not re.fullmatch(r"https?://[^/\s]+", origin))
+        for origin in origins
+    ):
         raise ValueError("cors_origins must contain * or origins like https://example.com")
     log_path = value["log_decisions"]
     if not isinstance(log_path, str):
@@ -224,6 +237,7 @@ def update_serve(patch: dict) -> dict:
         value["log_decisions"] = str(path)
     if value["mcp"]:
         from basal.mcp_server import available
+
         message = available()
         if message:
             raise ValueError(message)
@@ -295,8 +309,10 @@ def memory_settings() -> dict:
     value = load().get("memory")
     value = value if isinstance(value, dict) else {}
     budget, reserve = value.get("budget_bytes"), value.get("reserve_bytes", DEFAULT_RESERVE)
-    return {"budget_bytes": budget if type(budget) is int else None,
-            "reserve_bytes": reserve if type(reserve) is int and reserve >= 0 else DEFAULT_RESERVE}
+    return {
+        "budget_bytes": budget if type(budget) is int else None,
+        "reserve_bytes": reserve if type(reserve) is int and reserve >= 0 else DEFAULT_RESERVE,
+    }
 
 
 @_locked
@@ -306,8 +322,9 @@ def update_memory(patch: dict) -> dict:
     if unknown:
         raise ValueError(f"unknown memory setting: {min(unknown)}")
     value = {**memory_settings(), **patch}
-    if value["budget_bytes"] is not None and (type(value["budget_bytes"]) is not int
-                                              or value["budget_bytes"] < 1024**3):
+    if value["budget_bytes"] is not None and (
+        type(value["budget_bytes"]) is not int or value["budget_bytes"] < 1024**3
+    ):
         raise ValueError("budget_bytes must be null or at least 1 GiB")
     if type(value["reserve_bytes"]) is not int or value["reserve_bytes"] < 0:
         raise ValueError("reserve_bytes must be a non-negative integer")
@@ -370,8 +387,12 @@ def create_key(name: str) -> tuple[dict, str]:
     if any(record.get("name") == name for record in records):
         raise ValueError(f"API key {name!r} already exists")
     secret = "bsl_" + secrets.token_urlsafe(32)
-    record = {"name": name, "sha256": hashlib.sha256(secret.encode()).hexdigest(),
-              "prefix": secret[:8], "created": int(time.time())}
+    record = {
+        "name": name,
+        "sha256": hashlib.sha256(secret.encode()).hexdigest(),
+        "prefix": secret[:8],
+        "created": int(time.time()),
+    }
     data["api_keys"] = [*records, record]
     save(data)
     _sync_key_files(data)
@@ -400,8 +421,7 @@ def _keys_path(pid: int | None = None) -> Path:
 
 
 def _user_records(data: dict) -> list[dict]:
-    return [{"name": record["name"], "sha256": record["sha256"], "admin": False}
-            for record in data.get("api_keys", [])]
+    return [{"name": record["name"], "sha256": record["sha256"], "admin": False} for record in data.get("api_keys", [])]
 
 
 def _alive(pid: int) -> bool:

@@ -330,11 +330,22 @@ and compatibility details are in the [HTTP API reference](API.md).
 
    ```python
    import httpx
-   r = httpx.post("http://127.0.0.1:8000/v1/systemone", headers={"Authorization": "Bearer <copied key>"}, json={
-       "model": "Remek/basal-2.0-mini-MLX-8bit",
-       "state": "A user asks for a refund.",
-       "questions": {"route": {"type": "choice", "instructions": "Which team?",
-                               "criteria": {"billing": "Billing", "support": "Support"}}}})
+
+   r = httpx.post(
+       "http://127.0.0.1:8000/v1/systemone",
+       headers={"Authorization": "Bearer <copied key>"},
+       json={
+           "model": "Remek/basal-2.0-mini-MLX-8bit",
+           "state": "A user asks for a refund.",
+           "questions": {
+               "route": {
+                   "type": "choice",
+                   "instructions": "Which team?",
+                   "criteria": {"billing": "Billing", "support": "Support"},
+               }
+           },
+       },
+   )
    print(r.json()["answers"]["route"])
    ```
 

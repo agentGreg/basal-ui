@@ -1,5 +1,6 @@
 """Background jobs of basal-ui (benchmark, calibration, batch, ...): one running job per kind, each in its own thread,
 its progress in /api/status and its output in the Logs view (source job:<kind>)."""
+
 import json
 import os
 import re
@@ -45,14 +46,23 @@ class LogBuffer:
 
 
 PHASE_TEMPLATES = {
-    "phase_starting": "starting", "phase_running": "running", "phase_checking": "checking selected models",
-    "phase_unloading": "unloading selected models", "phase_starting_model": "starting model",
-    "phase_testing_inference": "testing inference", "phase_restoring": "restoring {model}",
+    "phase_starting": "starting",
+    "phase_running": "running",
+    "phase_checking": "checking selected models",
+    "phase_unloading": "unloading selected models",
+    "phase_starting_model": "starting model",
+    "phase_testing_inference": "testing inference",
+    "phase_restoring": "restoring {model}",
     "phase_calibrating_engine": "calibrating (engine in basal-ui's process)",
-    "phase_calibrating": "calibrating", "phase_loading_model": "loading model",
-    "phase_warm_up": "warm-up", "phase_sequential": "sequential", "phase_concurrent": "concurrent",
-    "phase_done": "done", "phase_done_warnings": "done_with_warnings",
-    "phase_cancelled": "cancelled", "phase_error": "error",
+    "phase_calibrating": "calibrating",
+    "phase_loading_model": "loading model",
+    "phase_warm_up": "warm-up",
+    "phase_sequential": "sequential",
+    "phase_concurrent": "concurrent",
+    "phase_done": "done",
+    "phase_done_warnings": "done_with_warnings",
+    "phase_cancelled": "cancelled",
+    "phase_error": "error",
 }
 
 
@@ -97,10 +107,21 @@ def run_tool(job, module, argv, out_path=None, on_json=None):
     output line when it fails."""
     command = [sys.executable, "-m", f"basal.{module}", *map(str, argv)]
     job.log.append(f"$ {shlex.join(command)}")
-    options = ({"start_new_session": True} if os.name == "posix" else
-               {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)})
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                            errors="replace", bufsize=1, **options)
+    options = (
+        {"start_new_session": True}
+        if os.name == "posix"
+        else {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    )
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+        **options,
+    )
     finished = threading.Event()
 
     def stop_on_cancel():
@@ -163,10 +184,20 @@ class Job:
     def state(self) -> dict:
         with self.lock:
             code, params = phase_fields(self.phase)
-            return {"kind": self.kind, "model": self.model, "label": self.label, "phase": self.phase,
-                    "phase_code": code, "phase_params": params,
-                    "done": self.done, "total": self.total, "error": self.error, "running": self.running,
-                    "started": self.started, "result": self.result}
+            return {
+                "kind": self.kind,
+                "model": self.model,
+                "label": self.label,
+                "phase": self.phase,
+                "phase_code": code,
+                "phase_params": params,
+                "done": self.done,
+                "total": self.total,
+                "error": self.error,
+                "running": self.running,
+                "started": self.started,
+                "result": self.result,
+            }
 
 
 class Jobs:
@@ -192,8 +223,10 @@ class Jobs:
         def run():
             try:
                 result = target(job, *args)
-                job.finish("done_with_warnings" if isinstance(result, dict) and result.get("warnings") else "done",
-                           result=result)
+                job.finish(
+                    "done_with_warnings" if isinstance(result, dict) and result.get("warnings") else "done",
+                    result=result,
+                )
                 self.event("info", f"{kind} finished: {label}")
             except Cancelled:
                 job.finish("cancelled")

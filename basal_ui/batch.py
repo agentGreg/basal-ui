@@ -1,6 +1,7 @@
 """Batch inference from basal-ui: basal-run over a JSONL file (simple items or full /v1/systemone requests) against a
 loaded model's private basal-serve; the answers go to a JSONL file, one line per input line. The requests go straight
 to the child: they are not counted in the statistics or the history (as benchmarks)."""
+
 import json
 from pathlib import Path
 
@@ -17,8 +18,16 @@ def run_batch(job, fleet, model_id, input_path, output_path, concurrency=16, ear
     runner = fleet.ready(model_id)
     total = sum(1 for line in Path(input_path).read_text(encoding="utf-8").splitlines() if line.strip())
     job.progress("running", 0, total)
-    args = ["--input", str(input_path), "--output", str(output_path), "--url", runner.base_url + "/v1/systemone",
-            "--concurrency", str(concurrency)]
+    args = [
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+        "--url",
+        runner.base_url + "/v1/systemone",
+        "--concurrency",
+        str(concurrency),
+    ]
     if early_exit:
         args += ["--early-exit", str(early_exit)]
     summary = run_tool(job, "run", args)  # basal-run prints its summary as the last line
@@ -31,4 +40,4 @@ def run_batch(job, fleet, model_id, input_path, output_path, concurrency=16, ear
 def rows(output_path, offset=0, limit=100) -> dict:
     """A page of a batch output file: {"rows", "total"}."""
     lines = [line for line in Path(output_path).read_text(encoding="utf-8").splitlines() if line.strip()]
-    return {"rows": [json.loads(line) for line in lines[offset:offset + limit]], "total": len(lines)}
+    return {"rows": [json.loads(line) for line in lines[offset : offset + limit]], "total": len(lines)}
