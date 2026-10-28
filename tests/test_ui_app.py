@@ -8,13 +8,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.ui import calibration, catalog, settings
-from basal.ui.app import Fleet, Runner, create_app, rss_by_pgid
-from basal.ui.catalog import Variant
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.jobs import LogBuffer
-from basal.ui.stats import Stats
+from basal_ui import calibration, catalog, settings
+from basal_ui.app import Fleet, Runner, create_app, rss_by_pgid
+from basal_ui.catalog import Variant
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.jobs import LogBuffer
+from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 MINI = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
@@ -246,7 +246,7 @@ def test_download_runs_without_a_model_and_reports_progress_then_errors(tmp_path
             record["path"] = str(tmp_path)
         record["ended"] = time.monotonic()
 
-    monkeypatch.setattr("basal.ui.app.Downloads._run", run)
+    monkeypatch.setattr("basal_ui.app.Downloads._run", run)
     app, _ = app_for(tmp_path, [MINI])
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/download", json={"id": "missing"}).status_code == 400
@@ -279,7 +279,7 @@ def test_startup_timeout_kills_child_process_group(tmp_path, monkeypatch):
     runner = Runner(models_dir_fn=lambda: tmp_path)
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     monkeypatch.setattr(runner, "_build_command", lambda *args: [sys.executable, "-c", code])
-    monkeypatch.setattr("basal.ui.app.START_TIMEOUT_S", 0.5)
+    monkeypatch.setattr("basal_ui.app.START_TIMEOUT_S", 0.5)
     runner.load(assessment)
     wait_for(lambda: runner.status()["state"] == "error", timeout=5)
     assert pid_file.exists()
@@ -306,9 +306,9 @@ def test_api_serve_settings_and_key_routes(tmp_path):
         assert client.put("/api/serve", json={"port": 80}).status_code == 400
 
 
-def test_runner_command_is_private_with_internal_key_and_model_name(tmp_path):
+def test_runner_command_is_private_on_loopback_with_model_name(tmp_path):
     model = Variant("model-id", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)
-    runner = Runner(settings_mod=settings, platform_fn=lambda: "cpu", internal_secret="internal")
+    runner = Runner(settings_mod=settings, platform_fn=lambda: "cpu")
     assessment = SimpleNamespace(variant=model, mode="vllm")
     settings.update_serve({"enabled": True, "host": "0.0.0.0", "port": 8123, "require_key": False,
                            "cors_origins": ["https://example.com"], "max_len": 8192,
@@ -317,10 +317,7 @@ def test_runner_command_is_private_with_internal_key_and_model_name(tmp_path):
     assert command[command.index("--name") + 1] == model.id
     assert command[command.index("--host") + 1] == "127.0.0.1"
     assert command[command.index("--port") + 1] == "43217"
-    key_file = command[command.index("--api-keys") + 1]
-    records = __import__("json").loads(open(key_file).read())["keys"]
-    assert [(r["name"], r["admin"]) for r in records] == [("basal-ui", True)]  # user keys never reach a child
-    assert key_file != str(settings.keys_file("a" * 64))  # the API server's file holds the user keys too
+    assert "--api-keys" not in command  # the API server checks keys; a stock basal-serve child takes none
     assert command[command.index("--log-decisions") + 1] == str(tmp_path / "decisions.jsonl")
     assert command[command.index("--max-len") + 1] == "8192"
     assert not {"--cors-origins", "--mcp"} & set(command)
@@ -328,10 +325,9 @@ def test_runner_command_is_private_with_internal_key_and_model_name(tmp_path):
     assert "--max-len" not in runner._build_command(model, tmp_path, assessment, False, 1, settings.serve_settings())
 
 
-def test_real_subprocess_requires_internal_key_and_records_the_decision(tmp_path, monkeypatch):
+def test_real_subprocess_answers_through_the_playground_and_records_the_decision(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     app, fleet = app_for(tmp_path, [MINI])
-    secret = fleet.internal_secret
     code = f"""
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
@@ -341,13 +337,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body))); self.end_headers()
         self.wfile.write(body)
     def do_GET(self):
-        if self.path != '/health' and self.headers.get('Authorization') != 'Bearer {secret}':
-            return self.reply(401)
         self.reply(200, b'{{"status":"ok"}}')
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))  # read first: replying early resets
-        if self.headers.get('Authorization') != 'Bearer {secret}':
-            return self.reply(401)
         answer = {{'type': 'choice', 'choice': 'a', 'confidence': 0.75}}
         self.reply(200, json.dumps({{'received': body, 'answers': {{'q': answer}},
                                      'usage': {{'input_tokens': 12}}}}).encode())
@@ -362,16 +354,15 @@ HTTPServer(('127.0.0.1', int(__import__('sys').argv[1])), Handler).serve_forever
         wait_for(lambda: states(client) == {"mini": "ready"}, timeout=5)
         runner = fleet.runners["mini"]
         assert httpx.get(runner.base_url + "/health").status_code == 200
-        assert httpx.get(runner.base_url + "/v1/models").status_code == 401
-        body = {"state": "hello", "images": [{"data": "aGVsbG8="}]}
-        assert httpx.post(runner.base_url + "/v1/systemone", json=body).status_code == 401
+        body = {"state": "hello", "questions": {"q": {"type": "choice", "instructions": "?", "criteria": ["a", "b"]}},
+                "media": [{"type": "image", "data": "aGVsbG8="}]}
         assert client.post("/api/decide", json={"model": "mini", **body}).json()["received"] == body
 
         items = client.get("/api/history").json()["items"]
         assert [(i["model"], i["source"], i["state_preview"]) for i in items] == [("mini", "playground", "hello")]
         assert items[0]["answers"] == {"q": {"type": "choice", "best": "a", "confidence": 0.75}}
         record = client.get(f"/api/history/{items[0]['id']}").json()
-        assert record["request"] == {"model": "mini", "state": "hello", "images": [{"data": "<8 bytes>"}]}
+        assert record["request"] == {"model": "mini", **body, "media": [{"type": "image", "data": "<8 bytes>"}]}
         assert record["replay_error"] and record["replay_request"] is None
         assert client.get("/api/history/h_missing").status_code == 404
         stats = client.get("/api/stats").json()["models"]["mini"]
@@ -482,7 +473,7 @@ def test_auto_load_waiting_on_catalog_is_cancelled_during_shutdown(tmp_path, mon
         release_catalog.wait()
         return [MINI], "test"
 
-    monkeypatch.setattr("basal.ui.app.threading.Event", event_factory)
+    monkeypatch.setattr("basal_ui.app.threading.Event", event_factory)
     app = create_app(catalog_fn=blocked_catalog, hardware_fn=lambda: HW, fleet=fleet, stats=fleet.stats,
                      history=fleet.history)
     client = TestClient(app, base_url="http://127.0.0.1")
@@ -498,7 +489,7 @@ def test_auto_load_waiting_on_catalog_is_cancelled_during_shutdown(tmp_path, mon
 
 
 def test_create_app_passes_settings_module_to_default_fleet(tmp_path, monkeypatch):
-    import basal.ui.app as app_module
+    import basal_ui.app as app_module
 
     fake_settings = SimpleNamespace(models_dir=lambda: None, stats_path=lambda: tmp_path / "s.json",
                                     history_path=lambda: tmp_path / "h.jsonl")
@@ -534,7 +525,7 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
         def poll(self):
             return None
 
-    monkeypatch.setattr("basal.ui.app.subprocess.Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr("basal_ui.app.subprocess.Popen", lambda *args, **kwargs: Process())
     old_health_entered, release_old_health = threading.Event(), threading.Event()
 
     def healthy(*args, **kwargs):
@@ -543,7 +534,7 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
             release_old_health.wait()
         return SimpleNamespace(status_code=200)
 
-    monkeypatch.setattr("basal.ui.app.httpx.get", healthy)
+    monkeypatch.setattr("basal_ui.app.httpx.get", healthy)
     old_thread = threading.Thread(target=runner._start, args=(old, 1, False, tmp_path, None), name="old-start")
     old_thread.start()
     assert old_health_entered.wait(timeout=2)
@@ -685,7 +676,7 @@ def test_rss_is_summed_per_process_group(monkeypatch):
     if os.name != "posix":
         pytest.skip("ps is POSIX-only")
     output = "  100  2048\n  100   1024\n  200 10\nbad line\n"
-    monkeypatch.setattr("basal.ui.app.subprocess.run", lambda *a, **k: SimpleNamespace(stdout=output))
+    monkeypatch.setattr("basal_ui.app.subprocess.run", lambda *a, **k: SimpleNamespace(stdout=output))
     assert rss_by_pgid() == {100: 3072 * 1024, 200: 10 * 1024}
 
 
@@ -880,10 +871,10 @@ def test_revision_reaches_cached_check_and_download_but_not_child_flags(tmp_path
     runner.options = {"revision": "refs/pr/5"}
     runner._build_command = lambda *args: ["fake"]
     runner._models_entry = lambda media: (None, [])
-    monkeypatch.setattr("basal.ui.app.subprocess.Popen",
+    monkeypatch.setattr("basal_ui.app.subprocess.Popen",
                         lambda *args, **kwargs: SimpleNamespace(stdout=__import__("io").StringIO(), poll=lambda: None,
                                                                 returncode=None, pid=0))
-    monkeypatch.setattr("basal.ui.app.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
+    monkeypatch.setattr("basal_ui.app.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
     runner._start(assessment, runner.gen, cache_dir=tmp_path)
     assert calls == [("check", "refs/pr/5"), ("download", "refs/pr/5")]
     del runner._build_command

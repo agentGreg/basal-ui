@@ -1,6 +1,6 @@
 """basal-ui's API server: one port for every loaded model. Each request names its model (`"model"` in the body); the
-gateway checks API keys, CORS and serves MCP, then forwards to that model's private basal-serve and counts the
-decision in the statistics and the history."""
+gateway checks API keys and CORS, serves MCP, answers OpenAI Decisions requests, then forwards to that model's
+private basal-serve and counts the decision in the statistics and the history."""
 import socket
 import threading
 import time
@@ -14,13 +14,13 @@ SNAPSHOT_KEYS = ("host", "port", "require_key", "cors_origins", "mcp")
 
 
 def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0.1"):
-    """The gateway's ASGI app. keys: basal.auth.ApiKeys or None (no key required)."""
+    """The gateway's ASGI app. keys: basal_ui.auth.ApiKeys or None (no key required)."""
     from starlette.applications import Starlette
     from starlette.responses import JSONResponse, Response
     from starlette.routing import Route
 
-    from basal.auth import protect, request_ids
-    from basal.compat import openai_error
+    from .auth import protect, request_ids
+    from .compat import openai_error
 
     from .app import host_middleware
 
@@ -50,7 +50,7 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
         if model not in loaded:
             return error(path, 404, f"model '{model}' is not loaded; loaded models: {loaded_text(loaded)}",
                          "MODEL_NOT_FOUND")
-        if path in SYSTEMONE:  # the child's own API has no model field; /v1/decisions validates it itself
+        if path in SYSTEMONE:  # the child's own API has no model field; Decisions translation drops it itself
             body = {k: v for k, v in body.items() if k != "model"}
         upstream = "/v1/systemone" if path in SYSTEMONE else "/v1/decisions"
         try:
@@ -85,9 +85,9 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
         from basal.mcp_server import http
 
         async def mcp_decide(body):
-            model = body.pop("model", None)
             loaded = fleet.loaded_ids()
-            if model not in loaded:
+            model = body.pop("model", None) or (loaded[0] if loaded else None)  # basal-serve 2.4.1's MCP tools
+            if model not in loaded:  # take no model argument: the first loaded model answers them
                 raise ValueError(f"model '{model}' is not loaded; loaded models: {loaded_text(loaded)}")
             r = await fleet.adecide(model, body, source="mcp", client=client["http"])
             if r.status_code != 200:
@@ -98,7 +98,7 @@ def build_app(fleet, stats, keys=None, cors_origins=(), mcp=False, host="127.0.0
                 raise ValueError(f"basal server {r.status_code}: {message}")
             return r.json()
 
-        mcp_routes, mcp_run = http(SimpleNamespace(decide=mcp_decide, name="basal-ui"), host, fleet.loaded_ids)
+        mcp_routes, mcp_run = http(SimpleNamespace(decide=mcp_decide, name="basal-ui"), host)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -127,7 +127,7 @@ class Gateway:
     def start(self):
         import uvicorn
 
-        from basal.auth import ApiKeys
+        from .auth import ApiKeys
 
         with self.lock:
             if self.server is not None:

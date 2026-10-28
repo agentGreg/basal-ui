@@ -149,3 +149,5 @@ body{background:var(--paper);color:var(--ink)}
 
 .backend-card h3{font-size:17px;font-weight:650}
 .backend-card>.muted{margin-top:12px}
+.brand{flex-wrap:wrap}
+.brand>#engineBadge{flex-basis:100%;width:fit-content;max-width:100%;height:auto;overflow:visible;font:11px/1.5 var(--mono);letter-spacing:0;white-space:normal;overflow-wrap:anywhere}

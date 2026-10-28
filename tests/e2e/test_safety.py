@@ -1,6 +1,6 @@
 """Decision safety: the certified thresholds and context policy a model reports, deferral under max_error, a state
 truncated to the context, and the History flags of both."""
-from tests.e2e.support import long_state
+from tests.e2e.support import context_of, long_state
 
 NO_CERTIFICATE = "no certified threshold for this type at this max_error"
 AMBIGUOUS = {"state": "Klient pisze: coś mi nie działa, nie wiem co.",
@@ -12,7 +12,7 @@ AMBIGUOUS = {"state": "Klient pisze: coś mi nie działa, nie wiem co.",
 def test_the_models_entry_carries_its_certified_thresholds_and_context_policy(ui, text_model):
     entry = ui.load(text_model["id"])["entry"]
     assert entry is not None, "basal-ui did not read the child's GET /v1/models entry"
-    context = entry["context"]
+    context = context_of(entry)
     assert isinstance(context["limit"], int) and context["limit"] >= 512
     assert context["overflow"] == "truncate" and 0 <= context["truncate_head"] <= 1
     for target, per_type in (entry.get("certified") or {}).items():
@@ -36,7 +36,7 @@ def test_act_below_the_certified_threshold_is_deferred_to_a_person(ui, text_mode
 
 
 def test_a_state_over_the_context_is_truncated_and_flagged(ui, text_model):
-    limit = ui.load(text_model["id"])["entry"]["context"]["limit"]
+    limit = context_of(ui.load(text_model["id"])["entry"])["limit"]
     body = {"state": long_state(limit), "questions": {"q": {"type": "noul", "instructions": "Czy to umowa najmu?"}}}
     usage = ui.decide(text_model["id"], body)["usage"]
     t = usage["truncated"]

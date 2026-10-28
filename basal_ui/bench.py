@@ -1,21 +1,19 @@
 """Measurements of one model from basal-ui: the benchmark preset (latency, throughput and accuracy over the bundled
 examples or a custom JSONL set, docs/BENCHMARK_SETS.md), configurable load tests and determinism checks (basal-loadtest
-against the model's basal-serve) and engine-mode comparisons (basal-bench, the model loaded in basal-ui's process)."""
+against the model's basal-serve) and engine-mode comparisons (basal-bench); the engine's tools run as subprocesses."""
 import asyncio
 import json
 import statistics
+import tempfile
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
 import httpx
 
-from basal import bench as offline
-from basal import loadtest
 from basal.bench import DEFAULT_QUESTIONS
 from basal.loadtest import body
 
-from .jobs import Cancelled
+from .jobs import Cancelled, run_tool
 
 MIN_ITEMS = 10
 WARMUP = 5
@@ -77,7 +75,7 @@ def _correct(item, response_json):
 async def run_benchmark(fleet, model_id, paths, label, job, n_seq=30, n_conc=120, concurrency=8) -> dict:
     """Warm-up, n_seq sequential requests (latency), n_conc at `concurrency` (throughput); every first answer to an
     item with `gold` is scored. Requests go through fleet.adecide with source "benchmark": not counted in the
-    statistics or the history. Progress and cancellation through the job (basal/ui/jobs.py)."""
+    statistics or the history. Progress and cancellation through the job (basal_ui/jobs.py)."""
     items = load_items(paths)
     if not items:
         raise ValueError(f"{label}: no items")
@@ -212,20 +210,29 @@ def loadtest_params(params, kind, early_exit_levels) -> dict:
     return p
 
 
+def loadtest_args(url, paths, params) -> list[str]:
+    """basal-loadtest's flags for the parameters (loadtest_params) against `url`."""
+    args = ["--url", url, "--questions", *map(str, paths), "--seed", params["seed"],
+            "--questions-per-request", params["questions_per_request"], "--n-seq", params["n_seq"],
+            "--n-conc", params["n_conc"], "--concurrency", params["concurrency"]]
+    if params["synthetic"] is not None:
+        args += ["--synthetic", params["synthetic"], "--long-frac", params["long_frac"]]
+    if params["early_exit"] is not None:
+        args += ["--early-exit", params["early_exit"]]
+    if params["determinism"]:
+        args += ["--determinism", params["determinism"]]
+    return [str(a) for a in args]
+
+
 def loadtest_job(job, fleet, model_id, label, paths, params):
     """basal-loadtest (or --determinism N) against the model's basal-serve; the result is kept with the benchmarks."""
     runner = fleet.ready(model_id)
-
-    def progress(phase, done, total):
-        job.check()
-        job.progress(phase, done, total)
-
-    a = SimpleNamespace(url=runner.base_url + "/v1/systemone", headers=runner._headers(), questions=paths,
-                        progress=progress, out=None, **params)
-    if params["determinism"]:
-        kind, out = "determinism", asyncio.run(loadtest.determinism(a, loadtest.determinism_bodies(a)))
-    else:
-        kind, out = "loadtest", asyncio.run(loadtest.run(a))
+    job.progress("running")
+    with tempfile.TemporaryDirectory(prefix="basal-ui-loadtest-") as tmp:
+        out_path = Path(tmp) / "out.json"
+        out = run_tool(job, "loadtest", [*loadtest_args(runner.base_url + "/v1/systemone", paths, params),
+                                         "--out", str(out_path)], out_path)
+    kind = "determinism" if params["determinism"] else "loadtest"
     out.pop("url", None)
     result = {"kind": kind, "model": model_id, "set": label, "params": params, "when": time.time(), **out}
     if fleet.stats is not None:
@@ -234,7 +241,7 @@ def loadtest_job(job, fleet, model_id, label, paths, params):
 
 
 def comparison_modes(available) -> list[str]:
-    """The modes a comparison may run: the available basal-serve modes (basal/ui/options.available_modes) plus the
+    """The modes a comparison may run: the available basal-serve modes (basal_ui/options.available_modes) plus the
     basal-bench references eager-fp32, vllm@deterministic and fast-exit@<policy> where their engine is available."""
     modes = [m["mode"] for m in available if m["available"]]
     out = (["eager-fp32"] if "eager" in modes else []) + modes
@@ -250,41 +257,69 @@ def comparison_memory(modes, est_memory_bytes) -> int:
     return (2 if "eager-fp32" in modes else 1) * (est_memory_bytes or 0)
 
 
+def bench_args(local_dir, modes, n, lat_n, gguf, options) -> list[str]:
+    """basal-bench's flags: the modes in order on the downloaded model, the bundled examples."""
+    args = ["--model", str(local_dir), "--modes", *modes, "--n", str(n), "--lat-n", str(lat_n),
+            "--ollama-url", options["ollama_url"], "--llamacpp-url", options["llamacpp_url"]]
+    if gguf:
+        args += ["--gguf", gguf]
+    if options.get("ollama_model"):
+        args += ["--ollama-model", options["ollama_model"]]
+    if options.get("mlx_packed"):
+        args.append("--mlx-packed")
+    return args
+
+
 def modes_job(job, fleet, variant, local_dir, modes, n, lat_n, options):
-    """basal-bench in basal-ui's process: every mode loaded, measured and freed in turn; the first mode that runs is the
-    reference of the agreement, a mode that fails to load or run is kept with its error. The memory reserved by the
-    caller is released at the end. Kept with the benchmarks."""
+    """basal-bench, one mode loaded, measured and freed at a time in its own process; the first mode that runs is the
+    reference of the agreement. basal-bench stops at a mode that fails: that mode is kept with its error and the rest
+    run in a new process after the reference again (its repeated row is dropped). The memory reserved by the caller is
+    released at the end. Kept with the benchmarks."""
+    gguf = str(Path(local_dir) / variant.gguf_file) if variant.gguf_file else None
+    rows, ref_mode, pending = [], None, list(modes)
     try:
-        md = offline.resolve(str(local_dir), metadata_only=all(
-            offline.MODES.get(m.split("@")[0], ("",))[0] in offline.GGUF_KINDS for m in modes))
-        qs = offline.load_questions(DEFAULT_QUESTIONS, n)
-        fmt = offline.model_format(md)
-        gguf = str(Path(local_dir) / variant.gguf_file) if variant.gguf_file else None
-        ref, ref_mode, rows = None, None, []
-        for i, mode in enumerate(modes):
+        while pending:
             job.check()
-            job.progress(mode, i, len(modes))
-            job.log.append(f"{mode}: loading")
+            run_modes = ([ref_mode] if ref_mode else []) + pending
+            measured = []
+
+            def row(r, run_modes=run_modes, measured=measured):
+                if r.get("mode") not in run_modes:
+                    return
+                measured.append(r)
+                job.progress(r["mode"], len(rows) + len(measured) - (1 if ref_mode else 0), len(modes))
+
+            job.progress(pending[0], len(rows), len(modes))
             try:
-                row, top = offline.measure_mode(mode, md, qs, fmt, lat_n, ref_mode or mode, ref, None, gguf,
-                                                options.get("ollama_model"), options["ollama_url"],
-                                                options["llamacpp_url"], options.get("mlx_packed", False))
-            except (Exception, SystemExit) as exc:  # noqa: BLE001 — the other modes still run
-                rows.append({"mode": mode, "error": str(exc)})
-                job.log.append(f"{mode}: {exc}")
-                continue
-            if ref is None:
-                ref, ref_mode = top, mode
-            if mode in ("mlx", "mlx-q8"):
-                row["mlx_packed"] = options.get("mlx_packed", False)
-            rows.append(row)
-            job.log.append(json.dumps({k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()}))
+                run_tool(job, "bench", bench_args(local_dir, run_modes, n, lat_n, gguf, options), on_json=row)
+                error = None
+            except RuntimeError as exc:  # the mode after the last measured one failed
+                error = str(exc)
+            reference_failed = bool(run_modes[0] == ref_mode and not measured)  # it measured fine the first time
+            new = measured[1:] if run_modes[0] == ref_mode else measured
+            for r in new:
+                if r["mode"] in ("mlx", "mlx-q8"):
+                    r["mlx_packed"] = options.get("mlx_packed", False)
+            rows += new
+            if ref_mode is None and new:
+                ref_mode = new[0]["mode"]
+            pending = pending[len(new):]
+            if not pending:
+                break
+            if error is None:
+                error = "basal-bench ended without measuring this mode"
+            if reference_failed:  # no reference for the agreement any more: the remaining modes are not measured
+                rows += [{"mode": m, "error": f"reference mode {ref_mode}: {error}"} for m in pending]
+                break
+            rows.append({"mode": pending[0], "error": error})
+            pending = pending[1:]
         job.progress("done", len(modes), len(modes))
         if not any("error" not in r for r in rows):
             raise RuntimeError("; ".join(f"{r['mode']}: {r['error']}" for r in rows))
     finally:
         fleet.release("modes")
-    result = {"kind": "modes", "model": variant.id, "set": "bundled", "items": len(qs), "when": time.time(),
+    items = next((r["n"] for r in rows if "n" in r), n)
+    result = {"kind": "modes", "model": variant.id, "set": "bundled", "items": items, "when": time.time(),
               "modes": rows}
     if fleet.stats is not None:
         fleet.stats.add_benchmark(variant.id, result)

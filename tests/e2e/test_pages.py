@@ -443,7 +443,7 @@ def test_the_builder_switches_types_and_edits_a_cost_matrix(page):
     sync_api.expect(page.locator("#decideError")).to_contain_text("tools must be a JSON array")
 
 
-def test_safety_strip_and_inspect_button_on_a_decision(page, text_model):
+def test_safety_strip_and_inspect_button_on_a_decision(page, ui, text_model):
     view(page, "playground")
     page.evaluate("r => setRequest(r)", CHOICE)
     page.click("#sendButton")
@@ -451,7 +451,8 @@ def test_safety_strip_and_inspect_button_on_a_decision(page, text_model):
     sync_api.expect(strip.first).to_contain_text(
         re.compile("Automatable|Below the certified|No certificate|uncalibrated|calibrated"))
     sync_api.expect(page.locator("#inspectDecision")).to_be_visible()
-    sync_api.expect(page.locator("#results")).to_contain_text("Longest prompt")
+    if "context" in (ui.model(text_model["id"])["entry"] or {}):  # the meter needs the engine's context policy
+        sync_api.expect(page.locator("#results")).to_contain_text("Longest prompt")
 
 
 def test_the_load_options_dialog_lists_the_modes(page, text_model):

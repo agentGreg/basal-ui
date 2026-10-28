@@ -7,12 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from basal import calibrate
-from basal.ui import calibration, catalog, settings
-from basal.ui.app import Fleet, Runner, create_app
-from basal.ui.catalog import Variant
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.stats import Stats
+from basal_ui import calibration, catalog, engine, settings
+from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.catalog import Variant
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.stats import Stats
 
 APPLE = Hardware("apple", "mps", 1024**4, None, None, frozenset({"mps"}))
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
@@ -107,13 +107,19 @@ def test_calibrate_fits_against_a_temporary_child_lists_and_selects_the_file(tmp
         assert runner.status()["restart_required"] is False
 
 
-def test_shipped_calibration_resolution_uses_preset_layout_and_adapter(tmp_path):
-    model, adapter = tmp_path / "model", tmp_path / "adapter"
-    model.mkdir(exist_ok=True); adapter.mkdir()
+def test_shipped_calibration_resolution_uses_preset_and_layout(tmp_path):
+    model = tmp_path / "model"
+    model.mkdir(exist_ok=True)
     (model / "basal.json").write_text('{"layout":"qfirst"}')
-    expected = adapter / "CALIBRATION.vllm.custom.qfirst.json"
+    expected = model / "CALIBRATION.vllm.custom.qfirst.json"
     expected.write_text("{}")
-    assert calibration.shipped_file(model, "vllm", "custom", layout="qfirst", adapter_dir=adapter) == expected
+    assert calibration.shipped_file(model, "vllm", "custom", layout="qfirst") == expected
+    if engine.feature("adapter"):  # an adapter's own file comes first (engine 2.5.1)
+        adapter = tmp_path / "adapter"
+        adapter.mkdir()
+        own = adapter / "CALIBRATION.vllm.custom.qfirst.json"
+        own.write_text("{}")
+        assert calibration.shipped_file(model, "vllm", "custom", layout="qfirst", adapter_dir=adapter) == own
 
 
 def test_calibrate_refuses_an_unknown_model_and_a_model_over_the_budget(tmp_path):
@@ -138,6 +144,7 @@ def make_app(tmp_path, hw=HW):
                              stats=fleet.stats, history=fleet.history)
 
 
+@pytest.mark.skipif(not engine.feature("adapter"), reason="needs an engine that takes --adapter (2.5.1)")
 def test_shipped_calibration_context_prefers_running_options_to_saved_options(tmp_path, config):
     adapter = tmp_path / "adapter"
     adapter.mkdir()
@@ -326,3 +333,22 @@ def test_a_missing_compare_or_reference_file_is_refused_before_the_job(tmp_path,
             assert response.status_code == 400
             assert response.json()["detail"] == f"{key}: {missing} is not a readable file"
         assert not fleet.temporary
+
+
+def test_a_file_fitted_on_a_cache_snapshot_belongs_to_the_served_repo(tmp_path):
+    """basal-ui passes basal-calibrate the snapshot directory; the file must name the repo id and commit, or
+    basal-serve (served with --name <repo>) would call it another model's file and drop its thresholds."""
+    from basal.server import calibration_mismatch
+    snapshot = tmp_path / "models--Remek--basal-2.0-mini" / "snapshots" / "cb81b32ce89b"
+    snapshot.mkdir(parents=True)
+    path = tmp_path / "fitted.json"
+    path.write_text(json.dumps({"fitted_on": {"model": str(snapshot), "decisions": 20}, "thresholds": {}}))
+    calibration.name_snapshot(path, snapshot)
+    cal = json.loads(path.read_text())
+    assert cal["fitted_on"] == {"model": "Remek/basal-2.0-mini", "revision": "cb81b32ce89b", "decisions": 20}
+    assert calibration_mismatch(cal, "Remek/basal-2.0-mini", snapshot) is None
+    local = tmp_path / "my-model"  # a plain directory keeps its path: that is its name
+    local.mkdir()
+    path.write_text(json.dumps({"fitted_on": {"model": str(local)}}))
+    calibration.name_snapshot(path, local)
+    assert json.loads(path.read_text())["fitted_on"] == {"model": str(local)}

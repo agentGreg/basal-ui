@@ -1,12 +1,67 @@
 """The Inspect view: basal-viz's Explainer for one downloaded model, loaded into basal-ui's own process (the page reads
-every layer of the PyTorch model) and served by basal-viz's own app mounted at /viz (basal/viz.py make_app)."""
+every layer of the PyTorch model) and served at /viz by inspect_app: basal-viz's routes with basal-ui's copy of its
+page (static/viz.html: relative API paths for the /viz mount, requests posted from the Playground)."""
+import asyncio
+import json
 import gc
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
-from basal.viz import Explainer
+from basal.facts import inject as inject_facts
+from basal.server import http_status
+from basal.viz import Explainer, compare_served
 
 from .jobs import Cancelled
+
+VIZ_PAGE = Path(__file__).parent / "static" / "viz.html"
+
+
+def explained(body):
+    """The request basal-viz explains: with "facts": "auto" its state carries the computed facts, as basal-serve reads
+    it (basal-viz 2.4.1 explains the state without them)."""
+    if not isinstance(body, dict) or body.get("facts") != "auto":
+        return body
+    state = body.get("state")
+    return {**body, "state": inject_facts(state if isinstance(state, str) else json.dumps(state, ensure_ascii=False)),
+            "facts": "off"}
+
+
+def inspect_app(explainer_fn, examples_fn, lifespan=None):
+    """basal-viz's page and API (/, /api/info, /api/examples, /api/explain, as basal-viz's main builds them).
+    explainer_fn() is the Explainer in use; RuntimeError when there is none yet: 503 on info and explain."""
+    from starlette.applications import Starlette
+    from starlette.responses import FileResponse, JSONResponse
+    from starlette.routing import Route
+
+    def current():
+        try:
+            return explainer_fn(), None
+        except RuntimeError as e:
+            return None, JSONResponse({"error": str(e)}, status_code=503)
+
+    async def info(_):
+        ex, unavailable = current()
+        return unavailable or JSONResponse(ex.info)
+
+    async def explain(request):
+        ex, unavailable = current()
+        if unavailable:
+            return unavailable
+        try:
+            body = await request.json()
+            res = await asyncio.get_running_loop().run_in_executor(None, ex.explain, explained(body))
+            return JSONResponse(compare_served(res, await ex.srv.decide(body)))
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse({"error": str(e)}, status_code=http_status(e))
+
+    return Starlette(routes=[
+        Route("/", lambda _: FileResponse(VIZ_PAGE)),
+        Route("/api/info", info),
+        Route("/api/examples", lambda _: JSONResponse(examples_fn())),
+        Route("/api/explain", explain, methods=["POST"]),
+    ], lifespan=lifespan)
+
 
 NOT_INSPECTABLE = ("basal-viz reads the bf16 PyTorch weights of basal-1.0, basal-1.5 and basal-2.0; download the bf16 "
                    "variant")

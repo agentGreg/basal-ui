@@ -1,4 +1,4 @@
-"""End-to-end tests of a basal-ui release: a real basal-ui process (python -m basal.ui.app on a free port with its own
+"""End-to-end tests of a basal-ui release: a real basal-ui process (python -m basal_ui.app on a free port with its own
 settings directory) and real basal-serve children of the models on disk, driven through basal-ui's HTTP API, its API
 server and, for the pages, Chromium via Playwright (basal[e2e]). Opt-in, they take minutes: BASAL_E2E=1. What runs
 where, and the variables that pick the models: docs/E2E.md."""

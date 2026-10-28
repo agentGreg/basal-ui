@@ -6,8 +6,8 @@ import time
 import httpx
 import pytest
 
-from basal.ui import backends, catalog, settings
-from basal.ui.app import Runner
+from basal_ui import backends, catalog, settings
+from basal_ui.app import Runner
 from tests.test_ui_app import HW, MINI, SMALL, make_fleet, wait_for
 
 

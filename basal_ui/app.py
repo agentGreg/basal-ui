@@ -3,9 +3,9 @@ starts basal-serve for each and runs decisions in a playground.
 
   basal-ui --port 7860      then open http://127.0.0.1:7860
 
-Every loaded model runs in its own basal-serve subprocess on a free loopback port that only basal-ui knows (internal
-API key); /api/decide and the API server (basal/ui/gateway.py, one port for every model) forward to it, so a crashed
-or unloaded model never takes the UI down.
+Every loaded model runs in its own basal-serve subprocess on a free loopback port that only basal-ui knows;
+/api/decide and the API server (basal_ui/gateway.py, one port for every model, with its API keys) forward to it, so a
+crashed or unloaded model never takes the UI down.
 """
 import argparse
 import asyncio
@@ -15,7 +15,6 @@ import json
 import os
 import secrets
 import shlex
-import signal
 import socket
 import subprocess
 import sys
@@ -33,12 +32,14 @@ from fastapi.staticfiles import StaticFiles
 
 from . import catalog, hardware, settings
 from . import options as load_options
+from .compat import child_request
 from .gateway import Gateway
 from .history import History, make_record, replay_fields
-from .jobs import Jobs, LogBuffer
+from .jobs import Jobs, LogBuffer, terminate
 from .stats import Stats
 
 STATIC = Path(__file__).parent / "static"
+EXAMPLES = Path(__file__).parent / "examples"
 FAMILY_ORDER = {f"basal-{n}": i for i, n in enumerate(("2.0", "omni-1.1", "omni-1.0", "omni", "1.5", "1.0"))}
 START_TIMEOUT_S = 1800  # --mode fast compiles for 4-17 minutes on the first start (README, Serving modes)
 MODEL_LOGS_KEPT = 10  # log buffers of unloaded models kept for the Logs view
@@ -144,12 +145,11 @@ class Runner:
     background load that finds its generation outdated stops instead of touching the state."""
 
     def __init__(self, models_dir_fn=settings.models_dir, platform_fn=lambda: hardware.detect().platform,
-                 settings_mod=settings, downloads=None, internal_secret=None, log=None, event=None):
+                 settings_mod=settings, downloads=None, log=None, event=None):
         self.models_dir_fn = models_dir_fn
         self.platform_fn = platform_fn
         self.settings_mod = settings_mod
         self.downloads = downloads if downloads is not None else Downloads()
-        self.internal_secret = internal_secret or secrets.token_urlsafe(32)
         self.log = log if log is not None else LogBuffer()
         self.event = event or (lambda level, message: None)
         self.lock = threading.RLock()
@@ -179,7 +179,7 @@ class Runner:
     def _poll_health(self, gen, url):
         health = {"reachable": False, "running": None, "queued": None}
         try:
-            response = httpx.get(url + "/health", headers=self._headers(), timeout=0.5)
+            response = httpx.get(url + "/health", timeout=0.5)
             response.raise_for_status()
             data = response.json()
             health["reachable"] = isinstance(data, dict) and data.get("status") == "ok"
@@ -218,7 +218,7 @@ class Runner:
 
     def load(self, assessment, media=False, options=None, extra_args=(), temporary=False,
              local_only=False, snapshot=None, remember=True):
-        """options: load options (basal/ui/options.py; their mode replaces the assessment's, except with media);
+        """options: load options (basal_ui/options.py; their mode replaces the assessment's, except with media);
         temporary: a private child for a job (basal-calibrate): no API key (it is reached on loopback without one),
         no calibration selected in basal-ui, not remembered for auto-load; extra_args go to basal-serve last."""
         options = load_options.non_default(load_options.validate(options, assessment.mode))
@@ -269,14 +269,11 @@ class Runner:
         return None if self.temporary else self.settings_mod.calibration_selection().get(v.id)
 
     def _build_command(self, v, path, assessment, media, port, serve):
-        """The child is private: loopback, a free port, the internal key (basal-ui's admin key) required."""
+        """The child is private: loopback and a free port only basal-ui knows."""
         command = [sys.executable, "-m", "basal.server",
                    *catalog.serve_args(v, path, assessment.mode, self.platform_fn() if media else None,
                                        platform=self.platform_fn()),
                    "--name", v.id, "--host", "127.0.0.1", "--port", str(port)]
-        if not self.temporary:
-            command += ["--api-keys", str(self.settings_mod.internal_keys_file(hashlib.sha256(
-                self.internal_secret.encode()).hexdigest()))]
         if self._calibration(v):
             command += ["--calibration", self._calibration(v)]
         if serve["log_decisions"] and not self.temporary:
@@ -292,7 +289,7 @@ class Runner:
         attempts, error = (5 if media else 3), None
         for attempt in range(attempts):
             try:
-                response = httpx.get(self.base_url + "/v1/models", headers=self._headers(), timeout=1)
+                response = httpx.get(self.base_url + "/v1/models", timeout=1)
                 response.raise_for_status()
                 models = response.json().get("models", [])
                 entry = models[0] if models else None
@@ -341,8 +338,12 @@ class Runner:
                     time.sleep(0.2)  # let the log reader drain the last lines
                     raise RuntimeError(f"basal-serve exited ({proc.returncode}): {self.log.last() or 'no output'}")
                 try:
-                    if httpx.get(self.base_url + "/health", headers=self._headers(), timeout=1).status_code == 200:
+                    if httpx.get(self.base_url + "/health", timeout=1).status_code == 200:
                         entry, media_kinds = self._models_entry(media)
+                        if entry is not None and "certified" not in entry:  # basal-serve 2.4.1 does not report them
+                            from .calibration import served_certified
+                            entry = {**entry, "certified": served_certified(
+                                entry, path, assessment.mode, self.options, self._calibration(v))}
                         with self.lock:
                             if gen != self.gen:
                                 return
@@ -388,30 +389,7 @@ class Runner:
             self._reset()
             return proc, est
 
-    @staticmethod
-    def _terminate(proc):
-        """Stop basal-serve and everything it started (its own process group / session), then reap it."""
-        if not proc:
-            return
-
-        def signal_group(kill):
-            try:
-                if os.name == "posix":
-                    os.killpg(proc.pid, signal.SIGKILL if kill else signal.SIGTERM)
-                else:
-                    proc.kill() if kill else proc.terminate()
-            except ProcessLookupError:
-                pass
-
-        signal_group(kill=False)
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            signal_group(kill=True)
-            proc.wait()
-
-    def _headers(self):
-        return {"Authorization": f"Bearer {self.internal_secret}"}
+    _terminate = staticmethod(terminate)
 
     def _url(self, path):
         with self.lock:
@@ -420,10 +398,17 @@ class Runner:
             return self.base_url + path
 
     def decide(self, body, path="/v1/systemone"):
-        return httpx.post(self._url(path), json=body, headers=self._headers(), timeout=120)
+        """basal-serve's answer to a System One or OpenAI Decisions request (path), in the path's shape."""
+        child_body, reply = child_request(path, body)
+        if child_body is None:
+            return reply
+        return reply(httpx.post(self._url("/v1/systemone"), json=child_body, timeout=120))
 
     async def adecide(self, client, body, path="/v1/systemone"):
-        return await client.post(self._url(path), json=body, headers=self._headers())
+        child_body, reply = child_request(path, body)
+        if child_body is None:
+            return reply
+        return reply(await client.post(self._url("/v1/systemone"), json=child_body))
 
 
 class Fleet:
@@ -484,7 +469,7 @@ class Fleet:
 
     def _runner(self, log):
         return Runner(models_dir_fn=self.models_dir_fn, platform_fn=self.platform_fn, settings_mod=self.settings_mod,
-                      downloads=self.downloads, internal_secret=self.internal_secret, log=log, event=self.event)
+                      downloads=self.downloads, log=log, event=self.event)
 
     def start_temporary(self, kind, assessment, log, options=None, extra_args=(), local_only=False, reservation=None) -> Runner:
         """A private, unremembered child for a job (its memory counted in the budget); stop_temporary ends it."""
@@ -814,6 +799,30 @@ def _byte_counter():
     return Counter
 
 
+def examples():
+    """The engine's bundled examples (basal-viz's list) and basal-ui's own requests of every advanced question type
+    (basal_ui/examples), in basal-viz's shape."""
+    from basal.run import to_request
+    from basal.viz import examples as engine_examples
+    out = engine_examples()
+    for path in sorted(EXAMPLES.glob("*.jsonl")):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines()):
+            if line.strip():
+                item = json.loads(line)
+                out.append({"file": path.stem, "id": item.get("id") or f"{path.stem}-{n + 1}",
+                            "request": to_request(item)})
+    return out
+
+
+def ui_version():
+    """basal-ui's installed version ("0" in a source tree that was never installed)."""
+    import importlib.metadata
+    try:
+        return importlib.metadata.version("basal-ui")
+    except importlib.metadata.PackageNotFoundError:
+        return "0"
+
+
 def host_middleware(app, allowed_hosts):
     """Apply basal-ui's Host-header allowlist to an ASGI app."""
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts))
@@ -829,10 +838,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                            settings_mod=settings_mod, hardware_fn=hardware_fn, stats=stats, history=history)
     gateway = gateway or Gateway(fleet, settings_mod, stats)
     allowed_hosts = tuple(allowed_hosts)
-    from basal.viz import examples as viz_examples
-    from basal.viz import make_app as viz_app
-
-    from .inspect import Inspector
+    from .inspect import Inspector, inspect_app
     inspector = Inspector()
 
     def hw():
@@ -914,7 +920,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     app = host_middleware(FastAPI(title="basal-ui", lifespan=lifespan), allowed_hosts)
     if STATIC.is_dir():
         app.mount("/static", StaticFiles(directory=STATIC), name="static")
-    app.mount("/viz", viz_app(inspector.explainer, viz_examples))  # basal-viz for the Inspect view
+    app.mount("/viz", inspect_app(inspector.explainer, examples))  # basal-viz for the Inspect view
 
 
     @app.middleware("http")
@@ -1245,21 +1251,32 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
     @app.get("/api/updates")
     def get_updates():
-        from . import updates
-        import basal
+        from packaging.version import InvalidVersion, Version
+
+        from . import engine, updates
+
+        def newer(latest, installed):
+            try:
+                return latest is not None and Version(latest) > Version(installed)
+            except InvalidVersion:
+                return False
+
         enabled = settings_mod.check_updates()
-        latest, error = updates.latest() if enabled else (None, None)
-        installed = basal.__version__
-        try:
-            newer = latest is not None and tuple(map(int, latest.split("."))) > tuple(map(int, installed.split(".")))
-        except ValueError:
-            newer = False
+        latest, error = updates.latest(updates.UI_REPO) if enabled else (None, None)
+        installed = ui_version()
+        engine_status = engine.status()
+        engine_latest, engine_error = updates.latest(updates.ENGINE_REPO) if enabled else (None, None)
         variants, source = catalog_fn(cache_dir=settings_mod.models_dir())
         # only the hub catalog is the whole catalog: the cache fallback would seed (or report) a partial list
         new_models = settings_mod.update_seen_ids(v.id for v in variants) if source == "hub" else []
         return {"enabled": enabled, "installed": installed, "latest": latest,
-                "url": f"https://github.com/rkinas/basal/releases/tag/v{latest}" if latest else None,
-                "newer": newer, "error": error, "new_models": new_models, "catalog": source}
+                "url": f"https://github.com/{updates.UI_REPO}/releases/tag/v{latest}" if latest else None,
+                "newer": newer(latest, installed), "error": error, "new_models": new_models, "catalog": source,
+                "engine": {**engine_status, "latest": engine_latest, "error": engine_error,
+                           "newer": newer(engine_latest, engine_status["version"]),
+                           "latest_supported": engine_latest is not None and engine.supported(engine_latest),
+                           "url": (f"https://github.com/{updates.ENGINE_REPO}/releases/tag/v{engine_latest}"
+                                   if engine_latest else None)}}
 
     @app.post("/api/updates/seen")
     def mark_updates_seen():
@@ -1283,11 +1300,15 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         packed_code, packed_params = load_options.option_message_fields(packed_reason)
         think_reason = None if family_ok else load_options.THINK_REASON
         think_code, think_params = load_options.option_message_fields(think_reason)
+        adapter_reason = load_options.adapter_unavailable()
+        adapter_code, adapter_params = load_options.option_message_fields(adapter_reason)
         return {"modes": load_options.available_modes(variant, current, assessment), "options": merged,
                 "saved": bool(saved), "defaults": load_options.DEFAULTS,
                 "media_modes": load_options.available_media_modes(assessment, current),
                 "mlx_packed_reason": packed_reason, "mlx_packed_reason_code": packed_code,
                 "mlx_packed_reason_params": packed_params,
+                "adapter_reason": adapter_reason, "adapter_reason_code": adapter_code,
+                "adapter_reason_params": adapter_params,
                 "think": {"model": family_ok, "vllm": "vllm" in current.engines, "reason": think_reason,
                           "reason_code": think_code, "reason_params": think_params}}
 
@@ -1359,7 +1380,6 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
     @app.get("/api/examples")
     def get_examples():
-        from basal.viz import examples
         return examples()
 
     @app.post("/api/decide")
@@ -1845,10 +1865,16 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
 
 
 def main():
+    from .engine import check
+    engine = check()
     ap = argparse.ArgumentParser(description="basal browser UI: hardware check, model choice, playground")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7860)
     a = ap.parse_args()
+    if engine["experimental"]:
+        commit = f"@{engine['commit'][:7]}" if engine["commit"] else ""
+        print(f"basal-ui: experimental engine {engine['version']}{commit} (supported: {engine['supported']})",
+              flush=True)
     wildcard = a.host in ("0.0.0.0", "::")
     allowed = ["*"] if wildcard else ["127.0.0.1", "localhost", "::1", a.host]
     if wildcard:

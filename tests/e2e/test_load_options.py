@@ -1,6 +1,6 @@
 """Load options: the engine modes this machine offers, options reaching basal-serve, the context policy, basal-serve's
 own refusals, and options remembered for a model."""
-from tests.e2e.support import CHOICE, long_state
+from tests.e2e.support import CHOICE, context_of, long_state
 
 
 def options_of(ui, model_id):
@@ -25,8 +25,9 @@ def test_options_reach_basal_serve_and_the_context_policy_applies(ui, text_model
     chosen = {"deterministic": True, "orders": "2", "context_overflow": "refuse"}
     m = ui.load(model_id, chosen)
     assert m["command"][-5:] == ["--deterministic", "--orders", "2", "--context-overflow", "refuse"]
-    assert m["entry"]["context"]["overflow"] == "refuse" and m["entry"].get("orders") in (2, "2")
-    limit = m["entry"]["context"]["limit"]
+    context = context_of(m["entry"])
+    assert context["overflow"] == "refuse" and m["entry"].get("orders") in (2, "2")
+    limit = context["limit"]
     body = {"state": long_state(limit), "questions": {"q": {"type": "noul", "instructions": "Czy to umowa najmu?"}}}
     refused = ui.decide(model_id, body, expect=(422,))
     assert "the prompt is" in refused["error"] and refused["code"] == "INVALID_REQUEST"

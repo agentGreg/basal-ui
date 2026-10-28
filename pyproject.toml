@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basal-ui"
+version = "0.1.0"
+description = "Local browser app for basal models: pick a model for your hardware, serve it, try it"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115",
+  "starlette>=0.47",
+  "uvicorn[standard]>=0.35",
+  "httpx>=0.28",
+  "huggingface_hub>=0.34",
+  "packaging>=23",
+]
+# The engine (rkinas/basal) is not a runtime dependency: PyPI rejects direct-URL requirements and the PyPI "basal"
+# package is unrelated. basal_ui.engine.check() refuses to start without it; see README, "Install". Development pins it
+# in the dev group below (dependency groups are not published).
+
+[project.urls]
+Homepage = "https://github.com/pawelkiszczak/basal-ui"
+Engine = "https://github.com/rkinas/basal"
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.3,<3"]
+# the release gate with the models on disk (tests/e2e, BASAL_E2E=1; docs/E2E.md): its page tests drive Chromium
+# (after installing: playwright install chromium)
+e2e = ["playwright>=1.48"]
+
+[dependency-groups]
+dev = ["basal", "torch", "pytest", "ruff>=0.17"]  # basal: the newest engine release in the supported range
+
+[project.scripts]
+basal-ui = "basal_ui.__main__:main"  # checks the engine before basal_ui.app imports it
+
+[tool.setuptools]
+packages = ["basal_ui"]
+
+[tool.setuptools.package-data]
+basal_ui = ["static/*.html", "static/*.js", "static/*.css", "static/vendor/*", "static/fonts/*", "examples/*.jsonl"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]  # tests import shared stubs from tests.conftest and tests.test_ui_app
+markers = ["e2e: end-to-end test of a real basal-ui with real models (BASAL_E2E=1; docs/E2E.md)"]
+
+[tool.uv.sources]
+basal = { url = "https://github.com/rkinas/basal/archive/refs/tags/v2.4.1.tar.gz" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]  # CI and Linux dev: no CUDA wheels
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]  # the fork's pre-commit selection: syntax errors and undefined names

@@ -1,10 +1,17 @@
 """Background jobs of basal-ui (benchmark, calibration, batch, ...): one running job per kind, each in its own thread,
 its progress in /api/status and its output in the Logs view (source job:<kind>)."""
-import threading
+import json
+import os
 import re
+import shlex
+import signal
+import subprocess
+import sys
+import threading
 import time
 import uuid
 from collections import deque
+from pathlib import Path
 
 import httpx
 
@@ -59,6 +66,74 @@ def phase_fields(phase):
         if match:
             return code, match.groupdict()
     return None, None
+
+
+def terminate(proc):
+    """Stop a child process and everything it started (its own process group / session), then reap it."""
+    if not proc:
+        return
+
+    def signal_group(kill):
+        try:
+            if os.name == "posix":
+                os.killpg(proc.pid, signal.SIGKILL if kill else signal.SIGTERM)
+            else:
+                proc.kill() if kill else proc.terminate()
+        except ProcessLookupError:
+            pass
+
+    signal_group(kill=False)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        signal_group(kill=True)
+        proc.wait()
+
+
+def run_tool(job, module, argv, out_path=None, on_json=None):
+    """`python -m basal.<module> argv` (an engine tool: basal-loadtest, basal-bench, basal-run) for a job: its output
+    lines go to the job's log (each JSON object line also to on_json), a cancel stops it and everything it started.
+    -> the JSON it wrote to out_path, else the last JSON line it printed (None without one); RuntimeError with its last
+    output line when it fails."""
+    command = [sys.executable, "-m", f"basal.{module}", *map(str, argv)]
+    job.log.append(f"$ {shlex.join(command)}")
+    options = ({"start_new_session": True} if os.name == "posix" else
+               {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)})
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                            errors="replace", bufsize=1, **options)
+    finished = threading.Event()
+
+    def stop_on_cancel():
+        while not finished.wait(0.2):
+            if job.cancel.is_set():
+                terminate(proc)
+                return
+
+    threading.Thread(target=stop_on_cancel, name=f"basal-ui-{module}-cancel", daemon=True).start()
+    last_json = None
+    try:
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            job.log.append(line)
+            if line.startswith("{"):
+                try:
+                    last_json = json.loads(line)
+                except ValueError:
+                    continue
+                if on_json is not None:
+                    on_json(last_json)
+        proc.wait()
+    finally:
+        finished.set()
+    if job.cancel.is_set():
+        raise Cancelled()
+    if proc.returncode:
+        raise RuntimeError(f"basal-{module} exited ({proc.returncode}): {job.log.last() or 'no output'}")
+    if out_path is not None:
+        return json.loads(Path(out_path).read_text(encoding="utf-8"))
+    return last_json
+
+
 class Cancelled(Exception):
     """A job's target stops early: Job.cancel was set."""
 

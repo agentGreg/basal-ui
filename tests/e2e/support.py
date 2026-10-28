@@ -8,11 +8,13 @@ import sys
 import time
 from pathlib import Path
 
+import basal
 import httpx
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES = ROOT / "basal" / "examples"
+EXAMPLES = Path(basal.__file__).parent / "examples"  # the installed engine's bundled examples
+ADVANCED = ROOT / "basal_ui" / "examples" / "advanced.jsonl"
 LOAD_TIMEOUT = float(os.environ.get("BASAL_E2E_LOAD_TIMEOUT", "1800"))  # --mode fast compiles for minutes
 DOWNLOAD = os.environ.get("BASAL_E2E_DOWNLOAD") == "1"
 FALLBACK_MODEL = "Remek/basal-2.0-mini"  # bf16: runnable on CUDA (fast), Apple Silicon (mlx) and the CPU (eager)
@@ -51,7 +53,7 @@ class UI:
         self.http = httpx.Client(base_url=self.url, timeout=600)
         log = open(self.root / "basal-ui.log", "a")  # noqa: SIM115 — kept open for the process
         env = {**os.environ, "BASAL_UI_CONFIG": str(self.settings)}
-        self.proc = subprocess.Popen([sys.executable, "-m", "basal.ui.app", "--port", str(self.port)], cwd=ROOT,
+        self.proc = subprocess.Popen([sys.executable, "-m", "basal_ui.app", "--port", str(self.port)], cwd=ROOT,
                                      env=env, stdout=log, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
@@ -214,7 +216,7 @@ def text_ok(m):
 
 
 def advanced_requests():
-    return [json.loads(line) for line in (EXAMPLES / "advanced.jsonl").read_text().splitlines() if line.strip()]
+    return [json.loads(line) for line in ADVANCED.read_text().splitlines() if line.strip()]
 
 
 CHOICE = {"state": "Klient pisze, że karta została zablokowana po trzech błędnych PIN-ach i prosi o odblokowanie.",
@@ -227,3 +229,11 @@ def long_state(tokens):
     """A Polish state longer than `tokens` tokens (about 5 characters per token, 6 taken)."""
     sentence = "Umowa najmu lokalu mieszkalnego przy ulicy Polnej w Krakowie została zawarta na czas określony. "
     return (sentence * (tokens * 6 // len(sentence) + 1))[: tokens * 6]
+
+
+def context_of(entry):
+    """The context policy a child reports in GET /v1/models; the test is skipped on an engine that reports none
+    (basal 2.4.1; proposed upstream with the certified thresholds)."""
+    if "context" not in (entry or {}):
+        pytest.skip("the engine's GET /v1/models reports no context policy")
+    return entry["context"]

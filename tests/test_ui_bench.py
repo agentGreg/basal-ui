@@ -7,15 +7,13 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal import bench as offline
-from basal import loadtest
-from basal.ui import bench, catalog, settings
-from basal.ui.app import Fleet, Runner, create_app
-from basal.ui.catalog import Variant
-from basal.ui.jobs import Cancelled, Job, LogBuffer
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.stats import Stats
+from basal_ui import bench, catalog, settings
+from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.catalog import Variant
+from basal_ui.jobs import Cancelled, Job, LogBuffer
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 
@@ -88,7 +86,7 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
     stats = Stats(tmp_path / "stats.json")
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: HW, stats=stats,
         history=History(tmp_path / "h.jsonl"))
-    runner = Runner(internal_secret="x")
+    runner = Runner()
     runner.state, runner.model = "ready", "mini"
     fleet.runners["mini"] = runner
     app = create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW, fleet=fleet, stats=stats,
@@ -126,33 +124,29 @@ def test_benchmark_routes_run_one_at_a_time_and_store_the_result(tmp_path, monke
         assert job()["phase"] == "cancelled"
 
 
-def make_app(tmp_path, monkeypatch, hw=HW, variants=()):
+def make_app(tmp_path, monkeypatch, hw=HW, variants=(), base_url="http://child"):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: hw,
                   stats=Stats(tmp_path / "stats.json"), history=History(tmp_path / "h.jsonl"))
-    runner = Runner(internal_secret="x")
-    runner.state, runner.model, runner.base_url, runner.models_entry = "ready", "mini", "http://child", {"early_exit": []}
+    runner = Runner()
+    runner.state, runner.model, runner.base_url, runner.models_entry = "ready", "mini", base_url, {"early_exit": []}
     fleet.runners["mini"] = runner
     app = create_app(catalog_fn=lambda **_: (list(variants), "test"), hardware_fn=lambda: hw, fleet=fleet,
                      stats=fleet.stats, history=fleet.history)
     return app, fleet
 
 
-def finished(client):
-    deadline = time.monotonic() + 5
+def finished(client, timeout=60):
+    deadline = time.monotonic() + timeout
     while client.get("/api/status").json()["jobs"]["benchmark"]["running"] and time.monotonic() < deadline:
         time.sleep(0.01)
     return client.get("/api/status").json()["jobs"]["benchmark"]
 
 
-def test_load_test_and_determinism_check_against_the_model(tmp_path, monkeypatch):
-    def handler(request):  # a deterministic server
-        assert request.headers["authorization"] == "Bearer x"
-        return httpx.Response(200, json={"answers": {"q0": {"probabilities": {"option_1": 0.7, "option_2": 0.3}}}})
-
-    real = httpx.AsyncClient
-    monkeypatch.setattr(loadtest.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
-    app, fleet = make_app(tmp_path, monkeypatch)
+def test_load_test_and_determinism_check_against_the_model(tmp_path, monkeypatch, child):
+    """basal-loadtest runs as a subprocess against the model's child; the JSON it writes is the result."""
+    child.reply = {"answers": {"q0": {"probabilities": {"option_1": 0.7, "option_2": 0.3}}}}  # deterministic
+    app, fleet = make_app(tmp_path, monkeypatch, base_url=child.url)
     with TestClient(app, base_url="http://127.0.0.1") as client:
         bad = client.post("/api/benchmark", json={"id": "mini", "kind": "loadtest", "params": {"n_seq": 0}})
         assert bad.status_code == 400 and "n_seq" in bad.json()["detail"]
@@ -173,24 +167,21 @@ def test_load_test_and_determinism_check_against_the_model(tmp_path, monkeypatch
 BF16 = Variant("bf16", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 4 * 1024**3, False)
 
 
-def test_mode_comparison_runs_each_mode_in_process_and_reserves_its_memory(tmp_path, monkeypatch):
+def test_mode_comparison_runs_basal_bench_and_reserves_its_memory(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
-    monkeypatch.setattr(offline, "resolve", lambda path, metadata_only=False: tmp_path)
-    monkeypatch.setattr(offline, "model_format", lambda md: 2)
     built, reserved = [], []
 
-    def fake_measure(mode, md, qs, fmt, lat_n, reference_mode, ref_top=None, *rest):
-        if mode == "ollama":
-            raise RuntimeError("no Ollama server")
-        built.append(mode)
-        reserved.append(dict(fleet.reserved))
-        top = [0] * len(qs) if mode == "eager-fp32" else [0] * (len(qs) - 1) + [1]
-        row = {"mode": mode, "reference_mode": reference_mode, "lat1_ms": 1.0, "lat2_ms": 2.0, "dec_s": 10.0}
-        if ref_top is not None:
-            row["agree"] = sum(x == y for x, y in zip(top, ref_top)) / len(ref_top)
-        return row, top
+    def fake_bench(job, module, argv, out_path=None, on_json=None):  # basal-bench: one row per mode, in order
+        modes = argv[argv.index("--modes") + 1:argv.index("--n")]
+        for i, mode in enumerate(modes):
+            if mode == "ollama":
+                raise RuntimeError("basal-bench exited (1): no Ollama server")
+            built.append(mode)
+            reserved.append(dict(fleet.reserved))
+            row = {"mode": mode, "reference_mode": modes[0], "n": 20, "lat1_ms": 1.0, "lat2_ms": 2.0, "dec_s": 10.0}
+            on_json(row if i == 0 else {**row, "agree": 0.95})
 
-    monkeypatch.setattr(offline, "measure_mode", fake_measure)
+    monkeypatch.setattr(bench, "run_tool", fake_bench)
     app, fleet = make_app(tmp_path, monkeypatch, variants=[BF16])
     with TestClient(app, base_url="http://127.0.0.1") as client:
         selectable = client.get("/api/modes", params={"id": "bf16"}).json()["modes"]
@@ -200,8 +191,8 @@ def test_mode_comparison_runs_each_mode_in_process_and_reserves_its_memory(tmp_p
         body = {"id": "bf16", "kind": "modes", "modes": ["eager-fp32", "eager"], "n": 20, "lat_n": 5}
         assert client.post("/api/benchmark", json=body).status_code == 202
         result = finished(client)["result"]
-        assert built == ["eager-fp32", "eager"] and result["kind"] == "modes"
-        assert [r.get("agree") for r in result["modes"]] == [None, 1 - 1 / result["items"]]
+        assert built == ["eager-fp32", "eager"] and result["kind"] == "modes" and result["items"] == 20
+        assert [r.get("agree") for r in result["modes"]] == [None, 0.95]
         est = catalog.assess(BF16, HW).est_memory_bytes
         assert reserved[0] == {"modes": 2 * est} and fleet.reserved == {}  # eager-fp32: twice the bf16 estimate
         settings.update_memory({"budget_bytes": 2 * 1024**3 + est, "reserve_bytes": 0})
@@ -209,4 +200,5 @@ def test_mode_comparison_runs_each_mode_in_process_and_reserves_its_memory(tmp_p
         assert over.status_code == 409 and over.json()["detail"].startswith("over memory budget")
         assert client.post("/api/benchmark", json={**body, "modes": ["eager", "ollama"]}).status_code == 202
         rows = finished(client)["result"]["modes"]
-        assert rows[0]["mode"] == "eager" and rows[1] == {"mode": "ollama", "error": "no Ollama server"}
+        assert rows[0]["mode"] == "eager" and rows[1] == {"mode": "ollama",
+                                                           "error": "basal-bench exited (1): no Ollama server"}

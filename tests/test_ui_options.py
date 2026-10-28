@@ -4,12 +4,12 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.ui import catalog, options, settings
-from basal.ui.app import Fleet, create_app
-from basal.ui.catalog import Variant
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.stats import Stats
+from basal_ui import catalog, engine, options, settings
+from basal_ui.app import Fleet, create_app
+from basal_ui.catalog import Variant
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.stats import Stats
 
 CPU = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 CUDA = Hardware("cuda", "NVIDIA H100", 80 * 1024**3, None, (9, 0), frozenset({"cuda", "vllm", "sglang"}))
@@ -80,21 +80,38 @@ def test_invalid_options_name_the_option(bad, message):
 
 def test_every_engine_switch_reaches_basal_serve_as_it_reads_it(tmp_path):
     from basal.server import parser
-    ad = tmp_path / "ad"
-    ad.mkdir()
-    (ad / "adapter_config.json").write_text('{"peft_type": "LORA", "r": 2, "lora_alpha": 4}', encoding="utf-8")
-    (ad / "adapter_model.safetensors").write_bytes(b"")
     chosen = {"gemma_attn": "flex", "merge": "off", "lean": "pass2", "tree": "flex", "batches": "fine",
               "readout_layer": "on", "template_prefix": "off", "fp8_accum": "full", "eager_attn": "sliding=fa3,full=efficient",
               "eager_forward": "hf", "vllm_fast_prefill": "off", "dtype": "float16", "exit_heads": "/heads",
               "think_calibration": "off", "think_model": "/think", "think_adapter": "/adapter", "think_memory": 0.5,
-              "think_max_len": 4096, "think_log": "t.log", "adapter": str(ad)}
+              "think_max_len": 4096, "think_log": "t.log"}
+    if engine.feature("adapter"):
+        ad = tmp_path / "ad"
+        ad.mkdir()
+        (ad / "adapter_config.json").write_text('{"peft_type": "LORA", "r": 2, "lora_alpha": 4}', encoding="utf-8")
+        (ad / "adapter_model.safetensors").write_bytes(b"")
+        chosen["adapter"] = str(ad)
     a = parser().parse_args(["--model", "m", "--ple-offload", "on", "--strict-calibration", *options.args(chosen)])
     assert {k: getattr(a, k) for k in chosen} == chosen
     assert options.args({"ple_offload": True, "strict_calibration": True}) == [
         "--ple-offload", "on", "--strict-calibration"]
     defaults = parser().parse_args(["--model", "m"])
     assert {k: getattr(defaults, k) for k in chosen} == {k: options.DEFAULTS[k] for k in chosen}
+
+
+@pytest.mark.skipif(engine.feature("adapter"), reason="the engine takes --adapter")
+def test_the_adapter_option_is_refused_and_explained_without_an_engine_that_takes_it(tmp_path):
+    with pytest.raises(ValueError, match="load option adapter: LoRA adapters at load need basal engine 2.5.1"):
+        options.validate({"adapter": str(tmp_path)})
+    app = create_app(catalog_fn=lambda **_: ([BF16], "test"), hardware_fn=lambda: CPU)
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        data = client.get("/api/models/options", params={"id": BF16.id}).json()
+        assert data["adapter_reason_code"] == "adapter_engine"
+        refused = client.put("/api/models/options", json={"id": BF16.id, "options": {"adapter": str(tmp_path)}})
+        assert refused.status_code == 400 and "2.5.1" in refused.json()["detail"]
+
+
+@pytest.mark.skipif(not engine.feature("adapter"), reason="needs an engine that takes --adapter (2.5.1)")
 
 
 def test_an_adapter_that_basal_serve_would_refuse_is_refused_before_loading(tmp_path):
@@ -228,7 +245,7 @@ def test_load_options_reach_the_command_are_remembered_and_reused_by_restart(tmp
             self.state = "ready"
         settings.remember_loaded(assessment.variant.id, media, self.options)
 
-    monkeypatch.setattr("basal.ui.app.Runner._start", start)
+    monkeypatch.setattr("basal_ui.app.Runner._start", start)
     app = create_app(catalog_fn=lambda **_: ([BF16], "test"), hardware_fn=lambda: CPU, fleet=fleet, stats=fleet.stats,
                      history=fleet.history)
     with TestClient(app, base_url="http://127.0.0.1") as client:

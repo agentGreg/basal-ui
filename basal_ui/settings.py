@@ -391,18 +391,12 @@ def delete_key(name: str) -> None:
     _sync_key_files(data)
 
 
-# Each basal-ui process writes two key files next to the settings file. <stem>.keys-<pid>.json holds the user's keys
-# (shared, from the settings) plus that process's internal admin key: the API server reads it. <stem>.internal-<pid>.json
-# holds the internal key alone: each basal-serve child reads it, so only basal-ui reaches a child. Two basal-ui
-# instances on one settings file therefore never overwrite each other's internal key, and key changes reach each file.
+# Each basal-ui process writes a key file next to the settings file: <stem>.keys-<pid>.json holds the user's keys
+# (shared, from the settings) plus that process's internal admin key; the API server reads it. Two basal-ui instances
+# on one settings file therefore never overwrite each other's internal key, and key changes reach each file.
 def _keys_path(pid: int | None = None) -> Path:
     settings_path = _settings_path()
     return settings_path.with_name(f"{settings_path.stem}.keys-{os.getpid() if pid is None else pid}.json")
-
-
-def _internal_keys_path() -> Path:
-    settings_path = _settings_path()
-    return settings_path.with_name(f"{settings_path.stem}.internal-{os.getpid()}.json")
 
 
 def _user_records(data: dict) -> list[dict]:
@@ -443,7 +437,7 @@ def _sync_key_files(data: dict) -> None:
 
 @_locked
 def keys_file(internal_sha256: str) -> Path:
-    """This process's API server key file (format: basal/auth.py): the user's keys and this app's own admin key."""
+    """This process's API server key file (format: basal_ui/auth.py): the user's keys and this app's own admin key."""
     global _internal_sha256
     _internal_sha256 = internal_sha256
     path = _keys_path()
@@ -452,15 +446,7 @@ def keys_file(internal_sha256: str) -> Path:
     return path
 
 
-def internal_keys_file(internal_sha256: str) -> Path:
-    """The key file of a basal-serve child: this app's admin key only, so user keys never reach a child directly."""
-    path = _internal_keys_path()
-    _write_private(path, json.dumps({"keys": [{"name": "basal-ui", "sha256": internal_sha256, "admin": True}]}))
-    return path
-
-
 @_locked
 def remove_keys_file() -> None:
-    """Called when basal-ui exits: its API server and children are gone, so are its key files."""
+    """Called when basal-ui exits: its API server is gone, so is its key file."""
     _keys_path().unlink(missing_ok=True)
-    _internal_keys_path().unlink(missing_ok=True)

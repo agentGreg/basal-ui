@@ -6,7 +6,6 @@ them with basal-serve's own message, shown on the model's row and in its log."""
 import re
 from types import SimpleNamespace
 
-from basal import adapter as adapter_module
 from basal.engine import VLLM_PRESETS
 from basal.gdn_graph import refused as gdn_refused
 from basal.prompt import LAYOUTS
@@ -105,6 +104,10 @@ def validate(options: dict | None, default_mode: str | None = None) -> dict:
             if value is None and DEFAULTS[key] is not None:
                 value = DEFAULTS[key]
             if key == "adapter" and value is not None:  # a typo or a DoRA adapter: refused before basal-serve starts
+                reason = adapter_unavailable()
+                if reason:
+                    raise ValueError(f"load option adapter: {reason}")
+                from basal import adapter as adapter_module
                 try:
                     adapter_module.validate(value)
                 except SystemExit as exc:  # basal-serve's own message
@@ -250,6 +253,7 @@ OPTION_TEMPLATES = {
     "reason_fla": "the CUDA graph engine runs Qwen3.5's Gated DeltaNet layers with flash-linear-attention: pip install flash-linear-attention (or serve with --mode eager)",
     "reason_long_lane": "--long-lane is not available for Qwen3.5 (Gated DeltaNet) models",
     "reason_gdn_quant": "--mode {quant} is not available for Qwen3.5 (Gated DeltaNet) models: the CUDA graph engine serves them in bf16 (--mode fast); --mode vllm runs their FP8 checkpoints",
+    "adapter_engine": "LoRA adapters at load need basal engine 2.5.1 or newer",
 }
 RECURRENT_REASON = OPTION_TEMPLATES["reason_recurrent"]
 MLX_RECURRENT_REASON = OPTION_TEMPLATES["reason_mlx_recurrent"]
@@ -292,6 +296,12 @@ def mlx_packed_unavailable(v, hw):
     if v.family not in ("basal-1.0", "basal-1.5", "basal-2.0") or not (v.port == "bf16" or v.port.startswith("MLX")):
         return OPTION_TEMPLATES["mlx_packed_format"]
     return None
+
+
+def adapter_unavailable():
+    """Why the adapter load option cannot be used, None when the engine takes --adapter (feature probe)."""
+    from .engine import feature
+    return None if feature("adapter") else OPTION_TEMPLATES["adapter_engine"]
 
 
 def fp8_unavailable(hw):

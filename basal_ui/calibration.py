@@ -12,7 +12,7 @@ import shutil
 import time
 from pathlib import Path
 
-from basal.server import MODES, calibration_file, calibration_mismatch, certified_table
+from basal.server import MODES, calibration_file, calibration_mismatch, certified, model_identity
 
 from .hardware import free_engine_memory
 
@@ -77,10 +77,39 @@ def summary(path, local_dir=None) -> dict:
     return out
 
 
+def certified_table(cal):
+    """{max_error target: {question type: certified confidence threshold}} of a calibration ({} without thresholds):
+    what a client needs to tell automatable decisions from those to review."""
+    table = {}
+    for target in (cal.get("thresholds") or {}):
+        row = {t: c for t in ("choice", "noul", "score") if (c := certified(cal, float(target), t)) is not None}
+        if row:
+            table[target] = row
+    return table
+
+
 def shipped_file(local_dir, mode, preset=None, quant=None, layout="canonical", adapter_dir=None) -> Path:
-    """The calibration file basal-serve loads for the model in `mode` without --calibration."""
+    """The calibration file basal-serve loads for the model in `mode` without --calibration (adapter_dir: only with
+    an engine that takes --adapter)."""
     kind, default_quant = MODES[mode][:2]
-    return calibration_file(Path(local_dir), kind, None, quant or default_quant, preset, layout, adapter_dir)
+    return calibration_file(Path(local_dir), kind, None, quant or default_quant, preset, layout,
+                            *([adapter_dir] if adapter_dir else []))
+
+
+def served_certified(entry, local_dir, mode, options, selected=None) -> dict:
+    """The certified thresholds of the calibration a basal-serve child loaded (`selected`, its --calibration, else the
+    shipped file for its load options); {} when the child warned the file belongs to another model, or there is no
+    readable file."""
+    if entry is None or entry.get("calibration_warning"):
+        return {}
+    from basal.prompt import model_layout
+    try:
+        path = Path(selected) if selected else shipped_file(
+            local_dir, mode, options.get("vllm_preset"), options.get("quant"),
+            options.get("layout") or model_layout(Path(local_dir)), options.get("adapter"))
+        return certified_table(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
 
 
 def listing(model_id, settings_mod, local_dir=None) -> list[dict]:
@@ -184,6 +213,21 @@ def _basal_calibrate(job, argv, writer):
         writer.flush()
 
 
+def name_snapshot(path, local_dir):
+    """basal-calibrate 2.4.1 records `--model` as given: for a Hugging Face cache snapshot (how basal-ui passes a
+    model) the file then names a local path, which basal-serve's calibration check does not match with the served repo
+    id. Record the snapshot as its repo id and commit, as basal-serve names the served model."""
+    cal = json.loads(Path(path).read_text(encoding="utf-8"))
+    fitted = cal.get("fitted_on")
+    if not isinstance(fitted, dict) or fitted.get("model") != str(local_dir):
+        return
+    model, revision = model_identity(str(local_dir), Path(local_dir))
+    if revision is None:  # not a cache snapshot: the path is the model's name
+        return
+    fitted["model"], fitted["revision"] = model, revision
+    Path(path).write_text(json.dumps(cal, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, targets=TARGETS, options=None,
                     engine_args=None, advanced=None):
     """Run basal-calibrate, either against a private child or an in-process engine."""
@@ -246,5 +290,6 @@ def run_calibration(job, fleet, assessment, local_dir, input_path, out_path, tar
         return {"file": None, "report": report, "report_only": True}
     if not Path(out_path).exists():
         raise RuntimeError("basal-calibrate wrote no file")
+    name_snapshot(out_path, local_dir)
     Path(out_path).with_suffix(".report.txt").write_text(report + "\n", encoding="utf-8")
     return {"file": str(out_path), "report": report, "engine_in_process": in_process, **summary(out_path)}

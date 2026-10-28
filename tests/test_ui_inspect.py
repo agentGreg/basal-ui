@@ -5,12 +5,12 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.ui import catalog, inspect, settings
-from basal.ui.app import Fleet, create_app
-from basal.ui.catalog import Variant
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.stats import Stats
+from basal_ui import catalog, inspect, settings
+from basal_ui.app import Fleet, create_app
+from basal_ui.catalog import Variant
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 BF16 = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf16", None, 100, False)

@@ -3,8 +3,8 @@ import time
 
 import pytest
 
-from basal.ui.jobs import Jobs
-from basal.ui.jobs import LogBuffer
+from basal_ui.jobs import Jobs
+from basal_ui.jobs import LogBuffer
 
 
 def wait_done(jobs, kind, timeout=3):
@@ -54,7 +54,7 @@ def test_one_job_per_kind_cancel_error_and_result():
 
 
 def test_job_phase_codes_preserve_english_phase_and_capture_parameters():
-    from basal.ui.jobs import Job, PHASE_TEMPLATES, phase_fields
+    from basal_ui.jobs import Job, PHASE_TEMPLATES, phase_fields
 
     assert phase_fields("restoring model/example") == ("phase_restoring", {"model": "model/example"})
     job = Job("backend-test", "m", "label", LogBuffer())

@@ -1,6 +1,6 @@
 import pytest
 
-from basal.ui.history import History, make_record, replay_fields
+from basal_ui.history import History, make_record, replay_fields
 
 
 @pytest.fixture(autouse=True)

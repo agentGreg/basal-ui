@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from huggingface_hub.constants import HF_HUB_CACHE
 
-from basal.ui import settings
+from basal_ui import settings
 
 
 def test_interprocess_lock_context_runs_the_wrapped_function(tmp_path, monkeypatch):
@@ -195,7 +195,7 @@ def test_cross_process_settings_updates_do_not_lose_keys(tmp_path, monkeypatch):
     config = tmp_path / "settings.json"
     monkeypatch.setenv("BASAL_UI_CONFIG", str(config))
     env = {**os.environ, "BASAL_UI_CONFIG": str(config)}
-    code = ("from basal.ui import settings\n"
+    code = ("from basal_ui import settings\n"
             "import sys\n"
             "for i in range(20): settings.create_key(f'{sys.argv[1]}-{i}')")
     workers = [subprocess.Popen([sys.executable, "-c", code, prefix], env=env)
@@ -210,7 +210,7 @@ def test_cross_process_revoke_is_not_undone_by_creates(tmp_path, monkeypatch):
     env = {**os.environ, "BASAL_UI_CONFIG": str(config)}
     settings.create_key("revoke-me")
     start = tmp_path / "start"
-    code = ("from basal.ui import settings\n"
+    code = ("from basal_ui import settings\n"
             "import pathlib, sys, time\n"
             "start = pathlib.Path(sys.argv[1])\n"
             "while not start.exists(): time.sleep(.001)\n"
@@ -218,7 +218,7 @@ def test_cross_process_revoke_is_not_undone_by_creates(tmp_path, monkeypatch):
     creator = subprocess.Popen([sys.executable, "-c", code, str(start)], env=env)
     revoker = subprocess.Popen(
         [sys.executable, "-c",
-         ("from basal.ui import settings\n"
+         ("from basal_ui import settings\n"
           "import pathlib, sys, time\n"
           "start = pathlib.Path(sys.argv[1])\n"
           "while not start.exists(): time.sleep(.001)\n"

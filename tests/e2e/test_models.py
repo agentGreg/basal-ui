@@ -64,12 +64,12 @@ def test_two_models_answer_behind_one_api_port_with_a_key(ui, text_model, second
             assert r.status_code == 200, r.text
             return r.json()["result"]
 
-        assert set(rpc("tools/call", {"name": "list_models", "arguments": {}})["structuredContent"]["models"]) >= {a, b}
-        answer = rpc("tools/call", {"name": "decide", "arguments": {"model": b, "state": CHOICE["state"], "type": "noul",
+        # basal-serve 2.4.1's MCP tools take no model argument: the API server answers with the first loaded model
+        answer = rpc("tools/call", {"name": "decide", "arguments": {"state": CHOICE["state"], "type": "noul",
                                                                     "question": "Czy klient prosi o odblokowanie?"}})
-        assert not answer.get("isError") and answer["structuredContent"]["model"] == b, answer
+        assert not answer.get("isError") and answer["structuredContent"]["model"] == ui.status()["models"][0]["id"], answer
         assert 0 <= answer["structuredContent"]["noul"] <= 1
-        assert any(r["source"] == "mcp" for r in ui.get("/api/history", params={"model": b})["items"])
+        assert any(r["source"] == "mcp" for r in ui.get("/api/history", params={"model": answer["structuredContent"]["model"]})["items"])
 
 
 def test_memory_budget_refuses_a_load_that_does_not_fit(ui, text_model, second_model, hardware):

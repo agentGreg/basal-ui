@@ -1,10 +1,10 @@
-"""The Polish dictionary of basal-ui (basal/ui/static/i18n.js) against the strings the frontend passes to t() / tp()."""
+"""The Polish dictionary of basal-ui (basal_ui/static/i18n.js) against the strings the frontend passes to t() / tp()."""
 import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-STATIC = Path(__file__).parents[1] / "basal/ui/static"
+STATIC = Path(__file__).parents[1] / "basal_ui/static"
 JS_STRING = r"""(['"])((?:\\.|(?!\1).)*)\1"""  # a single- or double-quoted JS string literal
 
 

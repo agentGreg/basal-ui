@@ -179,7 +179,7 @@ class Manager:
     def inventory(self, refresh=False):
         with self.lock:
             if (self.detected_hw is None or refresh) and self.hardware_fn is hardware.detect:
-                command = 'import json; from basal.ui.hardware import detect; print("BASAL_HW="+json.dumps(detect().to_dict()))'
+                command = 'import json; from basal_ui.hardware import detect; print("BASAL_HW="+json.dumps(detect().to_dict()))'
                 try:
                     process = subprocess.run([sys.executable, '-c', command], capture_output=True, text=True, timeout=PROBE_TIMEOUT)
                     payload = next(line[len('BASAL_HW='):] for line in process.stdout.splitlines() if line.startswith('BASAL_HW='))
@@ -331,7 +331,7 @@ class Manager:
             for snapshot in snapshots:
                 job.check()
                 runner = snapshot['runner']
-                response = httpx.get(runner.base_url + '/health', headers=runner._headers(), timeout=2)
+                response = httpx.get(runner.base_url + '/health', timeout=2)
                 response.raise_for_status()
                 health = response.json()
                 if (health.get('status') != 'ok' or type(health.get('running')) is not int or

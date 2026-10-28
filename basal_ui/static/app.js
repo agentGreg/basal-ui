@@ -216,7 +216,12 @@ async function refreshUpdates() {
   try {
     const d=await api('/api/updates');
     const parts=[];
-    if(d.newer)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${t('basal {latest} is available — you have {installed}',{latest:esc(d.latest),installed:esc(d.installed)})}</strong> <a href="${esc(d.url)}" target="_blank" rel="noopener">${t('Release notes')}</a></div>`);
+    if(d.newer)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${t('basal-ui {latest} is available — you have {installed}',{latest:esc(d.latest),installed:esc(d.installed)})}</strong> <a href="${esc(d.url)}" target="_blank" rel="noopener">${t('Release notes')}</a></div>`);
+    const engine=d.engine||{};
+    if(engine.newer)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${engine.latest_supported?t('basal engine {latest} is available — you have {installed}',{latest:esc(engine.latest),installed:esc(engine.version)}):t('basal engine {latest} is released; this basal-ui supports {supported}',{latest:esc(engine.latest),supported:esc(engine.supported)})}</strong> <a href="${esc(engine.url)}" target="_blank" rel="noopener">${t('Release notes')}</a></div>`);
+    const badge=$('#engineBadge');
+    badge.hidden=!engine.experimental;
+    if(engine.experimental){badge.textContent=t('experimental engine {version}',{version:`${engine.version}${engine.commit?'@'+engine.commit.slice(0,7):''}`});badge.title=t('basal-ui supports engine {supported}',{supported:engine.supported});}
     if(d.new_models?.length)parts.push(`<div class="card"><button type="button" data-dismiss-update aria-label="${t('Dismiss')}">×</button><strong>${tp(d.new_models.length,'{n} new model','{n} new models',{n:d.new_models.length})} ${t('in the catalog')}</strong> <button type="button" id="showNewModels">${t('View models')}</button></div>`);
     $('#updatesBanner').innerHTML=parts.join('');
     const b=$('#showNewModels');if(b)b.onclick=()=>act(async()=>{await api('/api/updates/seen',{method:'POST'});await refreshUpdates();showView('models',true);selectModelsTab('all');});
@@ -1455,7 +1460,7 @@ function renderCalibrationFiles(id, d) {
     $('#reportText').textContent=r.report; $('#reportDialog').showModal();
   }));
 }
-// Load options: the engine mode and basal-serve's runtime settings of one load (basal/ui/options.py)
+// Load options: the engine mode and basal-serve's runtime settings of one load (basal_ui/options.py)
 const GRAPH_MODES=['fast','fast-nocompile','fast-exit','fp8','nvfp4'];
 const OPTION_SECTIONS=[
   ['Engine',['revision','adapter','ollama_url','ollama_model','llamacpp_url','http_parallel','quant','attn','dtype','vllm_preset','gpu_memory','vllm_fast_prefill','device','eager_attn','eager_forward','ple_offload','exit_heads','mlx_packed']],
@@ -1581,6 +1586,9 @@ function updateOptionVisibility() {
   if(!think.model)notes.push(ts(think.reason,think.reason_code,think.reason_params));
   else if(!think.vllm)notes.push(t('vLLM is not installed in basal-ui’s environment: give the Python of one that has it, or the URL of a running think server.'));
   if(mode!=='fast-exit')notes.push(t('Early exit needs --mode fast-exit (the exit heads of basal-1.0, bf16 on a CUDA GPU).'));
+  // LoRA adapters at load: only with an engine that takes --adapter (basal-ui's feature probe)
+  const adapterBox=$('#opt-adapter'), adapterReason=optionsState.data.adapter_reason;
+  if(adapterBox){adapterBox.disabled=Boolean(adapterReason); if(adapterReason){adapterBox.value='';adapterBox.title=ts(adapterReason,optionsState.data.adapter_reason_code,optionsState.data.adapter_reason_params);}else adapterBox.title='';}
   $('#optExperimentalNote').textContent=notes.join(' ');
 }
 function collectOptions() {
@@ -1744,7 +1752,7 @@ $('#downloadLogs').onclick=()=>{
   const a=document.createElement('a'), url=URL.createObjectURL(new Blob([$('#logOutput').textContent],{type:'text/plain'}));
   a.href=url; a.download=`${shortName(logSource)}-${new Date().toISOString().slice(0,10)}.log`; a.click(); URL.revokeObjectURL(url);
 };
-// Batch: basal-run over a JSONL file against a loaded model (basal/ui/batch.py)
+// Batch: basal-run over a JSONL file against a loaded model (basal_ui/batch.py)
 function answerBest(a) {
   if(!a||typeof a!=='object')return null;
   for(const key of ['choice','action','tool','label','score'])if(a[key]!=null)return String(typeof a[key]==='number'?Number(a[key]).toFixed(2):a[key]);
@@ -1793,7 +1801,7 @@ $('#runBatch').onclick=()=>act(async()=>{
 $('#cancelBatch').onclick=()=>act(async()=>{await api('/api/batch',{method:'DELETE'});await refreshStatus();});
 $('#downloadBatch').onclick=()=>{const a=document.createElement('a');a.href='/api/batch/download';a.click();};
 $('#copyBatchPath').onclick=()=>copyText(batchResult?.output||'',t('Output path copied'));
-// Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal/ui/inspect.py)
+// Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal_ui/inspect.py)
 const inspectableModel=m=>m.port==='bf16'&&!m.experimental;
 let inspectSignature='', inspectReady=false;
 function renderInspectModels() {

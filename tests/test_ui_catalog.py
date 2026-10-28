@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from basal.ui.catalog import (
+from basal_ui.catalog import (
     Variant,
     _label,
     _media_mode,
@@ -16,9 +16,9 @@ from basal.ui.catalog import (
     serve_args,
     suggest,
 )
-from basal.ui import catalog
-from basal.ui.catalog import base_dir, download, is_downloaded
-from basal.ui.hardware import Hardware
+from basal_ui import catalog
+from basal_ui.catalog import base_dir, download, is_downloaded
+from basal_ui.hardware import Hardware
 
 
 def hw(platform="cuda", name="H100", cap=(9, 0), engines=frozenset({"cuda"}), memory=80 * 1024**3,
@@ -35,7 +35,7 @@ def variant(repo="Remek/basal-2.0-4.5B", port=None, size=None, gguf=None):
 
 
 def test_hardware_detects_media_engine(monkeypatch):
-    from basal.ui import hardware
+    from basal_ui import hardware
 
     find_spec = hardware.importlib.util.find_spec
     packages = {"PIL", "soundfile", "scipy", "torchvision"}
@@ -193,17 +193,17 @@ def test_suggestion_codes_reproduce_english_text_with_structured_params():
     unknown_card = suggest([assess(unknown_size, budget)], budget)[0]
     assert unknown_card["why_params"]["estimate"] is None
     assert unknown_card["why"] == "mini in bf16: needs about — of a 8.6 GB budget"
-    source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
+    source = (Path(__file__).parents[1] / "basal_ui/static/i18n.js").read_text()
     polish = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))[unknown_card["why_code"]]
     translated = polish.format(**{**unknown_card["why_params"], "estimate": "—", "memory": 8.6})
     assert translated.replace("— GB", "—") == "mini w formacie bf16: potrzeba około — z budżetu 8.6 GB"
 
 
 def test_server_templates_have_matching_polish_placeholders():
-    from basal.ui import backends, options
-    from basal.ui.jobs import PHASE_TEMPLATES
+    from basal_ui import backends, options
+    from basal_ui.jobs import PHASE_TEMPLATES
 
-    source = (Path(__file__).parents[1] / "basal/ui/static/i18n.js").read_text()
+    source = (Path(__file__).parents[1] / "basal_ui/static/i18n.js").read_text()
     translated = dict(re.findall(r'"code:([^"]+)": "([^"]*)"', source))
     tables = (catalog.ASSESSMENT_TEMPLATES, backends.BACKEND_TEMPLATES,
               options.OPTION_TEMPLATES, PHASE_TEMPLATES)
@@ -244,7 +244,7 @@ def test_lightest_suggestion_is_pico_in_the_preferred_format():
 
 
 def test_available_memory_parses_macos_vm_stat(monkeypatch):
-    from basal.ui import hardware
+    from basal_ui import hardware
 
     output = ("Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
               "Pages free: 10.\nPages inactive: 20.\nPages speculative: 3.\n")
@@ -254,7 +254,7 @@ def test_available_memory_parses_macos_vm_stat(monkeypatch):
 
 
 def test_memory_on_windows_comes_from_global_memory_status(monkeypatch):
-    from basal.ui import hardware
+    from basal_ui import hardware
 
     monkeypatch.setattr(hardware.sys, "platform", "win32")
     monkeypatch.setattr(hardware, "_windows_memory", lambda: (16 * 1024**3, 6 * 1024**3))

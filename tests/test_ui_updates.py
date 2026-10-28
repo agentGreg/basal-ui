@@ -2,9 +2,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.ui import catalog, settings, updates
-from basal.ui.app import create_app
-from basal.ui.hardware import Hardware
+from basal_ui import catalog, settings, updates
+from basal_ui.app import create_app
+from basal_ui.hardware import Hardware
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 
@@ -13,53 +13,54 @@ def app(tmp_path):
     return create_app(catalog_fn=lambda **_: ([], "test"), hardware_fn=lambda: HW)
 
 
-def test_update_newer_older_errors_and_disabled(tmp_path, monkeypatch):
+class Reply:
+    def __init__(self, version):
+        self.version = version
+
+    @staticmethod
+    def raise_for_status():
+        pass
+
+    def json(self):
+        return {"tag_name": self.version}
+
+
+def test_ui_and_engine_updates_newer_older_unsupported_errors_and_disabled(tmp_path, monkeypatch):
     monkeypatch.setenv("BASAL_UI_CONFIG", str(tmp_path / "settings.json"))
-    monkeypatch.setattr(updates, "_cached", (0.0, None, None))
-    replies = iter(("9.0.0", "1.0.0"))
-
-    class Reply:
-        def __init__(self, version):
-            self.version = version
-
-        @staticmethod
-        def raise_for_status():
-            pass
-
-        def json(self):
-            return {"tag_name": self.version}
-
-    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: Reply(next(replies)))
+    monkeypatch.setattr(updates, "_cached", {})
+    monkeypatch.setattr("basal_ui.app.ui_version", lambda: "0.1.0")
+    latest = {updates.UI_REPO: "0.2.0", updates.ENGINE_REPO: "2.4.9"}
+    monkeypatch.setattr(httpx, "get", lambda url, **kwargs: Reply(next(v for r, v in latest.items() if r in url)))
     with TestClient(app(tmp_path), base_url="http://127.0.0.1") as client:
-        assert client.get("/api/updates").json()["newer"] is True
-        monkeypatch.setattr(updates, "_cached", (0.0, None, None))
-        assert client.get("/api/updates").json()["newer"] is False
-        monkeypatch.setattr(updates, "_cached", (0.0, None, None))
+        d = client.get("/api/updates").json()
+        assert (d["installed"], d["latest"], d["newer"]) == ("0.1.0", "0.2.0", True)
+        assert d["url"] == "https://github.com/pawelkiszczak/basal-ui/releases/tag/v0.2.0"
+        engine = d["engine"]
+        assert (engine["version"], engine["latest"], engine["newer"], engine["latest_supported"]) == (
+            "2.4.1", "2.4.9", True, True)
+        assert engine["experimental"] is False and engine["supported"] == ">=2.4.1,<2.5"
+        monkeypatch.setattr(updates, "_cached", {})
+        latest.update({updates.UI_REPO: "0.0.9", updates.ENGINE_REPO: "2.5.0"})
+        d = client.get("/api/updates").json()
+        assert d["newer"] is False
+        assert d["engine"]["newer"] is True and d["engine"]["latest_supported"] is False  # released, not supported yet
+        monkeypatch.setattr(updates, "_cached", {})
         monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: (_ for _ in ()).throw(httpx.HTTPError("offline")))
-        assert client.get("/api/updates").json()["error"] == "offline"
+        d = client.get("/api/updates").json()
+        assert d["error"] == d["engine"]["error"] == "offline"
         client.put("/api/settings", json={"check_updates": False})
         monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("disabled update check made a request")))
         disabled = client.get("/api/updates").json()
         assert disabled["enabled"] is False and disabled["latest"] is None and disabled["error"] is None
+        assert disabled["engine"]["latest"] is None and disabled["engine"]["version"] == "2.4.1"
 
 
 def test_a_failed_check_is_retried_after_ten_minutes_not_six_hours(monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(updates.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(updates, "_cached", (0.0, None, None))
+    monkeypatch.setattr(updates, "_cached", {})
     replies = iter((httpx.HTTPError("offline"), "9.0.0"))
-
-    class Reply:
-        def __init__(self, version):
-            self.version = version
-
-        @staticmethod
-        def raise_for_status():
-            pass
-
-        def json(self):
-            return {"tag_name": self.version}
 
     def get(*args, **kwargs):
         reply = next(replies)
@@ -67,13 +68,13 @@ def test_a_failed_check_is_retried_after_ten_minutes_not_six_hours(monkeypatch):
             raise reply
         return Reply(reply)
     monkeypatch.setattr(httpx, "get", get)
-    assert updates.latest() == (None, "offline")
+    assert updates.latest(updates.UI_REPO) == (None, "offline")
     clock[0] += 9 * 60
-    assert updates.latest() == (None, "offline")  # cached
+    assert updates.latest(updates.UI_REPO) == (None, "offline")  # cached
     clock[0] += 2 * 60
-    assert updates.latest() == ("9.0.0", None)
+    assert updates.latest(updates.UI_REPO) == ("9.0.0", None)
     clock[0] += 60 * 60
-    assert updates.latest() == ("9.0.0", None)  # a success stays cached for hours
+    assert updates.latest(updates.UI_REPO) == ("9.0.0", None)  # a success stays cached for hours
 
 
 @pytest.mark.parametrize("source", ["cache", "hub"])

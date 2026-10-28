@@ -1,26 +1,23 @@
 """2.3.1 integration contracts; simulated hardware/children, no model downloads."""
 import asyncio
 import dataclasses
-import json
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal import run
-from basal.prompt import RequestError
-from basal.server import build_app, parser
-from basal.ui import calibration, catalog, options, settings
-from basal.ui.app import Fleet, Runner, create_app
-from basal.ui.gateway import build_app as gateway_app
-from basal.ui.hardware import Hardware
-from basal.ui.jobs import Jobs
-from tests.test_http_status import AppServer, Engine, BODY
+from basal.server import parser
+from basal_ui import calibration, catalog, gateway, options, settings
+from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.gateway import build_app as gateway_app
+from basal_ui.hardware import Hardware
+from basal_ui.jobs import Jobs
 from tests.test_ui_options import BF16, CPU, CUDA, wait_for
 from tests.test_ui_jobs import wait_done
 
 APPLE = Hardware("apple", "Apple", 64 * 1024**3, None, None, frozenset({"mlx", "mps"}))
+BODY = {"state": "Invoice 1240 PLN.", "questions": {"q": {"type": "noul", "instructions": "Is it an invoice?"}}}
 
 
 @pytest.fixture(autouse=True)
@@ -83,12 +80,12 @@ def test_health_is_cached_and_missing_counters_are_not_idle(monkeypatch, payload
         calls.append((url, kw))
         return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx, "get", get)
-    runner = Runner(internal_secret="private")
+    runner = Runner()
     runner.state, runner.base_url = "ready", "http://child"
     runner.status()
     wait_for(lambda: not runner.health_polling)
     assert runner.status()["health"] == expected
-    assert len(calls) == 1 and calls[0][1] == {"headers": {"Authorization": "Bearer private"}, "timeout": .5}
+    assert len(calls) == 1 and calls[0][1] == {"timeout": .5}
 
 
 def test_unreachable_and_old_generation_health_are_not_idle(monkeypatch):
@@ -105,23 +102,30 @@ def test_unreachable_and_old_generation_health_are_not_idle(monkeypatch):
     assert runner.health["reachable"] is None
 
 
-@pytest.mark.parametrize("error,status,code", [
-    (RequestError("bad input"), 422, "INVALID_REQUEST"),
-    (RuntimeError("MPS backend out of memory"), 503, "OUT_OF_MEMORY"),
-    (KeyError("layer"), 500, "INTERNAL_ERROR"),
-    (ValueError("wrong shape in engine"), 500, "INTERNAL_ERROR"),
-])
+@pytest.mark.parametrize("status,code", [(422, "INVALID_REQUEST"), (503, "OUT_OF_MEMORY"), (500, "INTERNAL_ERROR")])
 @pytest.mark.parametrize("path", ["/v1/systemone", "/v1/decisions"])
-def test_error_envelopes_ids_and_load_recovery(error, status, code, path):
-    srv = AppServer(Engine(error))
-    app = build_app(srv, parser().parse_args(["--mode", "fast"]))
-    body = BODY if path == "/v1/systemone" else {"input": "s", "questions": [{"type": "predicate", "instructions": "ok?"}]}
-    with TestClient(app) as client:
-        response = client.post(path, json=body, headers={"x-request-id": "engine231"})
-        assert response.status_code == status
-        assert response.headers["x-request-id"] == response.headers["x-typesafe-request-id"] == "engine231"
-        assert (response.json() if path == "/v1/systemone" else response.json()["error"])["code"] == code
-        assert client.get("/health").json() == {"status": "ok", "running": 0, "queued": 0}
+def test_child_errors_get_typed_envelopes_and_request_ids(monkeypatch, tmp_path, status, code, path):
+    """basal-serve answers a failed request with {"error": message} and its status; the API server adds the code (and
+    the OpenAI shape on /v1/decisions) and its own request id."""
+    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: CPU)
+    runner = Runner()
+    runner.state, runner.model, runner.base_url = "ready", BF16.id, "http://child"
+    fleet.runners[BF16.id] = runner
+    seen = []
+
+    def child(request):
+        seen.append(request.url.path)
+        return httpx.Response(status, json={"error": "engine diagnostic"})
+    real = httpx.AsyncClient
+    monkeypatch.setattr(gateway.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(child), **kw))
+    body = {**BODY} if path == "/v1/systemone" else {"input": "s", "questions": [{"type": "predicate", "instructions": "ok?"}]}
+    with TestClient(gateway_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        response = client.post(path, json={"model": BF16.id, **body}, headers={"x-request-id": "engine231"})
+    assert seen == ["/v1/systemone"]  # Decisions are translated: the child is a stock basal-serve
+    assert response.status_code == status and response.headers["x-request-id"] == "engine231"
+    error = response.json() if path == "/v1/systemone" else response.json()["error"]
+    assert error["code"] == code
+    assert error["message" if path == "/v1/decisions" else "error"] == "engine diagnostic"
 
 
 @pytest.mark.parametrize("status,code", [(422, "INVALID_REQUEST"), (503, "OUT_OF_MEMORY"), (500, "INTERNAL_ERROR")])
@@ -149,22 +153,22 @@ def test_gateway_and_playground_keep_status_and_diagnostics(monkeypatch, tmp_pat
         assert r.headers["x-request-id"] == "child-id"
 
 
-def test_batch_keeps_each_http_failure_without_retry(tmp_path, monkeypatch):
-    statuses = [422, 503, 500]
-    calls = []
-    def handler(request):
-        status = statuses[len(calls)]
-        calls.append(request)
-        return httpx.Response(status, json={"error": "engine diagnostic", "code": str(status)}, headers={"x-request-id": f"id-{status}"})
+def test_invalid_request_is_refused_before_the_child(monkeypatch, tmp_path):
+    """Values basal-serve 2.4.1 answers with a 500 from inside the engine get a 422 without reaching it."""
+    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings, hardware_fn=lambda: CPU)
+    runner = Runner()
+    runner.state, runner.model, runner.base_url = "ready", BF16.id, "http://child"
+    fleet.runners[BF16.id] = runner
     real = httpx.AsyncClient
-    monkeypatch.setattr(run.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
-    source, output = tmp_path / "input.jsonl", tmp_path / "output.jsonl"
-    source.write_text('\n'.join(json.dumps({"id": i, **BODY}) for i in range(3)))
-    summary = asyncio.run(run.run(SimpleNamespace(input=source, output=output, concurrency=1, url="http://child", early_exit=None)))
-    rows = [json.loads(line) for line in output.read_text().splitlines()]
-    assert summary["errors"] == 3 and len(calls) == 3
-    assert [r["status"] for r in rows] == statuses
-    assert [r["request_id"] for r in rows] == [f"id-{s}" for s in statuses]
+    monkeypatch.setattr(gateway.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(
+        lambda request: pytest.fail("an invalid request reached basal-serve")), **kw))
+    bad = {"q": {"type": "act", "instructions": "pay?", "costs": {"wrong": 1}, "max_error": "low"},
+           "m": {"type": "multi", "instructions": "tags", "criteria": ["a", "b"], "min": "one"}}
+    with TestClient(gateway_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        for name, question in bad.items():
+            r = client.post("/v1/systemone", json={"model": BF16.id, "state": "s", "questions": {name: question}})
+            assert r.status_code == 422 and r.json()["code"] == "INVALID_REQUEST"
+            assert r.json()["detail"][0]["msg"].startswith(f"question '{name}'")
 
 
 def test_calibration_warnings_are_actual_report_text_and_jobs_recover(tmp_path):
@@ -215,21 +219,42 @@ def test_new_options_survive_save_restart_and_auto_load(hw, chosen, tmp_path, mo
 
 
 def test_mode_comparison_passes_and_records_packed_option(monkeypatch, tmp_path):
-    from basal.ui import bench
-    from basal.ui.jobs import Job, LogBuffer
+    from basal_ui import bench
+    from basal_ui.jobs import Job, LogBuffer
     calls = []
-    monkeypatch.setattr(bench.offline, "resolve", lambda *a, **k: tmp_path)
-    monkeypatch.setattr(bench.offline, "load_questions", lambda *a: [BODY])
-    monkeypatch.setattr(bench.offline, "model_format", lambda *a: 2)
-    def measure(*args):
-        calls.append(args)
-        return {"mode": args[0]}, [0]
-    monkeypatch.setattr(bench.offline, "measure_mode", measure)
+
+    def run_tool(job, module, argv, out_path=None, on_json=None):
+        calls.append((module, argv))
+        on_json({"mode": "mlx", "n": 44})
+    monkeypatch.setattr(bench, "run_tool", run_tool)
     result = bench.modes_job(Job("benchmark", "m", "comparison", LogBuffer()),
                             SimpleNamespace(release=lambda _: None, stats=None), BF16, tmp_path,
                             ["mlx"], 1, 1, options.validate({"mlx_packed": True}))
-    assert calls[0][-1] is True
-    assert result["modes"][0]["mlx_packed"] is True
+    assert calls[0][0] == "bench" and "--mlx-packed" in calls[0][1]
+    assert result["modes"] == [{"mode": "mlx", "n": 44, "mlx_packed": True}] and result["items"] == 44
+
+
+def test_mode_comparison_keeps_a_failed_mode_and_runs_the_rest_after_the_reference(monkeypatch, tmp_path):
+    """basal-bench stops at a mode that fails; the comparison keeps it with the error and measures the remaining
+    modes in a new run that starts with the reference again (whose repeated row is dropped)."""
+    from basal_ui import bench
+    from basal_ui.jobs import Job, LogBuffer
+    runs = []
+
+    def run_tool(job, module, argv, out_path=None, on_json=None):
+        modes = argv[argv.index("--modes") + 1:argv.index("--n")]
+        runs.append(modes)
+        for mode in modes:
+            if mode == "fp8":
+                raise RuntimeError("basal-bench exited (1): fp8 needs compute capability 8.9")
+            on_json({"mode": mode, "agree": 1.0})
+    monkeypatch.setattr(bench, "run_tool", run_tool)
+    result = bench.modes_job(Job("benchmark", "m", "comparison", LogBuffer()),
+                            SimpleNamespace(release=lambda _: None, stats=None), BF16, tmp_path,
+                            ["eager", "fp8", "fast"], 44, 10, options.validate({}))
+    assert runs == [["eager", "fp8", "fast"], ["eager", "fast"]]
+    assert [(r["mode"], r.get("error")) for r in result["modes"]] == [
+        ("eager", None), ("fp8", "basal-bench exited (1): fp8 needs compute capability 8.9"), ("fast", None)]
 
 
 def test_failed_http_job_preserves_status_body_and_id():
@@ -244,8 +269,8 @@ def test_failed_http_job_preserves_status_body_and_id():
 
 
 def test_benchmark_retains_distinct_http_failures_without_retry(tmp_path):
-    from basal.ui import bench
-    from basal.ui.jobs import Job, LogBuffer
+    from basal_ui import bench
+    from basal_ui.jobs import Job, LogBuffer
     from tests.test_ui_bench import AnswersOptionOne, write_set
     class FailingConcurrent(AnswersOptionOne):
         async def adecide(self, *args, **kwargs):

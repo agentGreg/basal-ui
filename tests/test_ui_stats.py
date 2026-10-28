@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from basal.ui.stats import Stats
+from basal_ui.stats import Stats
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ def test_two_instances_on_one_file_add_up(tmp_path):
 
 
 def test_record_during_reset_remains_in_delta_and_is_not_lost(stats, monkeypatch):
-    from basal.ui import settings
+    from basal_ui import settings
 
     write = settings._write_private
     started = threading.Event()

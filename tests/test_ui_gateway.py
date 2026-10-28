@@ -6,13 +6,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from basal.auth import ApiKeys
-from basal.ui import settings
-from basal.ui.app import Fleet, Runner
-from basal.ui.gateway import Gateway, build_app
-from basal.ui.hardware import Hardware
-from basal.ui.history import History
-from basal.ui.stats import Stats
+from basal_ui import gateway as gateway_module
+from basal_ui import settings
+from basal_ui.app import Fleet, Runner
+from basal_ui.auth import ApiKeys
+from basal_ui.gateway import Gateway, build_app
+from basal_ui.hardware import Hardware
+from basal_ui.history import History
+from basal_ui.stats import Stats
 
 HW = Hardware("cpu", "cpu", 1024**4, None, None, frozenset())
 
@@ -29,7 +30,7 @@ def fleet(tmp_path, monkeypatch):
                   hardware_fn=lambda: HW, stats=Stats(tmp_path / "stats.json"),
                   history=History(tmp_path / "history.jsonl"))
     for model_id in ("a/one", "b/two"):
-        runner = Runner(internal_secret="x")
+        runner = Runner()
         runner.state, runner.model, runner.ready_at = "ready", model_id, 1700000000.0
         runner.models_entry = {"name": model_id, "media": []}
         fleet.runners[model_id] = runner
@@ -117,7 +118,8 @@ def test_keys_guard_every_route_and_stats_need_the_admin_key(fleet, tmp_path):
         assert preflight.headers["access-control-allow-origin"] == "https://app.example"
 
 
-def test_mcp_tools_take_a_model_and_list_the_loaded_ones(fleet):
+def test_mcp_tools_answer_with_the_first_loaded_model(fleet):
+    """basal-serve 2.4.1's MCP tools take no model argument: the API server's MCP answers with the first loaded model."""
     pytest.importorskip("mcp")
     headers = {"Accept": "application/json, text/event-stream", "Host": "127.0.0.1:8793"}
 
@@ -128,15 +130,47 @@ def test_mcp_tools_take_a_model_and_list_the_loaded_ones(fleet):
         return response.json()["result"]
 
     with TestClient(build_app(fleet, fleet.stats, mcp=True), base_url="http://127.0.0.1") as client:
-        assert rpc(client, "tools/call", {"name": "list_models", "arguments": {}})["structuredContent"] == {
-            "models": ["a/one", "b/two"]}
-        answer = rpc(client, "tools/call", {"name": "decide", "arguments": {"model": "b/two", "state": "s",
-                                                                           "question": "?"}})
-        assert answer["structuredContent"]["model"] == "b/two"
-        refused = rpc(client, "tools/call", {"name": "decide", "arguments": {"model": "zz", "state": "s",
-                                                                            "question": "?"}})
-        assert refused["isError"] and "model 'zz' is not loaded" in refused["content"][0]["text"]
-    assert [(r["model"], r["source"]) for r in fleet.history.list()] == [("b/two", "mcp")]
+        answer = rpc(client, "tools/call", {"name": "decide", "arguments": {"state": "s", "question": "?"}})
+        assert answer["structuredContent"]["model"] == "a/one"
+    assert [(r["model"], r["source"]) for r in fleet.history.list()] == [("a/one", "mcp")]
+
+
+def test_decisions_are_translated_for_a_stock_child_and_recorded_as_sent(tmp_path, monkeypatch):
+    fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
+                  hardware_fn=lambda: HW, stats=Stats(tmp_path / "stats.json"),
+                  history=History(tmp_path / "history.jsonl"))
+    runner = Runner()
+    runner.state, runner.model, runner.base_url = "ready", "a/one", "http://child"
+    fleet.runners["a/one"] = runner
+    sent = []
+
+    def child(request):
+        sent.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"model": "a/one", "answers": {
+            "paid": {"type": "noul", "noul": 0.9, "confidence": 0.9},
+            "kind": {"type": "choice", "choice": "invoice", "probabilities": {"invoice": 0.8, "receipt": 0.2},
+                     "confidence": 0.8}}, "usage": {"input_tokens": 7}})
+    real = httpx.AsyncClient
+    monkeypatch.setattr(gateway_module.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(child), **kw))
+    request = {"model": "a/one", "input": "Invoice 12, paid.", "questions": [
+        {"type": "predicate", "name": "paid", "instructions": "Is it paid?"},
+        {"type": "choice", "name": "kind", "instructions": "Document kind?",
+         "choices": [{"value": "invoice"}, {"value": "receipt"}]}]}
+    with TestClient(build_app(fleet, fleet.stats), base_url="http://127.0.0.1") as client:
+        reply = client.post("/v1/decisions", json=request)
+    assert reply.status_code == 200
+    assert sent == [("/v1/systemone", {"state": "Invoice 12, paid.", "questions": {
+        "paid": {"type": "noul", "instructions": "Is it paid?"},
+        "kind": {"type": "choice", "instructions": "Document kind?", "criteria": {"invoice": None, "receipt": None}}}})]
+    data = reply.json()
+    assert data["object"] == "decision" and data["model"] == "a/one" and data["usage"]["input_tokens"] == 7
+    assert data["answers"] == [
+        {"type": "predicate", "name": "paid", "probability": 0.9},
+        {"type": "choice", "name": "kind", "choice": "invoice", "confidence": 0.8,
+         "probabilities": [{"value": "invoice", "probability": 0.8}, {"value": "receipt", "probability": 0.2}]}]
+    record = fleet.history.get(fleet.history.list()[0]["id"])
+    assert record["request"] == request and record["response"]["object"] == "decision"
 
 
 def free_port():
@@ -183,7 +217,7 @@ def test_port_in_use_is_reported_and_lan_url_is_used_for_all_interfaces(fleet, m
     finally:
         listener.close()
     calls = []
-    monkeypatch.setattr("basal.ui.app._lan_ip", lambda: calls.append(1) or "192.0.2.10")
+    monkeypatch.setattr("basal_ui.app._lan_ip", lambda: calls.append(1) or "192.0.2.10")
     gateway = Gateway(fleet, settings, fleet.stats)
     gateway.snapshot = {"host": "0.0.0.0", "port": 8123, "require_key": False, "cors_origins": [], "mcp": False}
     assert gateway.status()["url"] == "http://192.0.2.10:8123"

@@ -69,7 +69,7 @@ def replay_fields(request: dict) -> dict:
     """Build a Playground request from a recorded native or Decisions API request."""
     import re
 
-    from ..compat import decision_body
+    from .compat import decision_body
 
     def redacted(value, media=False):
         if isinstance(value, dict):
