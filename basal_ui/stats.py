@@ -66,13 +66,22 @@ def _empty():
 
 
 def _read(path: Path) -> dict:
+    """The stats file; reset_at holds when it was last reset: "*" (every model) or a model id -> unix time."""
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(loaded.get("models"), dict) and isinstance(loaded.get("benchmarks"), dict):
+            if not isinstance(loaded.get("reset_at"), dict):
+                loaded["reset_at"] = {}
             return loaded
     except (OSError, ValueError, AttributeError):
         pass
-    return {"models": {}, "benchmarks": {}}
+    return {"models": {}, "benchmarks": {}, "reset_at": {}}
+
+
+def _cleared(reset_at: dict, model_id: str, entry: dict) -> bool:
+    """True when a delta entry started before the file's last reset of that model (or of everything): another
+    process reset the counts this process had not flushed yet."""
+    return (entry["first_used"] or 0) < max(reset_at.get("*", 0), reset_at.get(model_id, 0))
 
 
 def _merge(into: dict, delta: dict) -> None:
@@ -103,8 +112,8 @@ class Stats:
         self._flusher.start()
 
     def record(self, model_id: str, response_json, latency_ms: float, ok: bool = True) -> None:
-        now = time.time()
-        with self.lock:
+        with self.lock:  # the time is taken under the lock, so a record racing a reset is stamped after it
+            now = time.time()
             entry = self.delta.setdefault(model_id, _empty())
             entry["first_used"] = entry["first_used"] or now
             entry["last_used"] = now
@@ -138,7 +147,8 @@ class Stats:
             data = _read(self.path)
             try:
                 for model_id, entry in delta.items():
-                    _merge(data["models"].setdefault(model_id, _empty()), entry)
+                    if not _cleared(data["reset_at"], model_id, entry):
+                        _merge(data["models"].setdefault(model_id, _empty()), entry)
                 change(data)
                 settings._write_private(self.path, json.dumps(data))
             except BaseException:
@@ -168,7 +178,8 @@ class Stats:
                 self.data = data
                 merged = json.loads(json.dumps(data))
                 for model_id, entry in self.delta.items():
-                    _merge(merged["models"].setdefault(model_id, _empty()), entry)
+                    if not _cleared(data["reset_at"], model_id, entry):
+                        _merge(merged["models"].setdefault(model_id, _empty()), entry)
             return merged
 
         merged = settings._locked(read)()
@@ -211,6 +222,7 @@ class Stats:
                         data["models"].clear()
                     else:
                         data["models"].pop(model_id, None)
+                    data["reset_at"]["*" if model_id is None else model_id] = time.time()
                     settings._write_private(self.path, json.dumps(data))
                 except BaseException:
                     for key, entry in previous.items():

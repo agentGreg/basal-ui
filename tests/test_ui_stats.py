@@ -1,4 +1,5 @@
 import threading
+import time
 
 import pytest
 
@@ -129,3 +130,21 @@ def test_snapshot_reads_another_instances_flushed_counters(tmp_path):
     assert a.snapshot()["models"]["m"]["requests"] == 1
     a.close()
     b.close()
+
+
+def test_reset_discards_another_instances_unflushed_counts(tmp_path):
+    a, b = Stats(tmp_path / "shared.json"), Stats(tmp_path / "shared.json")
+    try:
+        b.record("m", {"answers": {}}, 1.0)  # counted before the reset, not flushed yet
+        time.sleep(0.01)
+        a.reset()
+        assert b.snapshot()["models"] == {}
+        b.flush()
+        assert Stats(tmp_path / "shared.json").snapshot()["models"] == {}
+        time.sleep(0.01)
+        b.record("m", {"answers": {}}, 1.0)  # after the reset: counted
+        b.flush()
+        assert Stats(tmp_path / "shared.json").snapshot()["models"]["m"]["requests"] == 1
+    finally:
+        a.close()
+        b.close()
