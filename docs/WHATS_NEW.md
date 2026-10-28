@@ -34,6 +34,25 @@
   last one pinned); CI's engine matrix is generated from it and a test checks that `pyproject.toml`, the README and
   the E2E guide install the same release. `make engine-pin` prints it.
   [CONTRIBUTING.md](../CONTRIBUTING.md#bumping-the-engine)
+- **API server hardening:** a browser request whose `Origin` is not in the **CORS origins** setting is refused
+  (403 `ORIGIN_REFUSED`) before it reaches a model, so a web page cannot run decisions on a keyless server; bodies
+  must be `application/json` (415) and at most 256 MiB (413). The page and the embedded inspector refuse framing by
+  other sites and are revalidated on every load. [API](API.md#authentication-and-cors)
+- **Reliability:** a restart that fails no longer strands its memory reservation, and a concurrent load waits for it;
+  shutdown cancels jobs, ends their private children and waits up to 30 s for them; a process-group member that
+  ignores SIGTERM is killed; a full disk no longer fails an answered decision (it is logged instead); resetting the
+  statistics also discards the counts another basal-ui on the same settings file had not written yet; a settings file
+  that is not valid JSON is never overwritten (changes are refused with the path to fix).
+- **Models:** a sharded download counts as downloaded only with every shard its index names; an offline catalog
+  entry reads one snapshot (the one `main` points at); ROCm GPUs are not offered FP8, NVFP4, vLLM or SGLang; the
+  backend inference test checks the files at the revision the inventory showed; a malformed benchmark row fails with
+  its line number instead of being skipped.
+- **Accessibility:** History rows open from the keyboard (the time is a button with `aria-expanded`) and keep focus
+  across live refreshes; element boxes can be added, moved (arrows) and resized (Shift+arrows) without a pointer;
+  benchmark and band inputs have labels. The live History view keeps the newest 500 rows.
+- **Development:** Ruff `F,I,B,UP,SIM` with `ruff format` (`make format`, optional pre-commit hooks), a coverage
+  report in `make test`, `SECURITY.md`, Dependabot, and CI/release workflows with pinned actions, minimal permissions
+  and a release job that checks the tag against `pyproject.toml` and publishes the GitHub release notes.
 
 # Before 0.1.0 (in the fork)
 

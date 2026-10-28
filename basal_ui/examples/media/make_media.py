@@ -22,7 +22,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).resolve().parent
-FONT = Path(__file__).resolve().parents[2] / "ui" / "static" / "fonts" / "manrope.ttf"
+FONT = Path(__file__).resolve().parents[2] / "static" / "fonts" / "manrope.ttf"
 
 INK, MUTED, LINE, PAPER = "#1d211e", "#5d665f", "#d5dad3", "#ffffff"
 GREEN, BLUE, RED, BADGE = "#2f7d4f", "#1f5fb4", "#b3261e", "#e07b1f"

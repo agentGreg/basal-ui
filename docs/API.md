@@ -260,13 +260,30 @@ model_list:
       api_key: <secret>          # any non-empty value when the API server runs without keys
 ```
 
-### `basal.client.Basal`
+### Python (`httpx`)
+
+The gateway needs `model` in every request. `basal.client.Basal` (engine 2.4.1) takes neither a model nor an API key
+(`Basal(url, timeout, early_exit, facts)`), so it cannot reach basal-ui's API server; post the System One body instead:
 
 ```python
-from basal.client import Basal
+import httpx
 
-client = Basal("http://127.0.0.1:8000", api_key="<secret>")
-answer = client.choice("A user asks for a refund.", "Which team?", {"billing": "Billing", "support": "Support"})
+answer = httpx.post(
+    "http://127.0.0.1:8000/v1/systemone",
+    headers={"Authorization": "Bearer <secret>"},
+    json={
+        "model": "Remek/basal-2.0-mini-MLX-8bit",
+        "state": "A user asks for a refund.",
+        "questions": {
+            "team": {
+                "type": "choice",
+                "instructions": "Which team?",
+                "criteria": {"billing": "Billing", "support": "Support"},
+            }
+        },
+    },
+    timeout=120,
+).json()
 ```
 
 ### curl
@@ -274,11 +291,11 @@ answer = client.choice("A user asks for a refund.", "Which team?", {"billing": "
 ```bash
 curl http://127.0.0.1:8000/v1/systemone -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer <secret>' \
-  -d '{"state":"Choose a team","questions":{"route":{"type":"choice","instructions":"Which team?","criteria":{"billing":"Billing","support":"Support"}}}}'
+  -d '{"model":"<loaded model id, e.g. Remek/basal-2.0-mini-MLX-8bit>","state":"Choose a team","questions":{"route":{"type":"choice","instructions":"Which team?","criteria":{"billing":"Billing","support":"Support"}}}}'
 
 curl http://127.0.0.1:8000/v1/decisions -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer <secret>' \
-  -d '{"input":"Choose a team","questions":[{"type":"choice","instructions":"Which team?","choices":[{"value":"billing"},{"value":"support"}]}]}'
+  -d '{"model":"<loaded model id, e.g. Remek/basal-2.0-mini-MLX-8bit>","input":"Choose a team","questions":[{"type":"choice","instructions":"Which team?","choices":[{"value":"billing"},{"value":"support"}]}]}'
 ```
 
 ### Verified compatibility

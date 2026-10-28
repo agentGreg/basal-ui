@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
-PYTHON ?= .venv/bin/python
+# PYTHON is a command, word-split in the recipes: `uv run` finds the venv's interpreter on every OS
+PYTHON ?= $(UV) run --no-sync python
 UV ?= uv
 REF ?=
 ARGS ?=
@@ -33,7 +34,7 @@ engine:
 	fi
 
 engine-pin:
-	@"$$PYTHON" -c "from basal_ui.engine import PINNED_RELEASE; print(PINNED_RELEASE)"
+	@$$PYTHON -c "from basal_ui.engine import PINNED_RELEASE; print(PINNED_RELEASE)"
 
 lint:
 	"$$UV" run --no-sync ruff check . && "$$UV" run --no-sync ruff format --check .
@@ -48,7 +49,7 @@ e2e:
 	BASAL_E2E=1 "$$UV" run --no-sync pytest tests/e2e $(ARGS)
 
 run:
-	"$$PYTHON" -m basal_ui $(ARGS)
+	$$PYTHON -m basal_ui $(ARGS)
 
 screenshots:
 	"$$UV" run --extra e2e python scripts/screenshots.py

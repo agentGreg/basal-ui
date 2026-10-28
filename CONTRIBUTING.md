@@ -79,8 +79,8 @@ UI never blocks on a proposal. The pipeline:
 1. If the engine moves, bump it ("Bumping the engine" below); add a `docs/WHATS_NEW.md` section for the version.
 2. Run the e2e gate on real hardware (`make e2e`, `docs/E2E.md`) and record the run (models, hardware, results) in
    the release PR.
-3. Tag `vX.Y.Z`; `publish.yml` builds and uploads to PyPI (trusted publishing) and the GitHub release notes come
-   from WHATS_NEW.
+3. Bump `version` in `pyproject.toml` to X.Y.Z (`publish.yml` refuses a tag that differs), tag `vX.Y.Z`; `publish.yml`
+   uploads to PyPI (trusted publishing) and creates the GitHub release from the `# X.Y.Z` section of WHATS_NEW.
 
 ### Bumping the engine
 
