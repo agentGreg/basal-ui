@@ -194,10 +194,10 @@ def test_calibration_warnings_are_actual_report_text_and_jobs_recover(tmp_path):
 def test_new_options_survive_save_restart_and_auto_load(hw, chosen, tmp_path, monkeypatch):
     commands = []
     def start(self, assessment, gen, media=False, cache_dir=None, serve=None):
-        commands.append(self._build_command(BF16, tmp_path, assessment, media, 1, settings.serve_settings()))
-        with self.lock:
+        with self.lock:  # remembered before it is reported ready, as Runner._start does
+            settings.remember_loaded(BF16.id, media, self.options)
             self.state = "ready"
-        settings.remember_loaded(BF16.id, media, self.options)
+        commands.append(self._build_command(BF16, tmp_path, assessment, media, 1, settings.serve_settings()))
     monkeypatch.setattr(Runner, "_start", start)
     def app():
         return create_app(catalog_fn=lambda **_: ([BF16], "test"), hardware_fn=lambda: hw)

@@ -240,10 +240,10 @@ def test_load_options_reach_the_command_are_remembered_and_reused_by_restart(tmp
     commands = []
 
     def start(self, assessment, gen, media=False, cache_dir=None, serve=None):
-        commands.append(self._build_command(BF16, tmp_path, assessment, media, 1, settings.serve_settings()))
-        with self.lock:
+        with self.lock:  # remembered before it is reported ready, as Runner._start does
+            settings.remember_loaded(assessment.variant.id, media, self.options)
             self.state = "ready"
-        settings.remember_loaded(assessment.variant.id, media, self.options)
+        commands.append(self._build_command(BF16, tmp_path, assessment, media, 1, settings.serve_settings()))
 
     monkeypatch.setattr("basal_ui.app.Runner._start", start)
     app = create_app(catalog_fn=lambda **_: ([BF16], "test"), hardware_fn=lambda: CPU, fleet=fleet, stats=fleet.stats,
