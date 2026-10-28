@@ -1,0 +1,33 @@
+name: Engine idea
+description: Something basal-ui needs the engine (rkinas/basal) to do first
+labels: [engine]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        basal-ui runs only on upstream engine releases, so an engine change goes upstream first
+        ([CONTRIBUTING.md, "Engine proposals"](https://github.com/pawelkiszczak/basal-ui/blob/main/CONTRIBUTING.md#engine-proposals)).
+        An accepted idea becomes a research note (`docs/research/<topic>.md`, from `docs/research/TEMPLATE.md`) and an
+        issue + PR on rkinas/basal; the basal-ui control then ships behind an engine feature probe.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What a basal-ui user wants to do and cannot, and why the engine is where it has to change.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed engine change
+      description: The flag, field or behaviour basal-serve / basal-calibrate / basal-viz would gain; what stays compatible.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance check
+      description: The measurable criteria that decide the proposal, agreed before implementation.
+      placeholder: "e.g. bit-identical probabilities to X on basal-2.0-mini; start-up within 5% of today"
+    validations:
+      required: true

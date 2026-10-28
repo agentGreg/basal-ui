@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in basal-ui does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For bugs in the engine itself (basal-serve answers, models, calibration math) open an issue on
+        [rkinas/basal](https://github.com/rkinas/basal/issues) instead. Not sure? File it here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, including any error message shown in the page.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The view, the model and load options, the request (Playground → Edit JSON) if one is involved.
+      placeholder: |
+        1. Models → Remek/basal-2.0-mini → Load
+        2. Playground → ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: ui-version
+    attributes:
+      label: basal-ui version
+      description: '`pip show basal-ui` (or `uv tool list` for a uv tool install).'
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: engine-version
+    attributes:
+      label: Engine version
+      description: >-
+        `python -c "import basal; print(basal.__version__)"`; with an experimental engine, the badge in the top bar
+        (version@commit).
+      placeholder: "2.4.1"
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: OS and hardware
+      description: OS, and the GPU / Apple chip / CPU shown on the Overview.
+      placeholder: "macOS 15, Apple M3 Max 64 GB"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines from the Logs view (basal-ui and the model's basal-serve).
+      render: text

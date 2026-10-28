@@ -11,12 +11,47 @@ make lint                    # ruff check
 make test                    # the unit tests (tests/, not tests/e2e)
 make e2e                     # BASAL_E2E=1: real models on real hardware; docs/E2E.md
 make run                     # start basal-ui
+make screenshots             # refresh docs/images (see "Screenshots")
 ```
 
 `make install` syncs the environment from the lockfile; the dev group's `[tool.uv.sources]` pin decides which engine
 release it installs. `make engine REF=…` switches to another release-tag archive or a fork ref for a trial — a later
 `make install` restores the pinned tag. An engine outside `SUPPORTED` starts only with
 `BASAL_UI_ENGINE_UNCHECKED=1` (see the README, "Experimental engine").
+
+## Code style
+
+- Python: 120 columns; `make lint` runs Ruff with the rules in `pyproject.toml` (`[tool.ruff.lint]`: syntax errors
+  and undefined names). Follow the surrounding code: docstrings that say what a function returns and why, no
+  speculative abstractions.
+- Frontend: plain JavaScript and CSS in `basal_ui/static/` (no build step). Every UI string is English in the code and
+  passed through `t()` / `tp()`; its Polish translation goes into `basal_ui/static/i18n.js`.
+  `tests/test_ui_i18n.py` fails on a string without one.
+- Server errors stay English; translatable explanations carry a message code alongside the English text.
+
+## Tests
+
+- **Unit tests** (`make test`, `tests/test_*.py`): every route and behaviour with stubbed `basal-serve` children; fast,
+  no models, run on every CI job. Add one for each behaviour a user or API client can observe: answers, refusals,
+  boundaries, state transitions.
+- **End-to-end gate** (`make e2e`, `tests/e2e/`, [docs/E2E.md](docs/E2E.md)): a real basal-ui, real models, the pages in
+  Chromium. Add to it when the behaviour depends on a real engine or a real browser; a test that needs hardware the
+  machine lacks skips with the reason.
+- No tests of wiring (that a function calls another, that a field is copied), of wording, or of mocks echoing
+  themselves.
+
+## Pull requests
+
+One topic per PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) asks for what and why, whether the engine range
+is affected, the tests run (`make lint`, `make test`, and `make e2e` with the hardware for changes that touch loading,
+serving or the pages), refreshed screenshots for visible changes and a `docs/WHATS_NEW.md` bullet.
+
+## Screenshots
+
+The README's screenshots and tour GIF (`docs/images/`) come from `make screenshots` (`scripts/screenshots.py`): it
+starts basal-ui on a fresh settings directory, loads `Remek/basal-2.0-mini`, captures five views in Chromium and
+records the tour. Refresh them after a UI change to a view the README shows. It needs `Remek/basal-2.0-mini` on disk,
+Chromium for Playwright (`uv run --extra e2e playwright install chromium`) and `ffmpeg` on `PATH`.
 
 ## Engine proposals
 
@@ -53,6 +88,6 @@ is the pin, `PINNED_RELEASE`) and `SUPPORTED_RANGE`. CI's engine matrix is gener
 
 1. Edit `TESTED_RELEASES` and `SUPPORTED_RANGE` in `basal_ui/engine.py`.
 2. Edit the `basal` url in `pyproject.toml` `[tool.uv.sources]` (uv cannot read Python) and run `uv lock`.
-3. Edit the install lines in `README.md` and `docs/E2E.md`.
+3. Edit the install lines and the engine badge in `README.md`, and the install line in `docs/E2E.md`.
 
 `make test` (`tests/test_engine_gate.py::test_every_pin_names_the_tested_release`) fails until they all agree.

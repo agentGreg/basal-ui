@@ -9,6 +9,19 @@ description = "Local browser app for basal models: pick a model for your hardwar
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
+keywords = ["basal", "llm", "decisions", "calibration", "local", "browser"]
+# no License :: classifier: `license` is an SPDX expression (PEP 639), which setuptools>=77 refuses to combine with one
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
   "fastapi>=0.115",
   "starlette>=0.47",
@@ -24,6 +37,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/pawelkiszczak/basal-ui"
 Engine = "https://github.com/rkinas/basal"
+Changelog = "https://github.com/pawelkiszczak/basal-ui/blob/main/docs/WHATS_NEW.md"
+Issues = "https://github.com/pawelkiszczak/basal-ui/issues"
 
 [project.optional-dependencies]
 mcp = ["mcp>=2.3,<3"]

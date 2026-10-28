@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Engine bugs (basal-serve, models, calibration)
+    url: https://github.com/rkinas/basal/issues
+    about: Wrong answers, model loading in basal-serve itself, calibration math — the engine's own tracker.
