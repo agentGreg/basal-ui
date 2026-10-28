@@ -17,6 +17,35 @@ BF16 = Variant("mini", "Remek/basal-2.0-mini", "basal-2.0", "mini", "bf16", "bf1
 MLX = Variant("mini-mlx", "Remek/basal-2.0-mini-MLX-8bit", "basal-2.0", "mini", "MLX-8bit", "MLX 8-bit", None, 100,
               False)
 
+OMNI_BF16 = Variant("omni-mini", "Remek/basal-omni-1.0-mini", "basal-omni-1.0", "mini", "bf16", "bf16", None, 100,
+                    True)
+OMNI_FP8 = Variant("omni-mini-fp8", "Remek/basal-omni-1.0-mini-FP8", "basal-omni-1.0", "mini", "FP8", "FP8", None,
+                   100, True)
+OMNI_GGUF = Variant("omni-mini-gguf", "Remek/basal-omni-1.0-GGUF", "basal-omni-1.0", "mini", "GGUF", "GGUF", None,
+                    100, True)
+OMNI_MLX = Variant("omni-mini-mlx", "Remek/basal-omni-1.0-mini-MLX-8bit", "basal-omni-1.0", "mini", "MLX-8bit",
+                   "MLX 8-bit", None, 100, True)
+
+PICO = Variant("pico", "Remek/basal-omni-pico", "basal-omni", "pico", "bf16", "bf16", None, 100, True,
+               recurrent=True)
+
+
+@pytest.mark.parametrize("viz_gemma4", [True, False])
+def test_inspect_eligibility_takes_omni_bf16_only_with_an_engine_that_reads_it(monkeypatch, viz_gemma4):
+    monkeypatch.setattr(inspect, "feature", lambda name: {"viz_gemma4": viz_gemma4}[name])
+    assert inspect.inspectable(BF16) is None
+    assert inspect.inspectable(OMNI_BF16) == (None if viz_gemma4 else inspect.OMNI_NEEDS_ENGINE)
+    assert inspect.inspectable(PICO) == inspect.NOT_INSPECTABLE
+    for variant in (OMNI_FP8, OMNI_GGUF, OMNI_MLX, MLX):
+        assert inspect.inspectable(variant) == inspect.NOT_INSPECTABLE
+
+
+def test_models_api_reports_why_a_variant_cannot_be_inspected(client):
+    models = {m["id"]: m for m in client.get("/api/models").json()["models"]}
+    assert models["mini"]["inspect_reason"] is None
+    assert models["mini-mlx"]["inspect_reason"] == models["pico"]["inspect_reason"] == inspect.NOT_INSPECTABLE
+    assert models["pico"]["recurrent"] is True
+
 
 class StubExplainer:
     def __init__(self, a):
@@ -46,7 +75,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     fleet = Fleet(models_dir_fn=lambda: tmp_path, platform_fn=lambda: "cpu", settings_mod=settings,
                   hardware_fn=lambda: HW, stats=Stats(tmp_path / "s.json"), history=History(tmp_path / "h.jsonl"))
-    app = create_app(catalog_fn=lambda **_: ([BF16, MLX], "test"), hardware_fn=lambda: HW, fleet=fleet,
+    app = create_app(catalog_fn=lambda **_: ([BF16, MLX, PICO], "test"), hardware_fn=lambda: HW, fleet=fleet,
                      stats=fleet.stats, history=fleet.history)
     with TestClient(app, base_url="http://127.0.0.1") as c:
         c.fleet = fleet

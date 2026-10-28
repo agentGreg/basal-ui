@@ -25,6 +25,15 @@
   adds three generated images (a checkout screenshot with numbered elements, a Polish invoice, a revenue chart) and
   two voice clips (Polish complaint, English appointment) for basal-omni, loaded into the media field with an audio
   player for clips and a notice on a model without media; Inspect skips them. [USAGE.md](USAGE.md#browser-app-pick-a-model-for-your-hardware-and-try-it)
+- **Inspect for Gemma 4 basal-omni:** the bf16 basal-omni checkpoints (not the recurrent basal-omni-pico) can be
+  inspected once the engine's basal-viz reads them (`engine.feature("viz_gemma4")`, proposed upstream in
+  [rkinas/basal#75](https://github.com/rkinas/basal/pull/75)); on 2.4.x they are listed disabled with the reason.
+  `/api/models` reports why each variant cannot be inspected (`inspect_reason`). Requests with media are refused.
+  [USAGE.md](USAGE.md#inspect)
+- **One engine pin:** `basal_ui/engine.py` holds the engine releases basal-ui is tested with (`TESTED_RELEASES`, the
+  last one pinned); CI's engine matrix is generated from it and a test checks that `pyproject.toml`, the README and
+  the E2E guide install the same release. `make engine-pin` prints it.
+  [CONTRIBUTING.md](../CONTRIBUTING.md#bumping-the-engine)
 
 # Before 0.1.0 (in the fork)
 

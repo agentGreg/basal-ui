@@ -12,6 +12,7 @@ from basal.facts import inject as inject_facts
 from basal.server import http_status
 from basal.viz import Explainer, compare_served
 
+from .engine import feature
 from .jobs import Cancelled
 
 VIZ_PAGE = Path(__file__).parent / "static" / "viz.html"
@@ -63,14 +64,21 @@ def inspect_app(explainer_fn, examples_fn, lifespan=None):
     ], lifespan=lifespan)
 
 
-NOT_INSPECTABLE = ("basal-viz reads the bf16 PyTorch weights of basal-1.0, basal-1.5 and basal-2.0; download the bf16 "
-                   "variant")
+NOT_INSPECTABLE = ("basal-viz reads the bf16 PyTorch weights of basal-1.0, basal-1.5, basal-2.0 and basal-omni; "
+                   "download the bf16 variant")
+OMNI_NEEDS_ENGINE = ("Gemma 4 basal-omni needs an engine whose basal-viz reads it (proposed upstream: "
+                     "rkinas/basal#75); this engine's basal-viz reads basal-1.0, basal-1.5 and basal-2.0")
 
 
 def inspectable(variant) -> str | None:
-    """None when basal-viz can read the variant, else why not (MLX / GGUF / FP8 / NVFP4 ports, basal-omni)."""
-    if variant.port != "bf16" or variant.experimental:
+    """None when basal-viz can read the bf16 PyTorch variant, else why not (other ports, the recurrent basal-omni-pico,
+    Gemma 4 basal-omni on an engine whose basal-viz does not read it)."""
+    if variant.port != "bf16" or variant.recurrent:
         return NOT_INSPECTABLE
+    if variant.experimental and not variant.family.startswith("basal-omni"):
+        return NOT_INSPECTABLE
+    if variant.experimental and not feature("viz_gemma4"):
+        return OMNI_NEEDS_ENGINE
     return None
 
 

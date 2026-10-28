@@ -1844,15 +1844,15 @@ $('#runBatch').onclick=()=>act(async()=>{
 $('#cancelBatch').onclick=()=>act(async()=>{await api('/api/batch',{method:'DELETE'});await refreshStatus();});
 $('#downloadBatch').onclick=()=>{const a=document.createElement('a');a.href='/api/batch/download';a.click();};
 $('#copyBatchPath').onclick=()=>copyText(batchResult?.output||'',t('Output path copied'));
-// Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal_ui/inspect.py)
-const inspectableModel=m=>m.port==='bf16'&&!m.experimental;
+// Inspect: basal-viz embedded at /viz/ for a downloaded bf16 model (basal_ui/inspect.py decides: inspect_reason)
+const inspectableModel=m=>!m.inspect_reason;
 let inspectSignature='', inspectReady=false;
 function renderInspectModels() {
   const select=$('#inspectModel'), current=select.value||localStorage.getItem('basal-ui.inspectModel')||'', rows=modelData.filter(m=>m.downloaded);
   const signature=JSON.stringify(rows.map(m=>m.id));
   if(signature===inspectSignature)return;
   inspectSignature=signature;
-  select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}"${inspectableModel(m)?'':' disabled'}>${esc(m.id)}${inspectableModel(m)?'':` — ${t('basal-viz reads bf16 weights')}`}</option>`).join('')||`<option value="">${t('Download a bf16 model first')}</option>`;
+  select.innerHTML=rows.map(m=>`<option value="${esc(m.id)}"${inspectableModel(m)?'':` disabled title="${esc(m.inspect_reason)}"`}>${esc(m.id)}${inspectableModel(m)?'':` — ${t('basal-viz reads bf16 weights')}`}</option>`).join('')||`<option value="">${t('Download a bf16 model first')}</option>`;
   const ok=rows.filter(inspectableModel).map(m=>m.id);
   select.value=ok.includes(current)?current:ok[0]||'';
   loadInspectCalibrations();
@@ -1879,7 +1879,7 @@ function renderInspectState(state, job) {
 function inspectHandoff(request) {
   const st=statusCache?.inspect||{}, served=(statusCache?.models||[]).find(m=>m.id===request.model);
   const variant=id=>modelData.find(m=>m.id===id), sv=variant(request.model), iv=variant(st.model);
-  if(request.media)return {blocked:t('basal-viz explains text decisions; this request carries media')};
+  if(request.media)return {blocked:t('basal-viz reads text only; remove the media to inspect this request')};
   if(st.model!==request.model&&!(sv&&iv&&sv.family===iv.family&&sv.tier===iv.tier))
     return {blocked:t('the inspector runs {inspector}, this decision came from {model}: start the inspector with the bf16 weights of {weights}',{inspector:st.model,model:request.model,weights:sv?`${sv.family} ${sv.tier}`:request.model})};
   const body=structuredClone(request), notes=[];

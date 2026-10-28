@@ -859,7 +859,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
                            settings_mod=settings_mod, hardware_fn=hardware_fn, stats=stats, history=history)
     gateway = gateway or Gateway(fleet, settings_mod, stats)
     allowed_hosts = tuple(allowed_hosts)
-    from .inspect import Inspector, inspect_app
+    from .inspect import Inspector, inspect_app, inspectable
     inspector = Inspector()
 
     def hw():
@@ -1168,7 +1168,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
         assessed.sort(key=lambda a: (FAMILY_ORDER.get(a.variant.family, 99),
                                      catalog.TIER_ORDER.get(a.variant.tier, 99), a.variant.port, a.variant.label))
         fields = ("id", "repo", "author", "community", "base_repo", "family", "tier", "port", "label", "gguf_file",
-                  "weights_bytes", "experimental")
+                  "weights_bytes", "experimental", "recurrent")
         on_disk = {a.variant.id: catalog.downloaded_bytes(a.variant, cache_dir) for a in assessed}
         saved = settings_mod.load().get("load_options")  # once, not load_options() per row
         revisions = {k: v.get("revision") for k, v in saved.items() if isinstance(v, dict)} if isinstance(
@@ -1183,7 +1183,7 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
              "media_reason_code": catalog.message_fields(a.media_reason, "")[0],
              "media_reason_params": catalog.message_fields(a.media_reason, "")[1],
              "downloaded": on_disk[a.variant.id] is not None, "downloaded_bytes": on_disk[a.variant.id],
-             "revision": revisions.get(a.variant.id)}
+             "revision": revisions.get(a.variant.id), "inspect_reason": inspectable(a.variant)}
             for a in assessed]}
 
     @app.get("/api/presets")
@@ -1719,7 +1719,6 @@ def create_app(catalog_fn=catalog.list_variants, hardware_fn=hardware.detect, fl
     @app.post("/api/inspect", status_code=202)
     def post_inspect(body: dict = Body(...)):
         from . import calibration
-        from .inspect import inspectable
 
         variant = find_variant(body.get("id"))
         reason = inspectable(variant)

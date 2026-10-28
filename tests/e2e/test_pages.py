@@ -723,7 +723,8 @@ def test_the_inspect_handoff_names_every_difference_and_refuses_what_it_cannot_e
                  "option orders: served 2, explained 1", "calibration: the served temperatures differ",
                  "thinking: explained without the reasoning", "early exit 0.99"):
         assert part in notes, notes
-    assert "media" in page.evaluate(probe, [text_model["id"], {**mixed, "media": [{"type": "image"}]}])["blocked"]
+    assert "remove the media to inspect this request" in page.evaluate(
+        probe, [text_model["id"], {**mixed, "media": [{"type": "image"}]}])["blocked"]
     only_tasks = {"state": "s", "questions": {"intent": mixed["questions"]["intent"]}}
     assert "only task questions" in page.evaluate(probe, [text_model["id"], only_tasks])["blocked"]
     other = page.evaluate("""([model, request]) => {

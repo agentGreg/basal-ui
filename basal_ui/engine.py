@@ -67,6 +67,8 @@ def check():
 
 FEATURES = {
     "adapter": lambda: _spec("basal.adapter") is not None,  # --adapter (rkinas/basal#52, 2.5.1)
+    # basal-viz reads Gemma 4 basal-omni (rkinas/basal#75); basal_ui.inspect imports basal.viz anyway
+    "viz_gemma4": lambda: hasattr(importlib.import_module("basal.viz"), "is_gemma4"),
 }
 
 
