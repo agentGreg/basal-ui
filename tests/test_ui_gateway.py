@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from basal_ui import gateway as gateway_module
 from basal_ui import settings
-from basal_ui.app import Fleet, Runner
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.auth import ApiKeys
 from basal_ui.gateway import Gateway, build_app
 from basal_ui.hardware import Hardware
@@ -217,7 +217,7 @@ def test_port_in_use_is_reported_and_lan_url_is_used_for_all_interfaces(fleet, m
     finally:
         listener.close()
     calls = []
-    monkeypatch.setattr("basal_ui.app._lan_ip", lambda: calls.append(1) or "192.0.2.10")
+    monkeypatch.setattr("basal_ui.fleet._lan_ip", lambda: calls.append(1) or "192.0.2.10")
     gateway = Gateway(fleet, settings, fleet.stats)
     gateway.snapshot = {"host": "0.0.0.0", "port": 8123, "require_key": False, "cors_origins": [], "mcp": False}
     assert gateway.status()["url"] == "http://192.0.2.10:8123"

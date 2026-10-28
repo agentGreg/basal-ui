@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from basal_ui import catalog, engine, options, settings
-from basal_ui.app import Fleet, create_app
+from basal_ui.app import create_app
+from basal_ui.fleet import Fleet
 from basal_ui.catalog import Variant
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
@@ -245,7 +246,7 @@ def test_load_options_reach_the_command_are_remembered_and_reused_by_restart(tmp
             self.state = "ready"
         commands.append(self._build_command(BF16, tmp_path, assessment, media, 1, settings.serve_settings()))
 
-    monkeypatch.setattr("basal_ui.app.Runner._start", start)
+    monkeypatch.setattr("basal_ui.fleet.Runner._start", start)
     app = create_app(catalog_fn=lambda **_: ([BF16], "test"), hardware_fn=lambda: CPU, fleet=fleet, stats=fleet.stats,
                      history=fleet.history)
     with TestClient(app, base_url="http://127.0.0.1") as client:

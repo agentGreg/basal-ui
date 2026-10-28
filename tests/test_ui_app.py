@@ -11,7 +11,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from basal_ui import calibration, catalog, settings
-from basal_ui.app import Fleet, Runner, create_app, rss_by_pgid
+from basal_ui.app import create_app
+from basal_ui.fleet import Fleet, Runner, rss_by_pgid
 from basal_ui.catalog import Variant
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
@@ -290,7 +291,7 @@ def test_download_runs_without_a_model_and_reports_progress_then_errors(tmp_path
             record["path"] = str(tmp_path)
         record["ended"] = time.monotonic()
 
-    monkeypatch.setattr("basal_ui.app.Downloads._run", run)
+    monkeypatch.setattr("basal_ui.fleet.Downloads._run", run)
     app, _ = app_for(tmp_path, [MINI])
     with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.post("/api/download", json={"id": "missing"}).status_code == 400
@@ -323,7 +324,7 @@ def test_startup_timeout_kills_child_process_group(tmp_path, monkeypatch):
     runner = Runner(models_dir_fn=lambda: tmp_path)
     monkeypatch.setattr(catalog, "is_downloaded", lambda variant, cache_dir, revision=None: tmp_path)
     monkeypatch.setattr(runner, "_build_command", lambda *args: [sys.executable, "-c", code])
-    monkeypatch.setattr("basal_ui.app.START_TIMEOUT_S", 0.5)
+    monkeypatch.setattr("basal_ui.fleet.START_TIMEOUT_S", 0.5)
     runner.load(assessment)
     wait_for(lambda: runner.status()["state"] == "error", timeout=5)
     assert pid_file.exists()
@@ -573,7 +574,7 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
         def poll(self):
             return None
 
-    monkeypatch.setattr("basal_ui.app.subprocess.Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr("basal_ui.fleet.subprocess.Popen", lambda *args, **kwargs: Process())
     old_health_entered, release_old_health = threading.Event(), threading.Event()
 
     def healthy(*args, **kwargs):
@@ -582,7 +583,7 @@ def test_stale_overlapping_start_does_not_replace_last_ready_model(tmp_path, mon
             release_old_health.wait()
         return SimpleNamespace(status_code=200)
 
-    monkeypatch.setattr("basal_ui.app.httpx.get", healthy)
+    monkeypatch.setattr("basal_ui.fleet.httpx.get", healthy)
     old_thread = threading.Thread(target=runner._start, args=(old, 1, False, tmp_path, None), name="old-start")
     old_thread.start()
     assert old_health_entered.wait(timeout=2)
@@ -724,7 +725,7 @@ def test_rss_is_summed_per_process_group(monkeypatch):
     if os.name != "posix":
         pytest.skip("ps is POSIX-only")
     output = "  100  2048\n  100   1024\n  200 10\nbad line\n"
-    monkeypatch.setattr("basal_ui.app.subprocess.run", lambda *a, **k: SimpleNamespace(stdout=output))
+    monkeypatch.setattr("basal_ui.fleet.subprocess.run", lambda *a, **k: SimpleNamespace(stdout=output))
     assert rss_by_pgid() == {100: 3072 * 1024, 200: 10 * 1024}
 
 
@@ -919,10 +920,10 @@ def test_revision_reaches_cached_check_and_download_but_not_child_flags(tmp_path
     runner.options = {"revision": "refs/pr/5"}
     runner._build_command = lambda *args: ["fake"]
     runner._models_entry = lambda media: (None, [])
-    monkeypatch.setattr("basal_ui.app.subprocess.Popen",
+    monkeypatch.setattr("basal_ui.fleet.subprocess.Popen",
                         lambda *args, **kwargs: SimpleNamespace(stdout=__import__("io").StringIO(), poll=lambda: None,
                                                                 returncode=None, pid=0))
-    monkeypatch.setattr("basal_ui.app.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
+    monkeypatch.setattr("basal_ui.fleet.httpx.get", lambda *args, **kwargs: SimpleNamespace(status_code=200))
     runner._start(assessment, runner.gen, cache_dir=tmp_path)
     assert calls == [("check", "refs/pr/5"), ("download", "refs/pr/5")]
     del runner._build_command

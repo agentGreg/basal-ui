@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from basal.server import parser
 from basal_ui import calibration, catalog, gateway, options, settings
-from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.app import create_app
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.gateway import build_app as gateway_app
 from basal_ui.hardware import Hardware
 from basal_ui.jobs import Jobs

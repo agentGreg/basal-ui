@@ -8,7 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from basal_ui import bench, catalog, settings
-from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.app import create_app
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.catalog import Variant
 from basal_ui.jobs import Cancelled, Job, LogBuffer
 from basal_ui.hardware import Hardware

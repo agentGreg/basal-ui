@@ -7,7 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from basal_ui import gateway, settings
-from basal_ui.app import Fleet, Runner
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.auth import ApiKeys
 from basal_ui.hardware import Hardware
 

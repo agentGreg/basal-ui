@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from basal_ui import settings
-from basal_ui.app import Fleet, Runner, create_app
+from basal_ui.app import create_app
+from basal_ui.fleet import Fleet, Runner
 from basal_ui.hardware import Hardware
 from basal_ui.history import History
 from basal_ui.stats import Stats
