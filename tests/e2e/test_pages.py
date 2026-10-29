@@ -258,6 +258,7 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
     page.click('.side-nav [data-view="models"]')
     page.click("#allModelsTab")
     page.check("#notRunnableToggle")
+    page.check("#olderToggle")  # the unavailable model may be of an older family (basal-1.5 GGUF)
     translated_reason = page.evaluate("m => ts(m.reason, m.reason_code, m.reason_params)", unavailable)
     assert translated_reason != unavailable["reason"]
     reason = page.locator("#modelsTable .reason").filter(has_text=translated_reason)
@@ -305,6 +306,7 @@ def test_server_messages_translate_in_polish_and_remain_english(page):
     page.click('.side-nav [data-view="models"]')
     page.click("#allModelsTab")
     page.check("#notRunnableToggle")
+    page.check("#olderToggle")  # the unavailable model may be of an older family (basal-1.5 GGUF)
     sync_api.expect(page.locator("#modelsTable .reason").filter(has_text=unavailable["reason"]).first).to_be_visible()
     page.click("#suggestedTab")
     sync_api.expect(page.locator("#suggested .why").filter(has_text=suggestion["why"]).first).to_be_visible()
