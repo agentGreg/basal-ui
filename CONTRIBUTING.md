@@ -41,11 +41,28 @@ release it installs. `make engine REF=…` switches to another release-tag archi
 - No tests of wiring (that a function calls another, that a field is copied), of wording, or of mocks echoing
   themselves.
 
+## Branches and CI
+
+| Branch | Role | Changes arrive by |
+|---|---|---|
+| `dev` | integration: every feature and fix lands here first | a pull request from a topic branch |
+| `stage` | release candidate: what the next release will ship, where the e2e gate runs | a pull request `dev` → `stage` |
+| `main` | released code; `vX.Y.Z` tags are cut from it | a pull request `stage` → `main` |
+
+A fix made on `stage` (found while testing a release candidate) goes back with a pull request `stage` → `dev`, so
+`dev` never loses it. Nobody commits to `stage` or `main` directly.
+
+CI (`.github/workflows/ci.yml`: Ruff check and format, the unit tests, Ubuntu and macOS × Python 3.10 and 3.13 ×
+every tested engine release) runs on every push to `dev`, `stage` and `main` and on every pull request into them, in
+either direction: `dev` → `stage`, `stage` → `dev`, `stage` → `main`. A pull request merges when CI is green. CD is
+`publish.yml`: a `vX.Y.Z` tag on `main` publishes to PyPI and creates the GitHub release (see Releasing).
+
 ## Pull requests
 
-One topic per PR. The template (`.github/PULL_REQUEST_TEMPLATE.md`) asks for what and why, whether the engine range
-is affected, the tests run (`make lint`, `make test`, and `make e2e` with the hardware for changes that touch loading,
-serving or the pages), refreshed screenshots for visible changes and a `docs/WHATS_NEW.md` bullet.
+One topic per PR, opened against `dev`. The template (`.github/PULL_REQUEST_TEMPLATE.md`) asks for what and why,
+whether the engine range is affected, the tests run (`make lint`, `make test`, and `make e2e` with the hardware for
+changes that touch loading, serving or the pages), refreshed screenshots for visible changes and a
+`docs/WHATS_NEW.md` bullet.
 
 ## Screenshots
 
@@ -77,10 +94,14 @@ UI never blocks on a proposal. The pipeline:
 ## Releasing
 
 1. If the engine moves, bump it ("Bumping the engine" below); add a `docs/WHATS_NEW.md` section for the version.
-2. Run the e2e gate on real hardware (`make e2e`, `docs/E2E.md`) and record the run (models, hardware, results) in
-   the release PR.
-3. Bump `version` in `pyproject.toml` to X.Y.Z (`publish.yml` refuses a tag that differs), tag `vX.Y.Z`; `publish.yml`
-   uploads to PyPI (trusted publishing) and creates the GitHub release from the `# X.Y.Z` section of WHATS_NEW.
+   Both land on `dev` like any change.
+2. Open the pull request `dev` → `stage`. On `stage`, run the e2e gate on real hardware (`make e2e`, `docs/E2E.md`)
+   and record the run (models, hardware, results) in that pull request; fixes go to `stage` and back to `dev`
+   (`stage` → `dev`).
+3. Bump `version` in `pyproject.toml` to X.Y.Z on `stage` (`publish.yml` refuses a tag that differs), then open the
+   pull request `stage` → `main`.
+4. After it merges, tag `vX.Y.Z` on `main` and push the tag; `publish.yml` uploads to PyPI (trusted publishing) and
+   creates the GitHub release from the `# X.Y.Z` section of WHATS_NEW.
 
 ### Bumping the engine
 

@@ -1,6 +1,7 @@
 ### What
 
 <!-- The change, one topic per PR. Closes #… -->
+<!-- Target: changes go to `dev`; promotions are `dev` → `stage` → `main`; a fix made on `stage` returns with `stage` → `dev` (CONTRIBUTING.md, "Branches and CI"). -->
 
 ### Why
 

@@ -91,7 +91,9 @@ commit). Features the engine does not provide yet stay hidden or greyed out with
 | [docs/API.md](docs/API.md) | basal-ui's API server: keys, CORS, errors, OpenAI Decisions, MCP, clients |
 | [docs/E2E.md](docs/E2E.md) | the end-to-end release gate |
 | [docs/WHATS_NEW.md](docs/WHATS_NEW.md) | the changelog |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | dev setup, code style, tests, pull requests, the Engine-proposal pipeline, [releasing](CONTRIBUTING.md#releasing) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | dev setup, code style, tests, [branches and CI](CONTRIBUTING.md#branches-and-ci) (`dev` → `stage` → `main`), pull requests, the Engine-proposal pipeline, [releasing](CONTRIBUTING.md#releasing) |
+| [CONTRIBUTORS.md](CONTRIBUTORS.md) | who built basal-ui and the work it stands on |
+| [SECURITY.md](SECURITY.md) | supported versions and private vulnerability reports |
 | [rkinas/basal](https://github.com/rkinas/basal) | the engine |
 
 ## License

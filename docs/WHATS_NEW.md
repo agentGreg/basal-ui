@@ -51,8 +51,10 @@
   across live refreshes; element boxes can be added, moved (arrows) and resized (Shift+arrows) without a pointer;
   benchmark and band inputs have labels. The live History view keeps the newest 500 rows.
 - **Development:** Ruff `F,I,B,UP,SIM` with `ruff format` (`make format`, optional pre-commit hooks), a coverage
-  report in `make test`, `SECURITY.md`, Dependabot, and CI/release workflows with pinned actions, minimal permissions
-  and a release job that checks the tag against `pyproject.toml` and publishes the GitHub release notes.
+  report in `make test`, `SECURITY.md`, `CONTRIBUTORS.md`, Dependabot, and CI/release workflows with pinned actions,
+  minimal permissions and a release job that checks the tag against `pyproject.toml` and publishes the GitHub release
+  notes. Changes flow `dev` → `stage` → `main`; CI runs on pushes to and pull requests into all three.
+  [CONTRIBUTING.md](../CONTRIBUTING.md#branches-and-ci)
 
 # Before 0.1.0 (in the fork)
 

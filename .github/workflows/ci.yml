@@ -1,8 +1,11 @@
 name: ci
+# Branches: dev (integration) -> stage (release candidate) -> main (released; tags v* publish). CI runs on every push
+# to the three and on every pull request into them, in either direction (dev -> stage, stage -> dev, stage -> main).
 on:
   push:
-    branches: [main]
+    branches: [main, stage, dev]
   pull_request:
+    branches: [main, stage, dev]
 
 permissions:
   contents: read
