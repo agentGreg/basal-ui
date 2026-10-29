@@ -22,8 +22,9 @@ line, each a state, one question and its options.
   the 155 requests of a run, but each item is scored once.
 - Scoring: an item is correct when the option with the highest probability is the `gold` one. Accuracy is reported
   overall and per file (by file name).
-- Lines that are not JSON stop the run with the file and line number; objects without `state`, `question` or
-  `options` are skipped. Full-request lines (with `questions`) are skipped as well.
+- Lines that are not JSON stop the run with the file and line number; so does an object that is not a simple item —
+  missing `state`, `question` or at least two `options`, a `gold` that does not index the options, or a full request
+  line (with `questions`).
 
 **Where to put it.** Anywhere readable: in basal-ui choose **Custom path…** in the set selector and enter the path of a
 `.jsonl` file, or of a directory (every `*.jsonl` in it is read, in name order). `~` is expanded. The bundled set is

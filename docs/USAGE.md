@@ -17,8 +17,9 @@ basal-ui --port 7860                  # then open http://127.0.0.1:7860
 The engine install takes the extra of the machine (`basal[mlx]`, `basal[gguf]`, `basal[fp8]`, `basal[vllm]`, …);
 basal-ui is a separate package with no extras of that kind — see the [README](../README.md#install).
 
-The left menu has one view per task, each with its own address (`#overview`, `#models`, `#manager`, `#playground`,
-`#api`, `#history`, `#logs`), so the browser's back button and bookmarks work. **Overview** shows the hardware, the
+The left menu has one view per task, each with its own address (`#overview`, `#models`, `#manager`, `#backends`,
+`#playground`, `#batch`, `#inspect`, `#api`, `#history`, `#logs`), so the browser's back button and bookmarks work.
+**Overview** shows the hardware, the
 **inference** happening now (updated every second while Overview is open: per model the requests basal-ui is waiting
 on by source — Playground, API server, MCP, benchmark — with the longest one's time and basal-serve's running / queued
 counters, and running batch, benchmark, calibration and backend-test jobs with their progress; otherwise *Idle* and
@@ -37,16 +38,17 @@ layout and adapter (or the saved load options when unloaded), the `GET /v1/model
 preset, context) and the README (of the `revision` load option when one is set); `basal.json`, the loaded entry and the
 README start collapsed. The menu's footer switches the theme
 (light, dark, or the system's) and the language (**EN** / **PL**, kept in the browser; coded UI-owned model, option,
-backend and job messages are translated in Polish; uncoded server errors stay English). Keyboard: Ctrl/⌘+Enter sends the Playground decision, Alt+1…9 (Option+1…9 on macOS,
-any keyboard layout) opens the views in menu order, `?` lists the shortcuts. Overview says when a newer basal release
+backend and job messages are translated in Polish; uncoded server errors stay English). Keyboard: Ctrl/⌘+Enter sends
+the Playground decision, Alt+1…9 (Option+1…9 on macOS, any keyboard layout) opens the views in menu order and Alt+0
+(Option+0) the Backends view, `?` lists the shortcuts. Overview says when a newer basal release
 is out (GitHub's latest release of rkinas/basal, checked at most every 6 hours, 10 minutes after a failed check) and
 when new models appeared in the Hugging Face catalog (the offline catalog of the models on disk does not count);
 **Check for updates** turns the release check off.
 
 - **Hardware.** NVIDIA GPU (name, compute capability, memory), Apple Silicon (MLX's recommended working set) or CPU
-  (60% of RAM), the engines installed (`mlx`, `llama-cpp-python`, `vllm`, `media`), and the memory available now
-  (free GPU memory on NVIDIA; free + inactive + speculative pages from `vm_stat` on macOS, which leaves out reclaimable
-  file cache; `MemAvailable` on Linux).
+  (60% of RAM), the engines installed (chips such as `mlx`, `gguf`, `vllm`, `sglang`, `media`), and the memory
+  available now (free GPU memory on NVIDIA; free + inactive + speculative pages from `vm_stat` on macOS, which leaves
+  out reclaimable file cache; `MemAvailable` on Linux).
 - **All models.** Every `Remek/basal-*` repository and each `.gguf` file of a `-GGUF` repository, with weight size,
   estimated memory (weights × 1.2 + 1 GB), fit against the budget and *fit now* against the available memory (*fits*
   up to 85%, *tight* up to 100%), and the `basal-serve` mode it would run in, or why it cannot run here and which
@@ -100,11 +102,12 @@ when new models appeared in the Hugging Face catalog (the offline catalog of the
   multi and tool also fallback and exclusive keys). Requests go to the selected model's `POST /v1/systemone`. With a
   media server, up to 8 images or audio files (20 MiB each) go along as `media`, with the image `detail`. The media
   examples load their files into the media field, with an audio player for clips; on a model without media they load
-  with a notice and cannot be sent. Mark elements on one image to add a `choice` question; boxes are saved as numbered
-  overlays in a marked copy, and their probabilities appear over that image after a decision. Saved requests retain
-  the original and marked image and boxes. Evidence spans are disabled while media is attached because they refer to
-  spans in the state's text; the raw JSON request still rejects evidence with media. Inspect's example list leaves the
-  media examples out (the lens reads text only).
+  with a notice and cannot be sent. Mark elements on one image to add a `choice` question; a box is drawn with the
+  pointer or added with **Add box** and moved or resized with the arrow keys (Shift resizes, Delete removes). Boxes are
+  saved as numbered overlays in a marked copy, and their probabilities appear over that image after a decision.
+  Saved requests retain the original and marked image and boxes. Evidence spans are disabled while media is attached
+  because they refer to spans in the state's text; the raw JSON request still rejects evidence with media. Inspect's
+  example list leaves the media examples out (the lens reads text only).
 
 ## Load options
 
@@ -113,7 +116,8 @@ model in collapsible sections (Engine and any section holding a non-default valu
 stays that way for the next dialog in the session; a collapsed section still saves its values):
 the **engine mode** (every `basal-serve --mode`, the ones this machine or variant cannot use greyed out with
 the reason — CUDA graph modes need an NVIDIA GPU, vLLM / SGLang their extra, MLX Apple Silicon, TPU a TPU VM, Strix
-an AMD Strix Halo; Ollama and llama-server take the URL of the running service), quantisation, attention kernels,
+an AMD Strix Halo; a ROCm GPU, although PyTorch reports CUDA, is offered none of the NVIDIA-only modes — FP8, NVFP4,
+vLLM and SGLang; Ollama and llama-server take the URL of the running service), quantisation, attention kernels,
 dtype, the vLLM preset, GPU share and KV-sharing fast prefill, the Gemma 4 eager forward, attention and per-layer
 embedding offload (`--eager-forward`, `--eager-attn`, `--ple-offload`), the exit heads directory, determinism, option
 orders and the `auto` band, batching, the state and prefix caches, the scheduler and long-request lane, the **prompt
@@ -260,11 +264,13 @@ file is written) and `--save-rows`, which keeps the uncalibrated probabilities n
 
 **History** lists every decision basal-ui answered — from the playground, the API server and MCP — newest first:
 time, model, source, a preview of the state, the answer of each question with its confidence, latency and HTTP
-status. Filter by model and source, search the state, open a row for the full request and response, copy the request
+status. Filter by model and source, search the state, open a row for the full request and response (its time is a
+button, so rows open from the keyboard and keep focus across refreshes), copy the request
 or **Replay in Playground** (a converted request in the Playground with its model selected; replay only fills the form).
 Media bytes are removed from history, so a request whose replay needs an original attachment is blocked with an
 explanation. The last 2000 decisions are kept
 in `<settings stem>.history.jsonl` (owner-only) next to the settings file, with media bytes replaced by their size;
+a History view left open polls and keeps the newest 500 rows (**More** loads older ones);
 **Clear history** empties it. `GET /api/history?order=asc` returns oldest first for incremental consumers;
 `order=desc` remains the default, and `after` cursors outside the retained window return retained records only.
 
@@ -378,9 +384,13 @@ with the current settings; a model that is unknown or cannot run any more is ski
   key if the original is lost.
 - **409 over memory budget:** unload a model, or raise the budget / lower **Keep free** under **API server → Memory**.
 - **CORS preflight returns 400:** add the browser page's exact origin (scheme and host, with any port) to **CORS
-  origins**, save, then restart the server. A foreign origin is rejected without an allow-origin header.
+  origins**, save, then restart the server. A foreign origin is rejected without an allow-origin header, and a browser
+  request (not a preflight) from it is refused with 403 `ORIGIN_REFUSED` before the key check, so a web page cannot
+  drive even a keyless server.
 - **MCP extra missing:** install `basal-ui[mcp]` in the same environment, then enable MCP and restart the
   server. The UI reports when the extra is unavailable.
+- **Settings file is not valid JSON:** the app still opens and shows the settings as empty, but every change is
+  refused with the file's path; fix or delete the file by hand, then change settings again.
 
 For API routes, request and response formats, authentication details and compatibility notes, see the
 [HTTP API reference](API.md). The Connect panel also includes TypeSafe, OpenAI, LiteLLM and MCP examples.
