@@ -50,12 +50,25 @@ release it installs. `make engine REF=…` switches to another release-tag archi
 | `main` | released code; `vX.Y.Z` tags are cut from it | a pull request `stage` → `main` |
 
 A fix made on `stage` (found while testing a release candidate) goes back with a pull request `stage` → `dev`, so
-`dev` never loses it. Nobody commits to `stage` or `main` directly.
+`dev` never loses it.
 
 CI (`.github/workflows/ci.yml`: Ruff check and format, the unit tests, Ubuntu and macOS × Python 3.10 and 3.13 ×
 every tested engine release) runs on every push to `dev`, `stage` and `main` and on every pull request into them, in
-either direction: `dev` → `stage`, `stage` → `dev`, `stage` → `main`. A pull request merges when CI is green. CD is
-`publish.yml`: a `vX.Y.Z` tag on `main` publishes to PyPI and creates the GitHub release (see Releasing).
+either direction: `dev` → `stage`, `stage` → `dev`, `stage` → `main`. Its last job, `ci-ok`, passes only when every
+matrix job passed; it is the one check branch protection requires (the matrix job names change with the engine
+releases). CD is `publish.yml`: a `vX.Y.Z` tag on `main` publishes to PyPI and creates the GitHub release (see
+Releasing).
+
+Branch protection on GitHub enforces this:
+
+| | `dev` | `stage` | `main` |
+|---|---|---|---|
+| changes only through a pull request with `ci-ok` green | yes | yes | yes |
+| the pull request must be up to date with the branch | no | yes | yes |
+| applies to admins too | no (the maintainer may push a fix directly) | yes | yes |
+| force pushes and deletion | refused | refused | refused |
+
+No review approval is required: the project has one maintainer, who cannot approve their own pull requests.
 
 ## Pull requests
 
