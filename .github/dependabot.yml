@@ -20,3 +20,7 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    ignore:
+      # the engine's pinned transformers caps huggingface-hub below the next major; it moves when the engine does
+      - dependency-name: huggingface-hub
+        update-types: ["version-update:semver-major"]
