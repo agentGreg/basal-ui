@@ -89,6 +89,24 @@ def test_media_bytes_are_replaced_by_their_size_and_states_are_previewed():
     assert (r["status"], r["answers"], r["response"]) == (422, {}, {"error": "bad"})
 
 
+def test_a_field_named_data_outside_media_is_kept_and_replays():
+    body = {
+        "state": "A user reports a leak.",
+        "questions": {"q": {"type": "choice", "criteria": {"data": "A data or privacy problem", "other": "Other"}}},
+        "media": [{"type": "image", "data": "QUJD"}],
+    }
+    r = make_record("m", "playground", body, 200, {}, 1.0)
+    assert r["request"]["questions"] == body["questions"]
+    assert r["request"]["media"] == [{"type": "image", "data": "<4 bytes>"}]
+    audio = {"type": "input_audio", "input_audio": {"data": "QUJD", "format": "wav"}}
+    recorded = make_record("m", "api", {"input": [audio]}, 200, {}, 1.0)["request"]
+    assert recorded["input"][0]["input_audio"]["data"] == "<4 bytes>"
+    del body["media"]
+    fields = replay_fields(make_record("m", "playground", body, 200, {}, 1.0)["request"])
+    assert fields["replay_error"] is None
+    assert fields["replay_request"]["questions"]["q"]["criteria"]["data"] == "A data or privacy problem"
+
+
 def test_decisions_api_history_has_a_playground_replay_without_changing_recorded_request():
     request = {
         "model": "m",

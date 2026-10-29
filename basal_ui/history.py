@@ -14,15 +14,22 @@ from .stats import answer_items, best_probability
 PREVIEW = 160
 
 
-def _strip_media(value):
-    """Media bytes -> their size: `data` fields of basal media and data: URLs (OpenAI input_image.image_url)."""
+def _strip_media(value, media=False):
+    """Media bytes -> their size: `data` fields of basal media and data: URLs (OpenAI input_image.image_url).
+    A `data` field is media only under media / images / audio or in an input_image / input_audio part, the same scope
+    replay_fields checks; an option or field named `data` elsewhere is the request's own text."""
     if isinstance(value, dict):
+        media = media or value.get("type") in ("input_image", "input_audio")
         return {
-            k: (f"<{len(v)} bytes>" if k == "data" and isinstance(v, str) else _strip_media(v))
+            k: (
+                f"<{len(v)} bytes>"
+                if media and k == "data" and isinstance(v, str)
+                else _strip_media(v, media or k in ("media", "images", "audio"))
+            )
             for k, v in value.items()
         }
     if isinstance(value, list):
-        return [_strip_media(v) for v in value]
+        return [_strip_media(v, media) for v in value]
     if isinstance(value, str) and value.startswith("data:") and len(value) > 64:
         return f"<{len(value)} bytes>"
     return value
